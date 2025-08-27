@@ -70,4 +70,4 @@ From PRD Development Phases Section - CORE-001: Project Foundation
 5. Merge to develop when complete
 
 ## Notes
-This implements exactly what PRD specifies for CORE-001, with strict boundaries to prevent scope creep.
+This implements exactly what PRD.md specifies for CORE-001, with strict boundaries to prevent scope creep.
