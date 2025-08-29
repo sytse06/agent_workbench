@@ -1,31 +1,88 @@
 # Python
 __pycache__/
-*.pyc
-*.pyo
-.venv/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Environment files
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment files - SPECIFIC exclusions
 .env
-.env.*
-!.env.example
+.env.local
+.env.*.local
+# Keep template configurations
+!config/*.env
 
 # Database
 *.db
-*.sqlite*
+*.sqlite
+*.sqlite3
 data/*.db
+data/*.sqlite*
 
-# IDE
+# IDEs
 .vscode/
 .idea/
+*.swp
+*.swo
 *.code-workspace
 
 # OS
 .DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# UV
+.uv/
 
 # Testing
 .pytest_cache/
 htmlcov/
+.coverage
+.coverage.*
 
-# Build
-dist/
-*.egg-info/
+# Alembic (keep structure, ignore generated migrations)
+alembic/versions/*.py
+!alembic/versions/__init__.py
+
+# AI Development
+.ai_context.md
+.debug_context.md
+
+# Backup directories from consolidation
+dev_backup_*/
+prod_backup_*/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Documentation builds
+docs/_build/
+site/
