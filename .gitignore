@@ -29,7 +29,6 @@ env.bak/
 venv.bak/
 
 # Environment files - SPECIFIC exclusions
-development.env
 config/
 *.env
 .env
