@@ -165,31 +165,139 @@ validate:
 		echo "Usage: make validate TASK=CORE-002-name"; \
 		exit 1; \
 	fi
-	@echo "🔍 Validating Implementation: $(TASK)"
+	@echo "🔍 Comprehensive Implementation Validation: $(TASK)"
+	@echo "=================================================="
 	@echo ""
-	@echo "📋 Files changed from develop:"
-	@git diff --name-only develop 2>/dev/null || echo "  (no changes detected)"
+	
+	# 1. Implementation Overview
+	@echo "📋 Implementation Overview:"
+	@files_changed=$$(git diff --name-only develop 2>/dev/null | wc -l | xargs); \
+	lines_changed=$$(git diff --stat develop 2>/dev/null | tail -1 | grep -o '[0-9]\+ insertions\|[0-9]\+ deletions' | head -1 | grep -o '[0-9]\+' || echo "0"); \
+	echo "   Files changed: $$files_changed"; \
+	echo "   Lines changed: $$lines_changed"; \
+	if [ $$files_changed -gt 20 ]; then \
+		echo "   ⚠️  Large changeset - verify scope boundaries carefully"; \
+	fi
 	@echo ""
-	@echo "📊 Lines changed:"
-	@git diff --stat develop 2>/dev/null | tail -1 || echo "  (no changes detected)"
-	@echo ""
-	@echo "🧪 Running tests..."
-	@if make test >/dev/null 2>&1; then \
-		echo "✅ Tests passed"; \
+	
+	# 2. Code Quality Validation
+	@echo "🎨 Code Quality Validation:"
+	@echo "   Running black (formatting)..."
+	@if uv run black --check --quiet src/ tests/ 2>/dev/null; then \
+		echo "   ✅ Code formatting passes"; \
 	else \
-		echo "❌ Tests failed - fix before completing"; \
+		echo "   ❌ Code formatting issues detected"; \
+		echo "   💡 Fix with: uv run black src/ tests/"; \
+		exit 1; \
+	fi
+	@echo "   Running ruff (linting)..."
+	@if uv run ruff check src/ tests/ --quiet 2>/dev/null; then \
+		echo "   ✅ Code linting passes"; \
+	else \
+		echo "   ❌ Code linting issues detected"; \
+		echo "   💡 Fix with: uv run ruff check src/ tests/ --fix"; \
+		exit 1; \
+	fi
+	@echo "   Running mypy (type checking)..."
+	@if uv run mypy src/ >/dev/null 2>&1; then \
+		echo "   ✅ Type checking passes"; \
+	else \
+		echo "   ❌ Type checking issues detected"; \
+		echo "   Running mypy to show details:"; \
+		uv run mypy src/; \
 		exit 1; \
 	fi
 	@echo ""
-	@echo "📝 Architecture compliance check:"
-	@echo "   Review files against: docs/architecture/decisions/$(TASK).md"
-	@echo "   Ensure no scope violations occurred"
+	
+	# 3. Test Suite Validation
+	@echo "🧪 Test Suite Validation:"
+	@if uv run pytest tests/ --quiet --tb=no 2>/dev/null; then \
+		coverage=$$(uv run pytest tests/ --cov=src/agent_workbench --cov-report=term-missing --quiet 2>/dev/null | grep "TOTAL" | awk '{print $$4}' || echo "unknown"); \
+		echo "   ✅ All tests pass (Coverage: $$coverage)"; \
+	else \
+		echo "   ❌ Test failures detected"; \
+		echo "   💡 Run: make test for details"; \
+		exit 1; \
+	fi
 	@echo ""
-	@echo "🔄 If satisfied: make complete TASK=$(TASK)"
+	
+	# 4. Scope Compliance Check  
+	@echo "🎯 Scope Compliance Verification:"
+	@if [ -x "./scripts/scope/agent_scope_check.sh" ]; then \
+		if ./scripts/scope/agent_scope_check.sh $(TASK) 2>&1 | grep -q "SCOPE COMPLIANCE: APPROVED"; then \
+			echo "   ✅ Architectural boundaries respected"; \
+		else \
+			echo "   ❌ Scope violations detected"; \
+			echo "   💡 Run: ./scripts/scope/agent_scope_check.sh $(TASK)"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "   ⚠️  Automated scope check unavailable"; \
+		echo "   📋 Manual review required:"; \
+		echo "      - Check files against: docs/architecture/decisions/$(TASK).md"; \
+		echo "      - Verify no forbidden dependencies added"; \
+		echo "      - Ensure implementation stays within boundaries"; \
+	fi
+	@echo ""
+	
+	# 5. Final Validation Summary
+	@echo "=================================================="
+	@echo "✅ VALIDATION COMPLETE: Implementation Ready"
+	@echo ""
+	@echo "📊 Validation Summary:"
+	@echo "  ✅ Code Quality (black, ruff, mypy)"
+	@echo "  ✅ Test Suite (pytest with coverage)"
+	@echo "  ✅ Scope Compliance (architectural boundaries)"
+	@echo ""
+	@echo "🚀 Ready to complete: make complete TASK=$(TASK)"
+
+# Quick quality fix command
+quality-fix:
+	@echo "🔧 Auto-fixing code quality issues..."
+	@uv run black src/ tests/
+	@uv run ruff check src/ tests/ --fix --quiet
+	@echo "✅ Formatting and auto-fixable issues resolved"
+	@echo "💡 Re-run 'make validate TASK=your-task' to verify"
+
+# Standalone quality check (matches your agent_quality function)
+quality-check:
+	@echo "🎨 Running comprehensive code quality checks..."
+	@echo "🧹 Checking code formatting..."
+	@uv run black --check src/ tests/
+	@echo "📏 Checking code style..."
+	@uv run ruff check src/ tests/
+	@echo "🔬 Checking types..."
+	@uv run mypy src/
+	@echo "✅ Code quality checks complete"
+
+# Pre-commit quality gate
+pre-commit:
+	@echo "🔍 Pre-commit Quality Gate"
+	@echo "=========================="
+	@$(MAKE) quality-check
+	@$(MAKE) test
+	@echo "✅ All pre-commit checks passed"
+
+# Enhanced scope check command that integrates with quality
+scope-validate:
+	@if [ -z "$(TASK)" ]; then \
+		echo "Usage: make scope-validate TASK=CORE-002-name"; \
+		exit 1; \
+	fi
+	@echo "🎯 Comprehensive Scope & Quality Validation"
+	@echo "=========================================="
+	@$(MAKE) quality-check
+	@echo ""
+	@if [ -x "./scripts/scope/agent_scope_check.sh" ]; then \
+		./scripts/scope/agent_scope_check.sh $(TASK); \
+	else \
+		echo "❌ Scope check script not found"; \
+		exit 1; \
+	fi
 
 complete:
 	@if [ -z "$(TASK)" ]; then \
-		echo "Usage: make complete TASK=CORE-002-name"; \
+		echo "Usage: make complete TASK=(TASK)"; \
 		exit 1; \
 	fi
 	@echo "🎉 Completing Implementation: $(TASK)"

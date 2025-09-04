@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
-from agent_workbench.main import app
 
+from agent_workbench.main import app
 
 client = TestClient(app)
 
