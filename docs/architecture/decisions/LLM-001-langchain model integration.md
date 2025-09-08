@@ -108,14 +108,14 @@ async def chat_completion(request: ChatRequest, service: ChatService = Depends(g
 async def stream_chat(request: ChatRequest, service: ChatService = Depends(get_chat_service))
 Additional Dependencies:
 tomllangchain = "^0.1.0"
-langchain-community = "^0.0.20"
+langchain-community = "^0.3.25"
 langchain-openai = "^0.0.8"
 openai = "^1.6.0"           # For direct OpenAI integration
 anthropic = "^0.8.0"        # For direct Anthropic integration
 httpx = "^0.25.0"           # For HTTP retries
 tenacity = "^8.2.0"         # For retry logic
-FORBIDDEN Actions:
 
+FORBIDDEN Actions:
 Creating UI components or Gradio integration
 Implementing agent workflows or tool calling
 Adding document processing or RAG capabilities
@@ -124,7 +124,6 @@ Adding authentication or user management
 Implementing vector embeddings or semantic search
 
 Success Criteria:
-
  Chat completions work with OpenRouter and Ollama
  Streaming responses work correctly
  All conversations automatically persisted to database

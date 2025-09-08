@@ -233,7 +233,7 @@ execute_ai_audit() {
     
     log_section "AI SCOPE AUDIT EXECUTION"
     
-    # Check for Ollama and mistral model
+    # Check for Ollama and devstral model
     if ! command -v ollama >/dev/null 2>&1; then
         log_warn "Ollama not found - install from https://ollama.com/"
         return 1
@@ -244,55 +244,69 @@ execute_ai_audit() {
     ollama list | head -5
     echo ""
     
-    # Check if mistral model is available
-    if ! ollama list | grep -q "mistral"; then
-        log_warn "Mistral model not found. Installing..."
+    # Check if devstral model is available
+    if ! ollama list | grep -q "devstral"; then
+        log_warn "Devstral model not found. Installing..."
         echo "This may take a few minutes..."
-        if ollama pull mistral; then
-            log_pass "Mistral model installed successfully"
+        if ollama pull devstral; then
+            log_pass "Devstral model installed successfully"
         else
-            log_fail "Failed to install Mistral model"
+            log_fail "Failed to install Devstral model"
             return 1
         fi
     else
-        log_pass "Mistral model found"
+        log_pass "Devstral model found"
     fi
     
     echo ""
-    log_info "Executing AI audit via Ollama Mistral..."
-    echo -e "${YELLOW}Sending prompt to Mistral (this may take 30-60 seconds)...${NC}"
+    log_info "Executing AI audit via Ollama Devstral..."
+    echo -e "${YELLOW}Sending prompt to Devstral (this may take 30-60 seconds)...${NC}"
     echo ""
     
     # Show the prompt being sent
-    echo -e "${CYAN}--- PROMPT BEING SENT TO MISTRAL ---${NC}"
+    echo -e "${CYAN}--- PROMPT BEING SENT TO DEVSTRAL ---${NC}"
     echo "$(head -20 "$prompt_file")..."
     echo -e "${CYAN}--- END PROMPT PREVIEW ---${NC}"
     echo ""
     
     # Create audit header
-    echo "=== AI SCOPE COMPLIANCE AUDIT ===" | tee /tmp/audit_result_$
-    echo "Task: $task_id" | tee -a /tmp/audit_result_$
-    echo "Audit Date: $(date)" | tee -a /tmp/audit_result_$
-    echo "Model: Mistral via Ollama" | tee -a /tmp/audit_result_$
-    echo "" | tee -a /tmp/audit_result_$
+    echo "=== AI SCOPE COMPLIANCE AUDIT ===" | tee /tmp/audit_result_$$
+    echo "Task: $task_id" | tee -a /tmp/audit_result_$$
+    echo "Audit Date: $(date)" | tee -a /tmp/audit_result_$$
+    echo "Model: Devstral via Ollama" | tee -a /tmp/audit_result_$$
+    echo "" | tee -a /tmp/audit_result_$$
     
     echo -e "${PURPLE}🤖 AI AUDIT IN PROGRESS - STREAMING RESPONSE:${NC}"
     echo -e "${PURPLE}================================================${NC}"
     
-    # Run the audit with live streaming output
-    if ollama run mistral < "$prompt_file" | tee -a /tmp/audit_result_$; then
+    # FIXED: Use cat to pipe the prompt file contents to ollama run
+    # This is more robust than using < redirection
+    echo -e "${BLUE}🚀 Executing Ollama audit...${NC}"
+    if cat "$prompt_file" | timeout 120 ollama run devstral 2>&1 | tee -a /tmp/audit_result_$; then
         echo ""
         echo -e "${PURPLE}================================================${NC}"
         log_pass "AI audit completed successfully"
         return 0
     else
+        local exit_code=$?
         echo ""
-        log_fail "Ollama audit execution failed"
+        log_fail "Ollama audit execution failed (exit code: $exit_code)"
+        
+        if [[ $exit_code -eq 124 ]]; then
+            echo "Audit timed out after 2 minutes"
+        fi
+        
         echo "Checking for error details..."
         if [[ -f /tmp/audit_result_$ ]]; then
             echo "Last few lines of output:"
             tail -10 /tmp/audit_result_$
         fi
+        
+        echo ""
+        echo -e "${YELLOW}Debugging steps:${NC}"
+        echo "1. Test Ollama directly: echo 'Hello' | ollama run devstral"
+        echo "2. Check daemon: curl http://localhost:11434/api/tags"
+        echo "3. View logs: ollama logs"
         return 1
     fi
 }
@@ -470,15 +484,16 @@ if [[ $# -eq 0 ]]; then
     echo "This script:"
     echo "1. Parses the ADR file for the specified task"
     echo "2. Runs automated scope compliance checks"
-    echo "3. Executes AI-powered scope audit via Ollama Mistral"
+    echo "3. Executes AI-powered scope audit via Ollama Devstral"
     echo ""
     echo "Requirements:"
     echo "- Ollama installed (https://ollama.com/)"
-    echo "- Mistral model (auto-installed if missing)"
+    echo "- Devstral model (auto-installed if missing)"
     echo "- ADR files in: docs/architecture/decisions/"
     exit 1
 fi
 
+# Call main function
 main "$@"
 
 # Cleanup on exit
