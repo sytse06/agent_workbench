@@ -6,6 +6,36 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+
+class ModelConfig(BaseModel):
+    """Configuration for LLM model parameters."""
+
+    provider: str = Field(
+        ...,
+        description="Provider name (openrouter, ollama, openai, anthropic, mistral)",
+    )
+    model_name: str = Field(..., description="Specific model name for the provider")
+    temperature: float = Field(
+        default=0.7, ge=0.0, le=2.0, description="Sampling temperature"
+    )
+    max_tokens: int = Field(
+        default=1000, gt=0, le=100000, description="Maximum tokens to generate"
+    )
+    top_p: float = Field(
+        default=1.0, ge=0.0, le=1.0, description="Top-p sampling parameter"
+    )
+    frequency_penalty: float = Field(
+        default=0.0, ge=-2.0, le=2.0, description="Frequency penalty"
+    )
+    system_prompt: Optional[str] = Field(None, description="System prompt to use")
+    streaming: bool = Field(
+        default=True, description="Whether to use streaming responses"
+    )
+    extra_params: Dict[str, Any] = Field(
+        default_factory=dict, description="Provider-specific parameters"
+    )
+
+
 # === Database Model Schemas ===
 
 
@@ -42,7 +72,7 @@ class ConversationInDB(ConversationBase):
 class ConversationResponse(ConversationInDB):
     """Schema for conversation API response."""
 
-    pass
+    llm_config: Optional[ModelConfig] = None
 
 
 class MessageBase(BaseModel):
@@ -138,3 +168,13 @@ class ErrorResponse(BaseModel):
 
     detail: str
     error_code: Optional[str] = None
+
+
+class ConversationSummary(BaseModel):
+    """Summary information about a conversation."""
+
+    id: UUID
+    title: str
+    created_at: datetime
+    message_count: int
+    llm_config: Optional[ModelConfig] = None

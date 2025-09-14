@@ -297,7 +297,8 @@ scope-validate:
 
 complete:
 	@if [ -z "$(TASK)" ]; then \
-		echo "Usage: make complete TASK=(TASK)"; \
+		echo "Usage: make complete TASK=TASK-NAME"; \
+		echo "Example: make complete TASK=LLM-001-langchain-model-integration"; \
 		exit 1; \
 	fi
 	@echo "🎉 Completing Implementation: $(TASK)"
