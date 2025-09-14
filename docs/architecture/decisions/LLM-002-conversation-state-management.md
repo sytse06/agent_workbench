@@ -1,297 +1,366 @@
-LLM-002: Conversation State Management
-Status
-Status: Ready for Implementation
-Date: September 09, 2025
-Decision Makers: Human Architect
-Task ID: LLM-002-conversation-state-management
-Dependencies: LLM-001 (chat foundation), CORE-002 (enhanced schema)
-Context
-Implement LangGraph-based conversation state management to transform the stateless chat service from LLM-001 into a context-aware, persistent conversation system. Provides the foundation for external context integration and advanced agent workflows while maintaining full backward compatibility with LLM-001.
-Architecture Scope
-What's Included:
+# LLM-002: Conversation State Management
 
-LangGraph state management for persistent conversation context
-Enhanced conversation lifecycle management
-Context integration interface for external systems
-Stateful conversation handling across sessions
-Database schema extensions for state persistence
-Migration path from LLM-001 stateless to stateful conversations
-Advanced conversation management endpoints
+## Status
 
-What's Explicitly Excluded:
+**Status**: Ready for Implementation  
+**Date**: September 14, 2025  
+**Decision Makers**: Human Architect  
+**Task ID**: LLM-002-conversation-state-management  
+**Dependencies**: LLM-001 (chat foundation), CORE-002 (database schema)
 
-UI integration or Gradio components (UI-001)
-Document processing logic or file handling (DOC-001)
-MCP tool integration or agent workflows (MCP-001, AGENT-001)
-Vector embeddings or semantic search capabilities
-Authentication or user management
-Direct LangChain ChatModel modifications (handled by LLM-001)
+## Context
 
-Architectural Decisions
-1. LangGraph State Architecture
-Core State Definition:
-pythonfrom typing import TypedDict, Annotated, Sequence, Optional, Dict, Any
-from langchain_core.messages import BaseMessage
-from langgraph.graph.message import add_messages
-from datetime import datetime
+Transform the stateless chat service from LLM-001 into a context-aware, persistent conversation system using framework-agnostic state management. Provides robust conversation memory, external context integration, and foundation for advanced agent workflows while maintaining universal provider compatibility through OpenAI-standard interfaces.
 
-class ConversationState(TypedDict):
-    messages: Annotated[Sequence[BaseMessage], add_messages]
-    model_config: ModelConfig  # From LLM-001
-    context_data: Dict[str, Any]  # External context from DOC-001, etc.
-    active_contexts: List[str]    # Context source identifiers
-    metadata: Dict[str, Any]      # Conversation metadata
+## Architecture Scope
+
+### What's Included:
+
+- Framework-agnostic conversation state management with persistent memory across sessions
+- OpenAI-compatible standard message format for universal provider support
+- Universal provider registry supporting OpenAI, OpenRouter, vLLM, Ollama, and any OpenAI-compatible service
+- Context integration interface for external systems (DOC-001, MCP-001) to inject data
+- Enhanced conversation lifecycle management with state persistence
+- Database schema extensions for state storage with efficient querying
+- Migration path from LLM-001 stateless to stateful conversations
+- Provider-agnostic LLM client using OpenAI-compatible endpoints
+
+### What's Explicitly Excluded:
+
+- UI integration or Gradio components (UI-001)
+- Document processing logic or file handling (DOC-001)
+- MCP tool integration or agent workflows (MCP-001, AGENT-001)
+- Framework-specific implementations (LangChain, LiteLLM adapters)
+- Vector embeddings or semantic search capabilities
+- Authentication or user management
+- Agent reasoning or decision-making logic
+
+## Architectural Decisions
+
+### 1. Framework-Agnostic State Architecture
+
+**Core Philosophy**: State management is a data persistence problem, not a framework problem
+
+```python
+class ConversationState(BaseModel):
+    conversation_id: UUID
+    messages: List[StandardMessage]           # Full conversation history
+    model_config: ModelConfig                # Provider and model settings
+    context_data: Dict[str, Any]             # External context injection
+    active_contexts: List[str]               # Context source tracking
+    metadata: Dict[str, Any]                 # Conversation metadata
     updated_at: datetime
-State Management Benefits:
+    
+    # Future extensions (empty for now, ready for AGENT-001)
+    agent_state: Optional[Dict[str, Any]] = None
+    workflow_data: Optional[Dict[str, Any]] = None
+```
 
-Persistent conversation memory across sessions
-Natural integration point for external context (documents, tools)
-Foundation for future agent workflows
-Eliminates "goldfish memory" problem of stateless LLMs
+### 2. OpenAI-Compatible Standard Message Format
 
-2. Database Schema Extension
-Enhanced CORE-002 Schema:
-sql-- Add to existing conversations table
+**Universal Message Schema**:
+```python
+class StandardMessage(BaseModel):
+    role: Literal["system", "user", "assistant", "tool"]
+    content: str
+    tool_calls: Optional[List[ToolCall]] = None
+    tool_call_id: Optional[str] = None
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    metadata: Optional[Dict[str, Any]] = None
+
+class ToolCall(BaseModel):
+    id: str
+    type: Literal["function"]
+    function: ToolFunction
+
+class ToolFunction(BaseModel):
+    name: str
+    arguments: str  # JSON string
+```
+
+### 3. Universal Provider Registry
+
+**Provider Abstraction**:
+```python
+class ModelProvider(BaseModel):
+    name: str
+    base_url: str
+    api_key_env_var: str
+    models: List[str]
+    supports_streaming: bool = True
+    supports_tools: bool = False
+    max_context_length: Optional[int] = None
+    
+class ModelConfig(BaseModel):
+    provider: str                           # Provider identifier
+    model: str                             # Model name
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=1000, gt=0, le=100000)
+    top_p: float = Field(default=1.0, ge=0.0, le=1.0)
+    frequency_penalty: float = Field(default=0.0, ge=-2.0, le=2.0)
+    presence_penalty: float = Field(default=0.0, ge=-2.0, le=2.0)
+    system_prompt: Optional[str] = None
+    streaming: bool = True
+    extra_params: Dict[str, Any] = {}
+```
+
+### 4. Database Schema Extensions
+
+**Enhanced Schema from CORE-002**:
+```sql
+-- Extend existing conversations table
 ALTER TABLE conversations ADD COLUMN model_config JSON;
+ALTER TABLE conversations ADD COLUMN context_sources JSON;
+ALTER TABLE conversations ADD COLUMN last_activity TIMESTAMP;
 
--- New table for LangGraph state persistence
+-- New table for conversation state persistence
 CREATE TABLE conversation_states (
-    conversation_id VARCHAR(36) PRIMARY KEY REFERENCES conversations(id),
+    conversation_id VARCHAR(36) PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
     state_data JSON NOT NULL,
-    context_sources JSON,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    context_data JSON,
+    active_contexts JSON,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    version INTEGER DEFAULT 1
 );
 
--- Index for performance
+-- Indexes for performance
 CREATE INDEX idx_conversation_states_updated ON conversation_states(updated_at);
-CREATE INDEX idx_conversation_states_context ON conversation_states USING GIN (context_sources);
-3. State Persistence Strategy
-Automatic State Management:
+CREATE INDEX idx_conversation_states_context ON conversation_states USING GIN (active_contexts);
+CREATE INDEX idx_conversations_activity ON conversations(last_activity);
+```
 
-State automatically saved after each chat interaction
-Lazy loading of conversation state on first access
-State compression for long conversations
-Context source tracking for external integrations
+### 5. Provider-Agnostic LLM Client
 
-Migration from LLM-001:
-
-Existing conversations automatically upgraded to stateful
-Backward compatibility maintained for LLM-001 endpoints
-Gradual migration path without breaking changes
-
-4. Context Integration Architecture
-External Context Flow:
-python# External systems (DOC-001) update conversation state
-def update_conversation_context(
-    conversation_id: UUID,
-    context_data: Dict[str, Any],
-    context_sources: List[str]
-):
-    state = load_conversation_state(conversation_id)
-    state["context_data"].update(context_data)
-    state["active_contexts"].extend(context_sources)
-    save_conversation_state(conversation_id, state)
-
-# LLM service reads context from state naturally
-def build_context_aware_messages(state: ConversationState, message: str) -> List[BaseMessage]:
-    messages = list(state["messages"])
+**Universal Client Implementation**:
+```python
+class UniversalLLMClient:
+    """
+    OpenAI-compatible client that works with any provider
+    No framework dependencies, pure HTTP implementation
+    """
     
-    if state.get("context_data"):
-        context_prompt = create_context_prompt(state["context_data"])
-        messages.insert(-1, context_prompt)  # Insert before latest user message
+    def __init__(self, provider_registry: ProviderRegistry):
+        self.providers = provider_registry
+        self.http_client = httpx.AsyncClient()
     
-    messages.append(HumanMessage(content=message))
-    return messages
-5. LangGraph Workflow Integration
-Simple Chat Workflow:
-pythonfrom langgraph.graph import StateGraph, END
+    async def chat_completion(
+        self, 
+        messages: List[StandardMessage], 
+        config: ModelConfig
+    ) -> ChatResponse:
+        provider = await self.providers.get_provider(config.provider)
+        request_data = self._build_chat_request(messages, config)
+        response = await self.http_client.post(
+            f"{provider.base_url}/chat/completions",
+            json=request_data,
+            headers=self._build_headers(provider)
+        )
+        return self._parse_chat_response(response.json())
+```
 
-def create_chat_workflow() -> StateGraph:
-    workflow = StateGraph(ConversationState)
-    
-    workflow.add_node("load_context", load_conversation_context)
-    workflow.add_node("chat_completion", chat_completion_node)
-    workflow.add_node("save_state", save_conversation_state_node)
-    
-    workflow.add_edge("load_context", "chat_completion")
-    workflow.add_edge("chat_completion", "save_state")
-    workflow.add_edge("save_state", END)
-    
-    workflow.set_entry_point("load_context")
-    return workflow.compile()
-Implementation Boundaries for AI
-Files to CREATE:
+## Implementation Boundaries for AI
+
+### Files to CREATE:
+
+```
+src/agent_workbench/models/
+├── messages.py              # StandardMessage, ToolCall definitions
+├── providers.py             # ModelProvider, ModelConfig definitions
+├── conversation_state.py    # ConversationState and database models
+└── responses.py             # ChatResponse, streaming response models
+
 src/agent_workbench/services/
-├── state_manager.py         # LangGraph state persistence
-├── conversation_manager.py  # Enhanced conversation lifecycle
-└── context_service.py       # Context integration interface
+├── state_manager.py         # Core state persistence and lifecycle
+├── provider_registry.py     # Provider management and validation
+├── conversation_service.py  # Context-aware conversation logic
+└── context_service.py       # External context integration
 
 src/agent_workbench/core/
-├── chat_state.py           # LangGraph state definitions
-└── workflow.py             # Basic chat workflow
+├── universal_client.py      # OpenAI-compatible LLM client
+└── message_builder.py       # Context-aware message construction
+
+src/agent_workbench/config/
+└── providers.py             # Default provider configurations
 
 src/agent_workbench/api/routes/
-├── conversations.py        # Enhanced conversation management
-└── context.py             # Context integration endpoints
+├── conversations.py         # Enhanced conversation management
+├── context.py              # Context integration endpoints
+└── providers.py            # Provider information endpoints
+```
 
-src/agent_workbench/models/
-└── conversation_state.py  # Database model for state persistence
-Files to MODIFY:
-src/agent_workbench/services/llm_service.py  # Add state management integration
-src/agent_workbench/api/routes/chat.py       # Add stateful endpoints
-Exact Function Signatures:
-python# state_manager.py
+### Files to MODIFY:
+
+```
+src/agent_workbench/services/llm_service.py  # Integration with state management
+src/agent_workbench/api/routes/chat.py       # Add stateful chat endpoints
+```
+
+### Exact Function Signatures:
+
+```python
+# models/conversation_state.py
+class ConversationState(BaseModel):
+    conversation_id: UUID
+    messages: List[StandardMessage]
+    model_config: ModelConfig
+    context_data: Dict[str, Any]
+    active_contexts: List[str]
+    metadata: Dict[str, Any]
+    updated_at: datetime
+    agent_state: Optional[Dict[str, Any]] = None
+    workflow_data: Optional[Dict[str, Any]] = None
+
+class ConversationStateDB(Base):
+    __tablename__ = "conversation_states"
+    conversation_id = Column(UUID, ForeignKey("conversations.id"), primary_key=True)
+    state_data = Column(JSON, nullable=False)
+    context_data = Column(JSON)
+    active_contexts = Column(JSON)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    version = Column(Integer, default=1)
+
+# services/state_manager.py
 class StateManager:
     async def load_conversation_state(self, conversation_id: UUID) -> ConversationState
-    async def save_conversation_state(self, conversation_id: UUID, state: ConversationState) -> None
-    async def create_default_state(self, conversation_id: UUID, model_config: ModelConfig) -> ConversationState
-    async def migrate_conversation_to_state(self, conversation_id: UUID) -> ConversationState
-
-# conversation_manager.py
-class ConversationManager:
-    async def create_conversation(self, title: Optional[str] = None, model_config: Optional[ModelConfig] = None) -> UUID
-    async def get_conversations(self, limit: int = 50) -> List[ConversationSummary]
+    async def save_conversation_state(self, state: ConversationState) -> None
+    async def create_conversation(self, model_config: ModelConfig, title: Optional[str] = None) -> UUID
     async def delete_conversation(self, conversation_id: UUID) -> bool
-    async def update_conversation_config(self, conversation_id: UUID, config: ModelConfig) -> None
-    async def get_conversation_state(self, conversation_id: UUID) -> ConversationState
+    async def list_conversations(self, limit: int = 50, offset: int = 0) -> List[ConversationSummary]
+    async def migrate_conversation_to_stateful(self, conversation_id: UUID) -> ConversationState
 
-# context_service.py
+# services/conversation_service.py
+class ConversationService:
+    async def chat_with_context(self, conversation_id: UUID, message: str) -> ChatResponse
+    async def stream_chat_with_context(self, conversation_id: UUID, message: str) -> AsyncGenerator[str, None]
+    async def get_conversation_summary(self, conversation_id: UUID) -> ConversationSummary
+    async def update_conversation_config(self, conversation_id: UUID, config: ModelConfig) -> None
+
+# services/context_service.py
 class ContextService:
     async def update_conversation_context(self, conversation_id: UUID, context_data: Dict[str, Any], sources: List[str]) -> None
     async def clear_conversation_context(self, conversation_id: UUID, source: Optional[str] = None) -> None
     async def get_active_contexts(self, conversation_id: UUID) -> List[str]
+    async def get_context_data(self, conversation_id: UUID) -> Dict[str, Any]
 
-# Enhanced LLM service (MODIFY llm_service.py)
-class ChatService:
-    # Add state management methods
-    async def chat_completion_stateful(self, message: str, conversation_id: UUID) -> Tuple[ChatResponse, ConversationState]
-    async def stream_completion_stateful(self, message: str, conversation_id: UUID) -> AsyncGenerator[str, None]
+# services/provider_registry.py
+class ProviderRegistry:
+    async def get_available_providers(self) -> List[ModelProvider]
+    async def get_provider_models(self, provider_name: str) -> List[str]
+    async def validate_model_config(self, config: ModelConfig) -> ValidationResult
+    async def get_provider(self, provider_name: str) -> ModelProvider
+    async def register_custom_provider(self, provider: ModelProvider) -> None
 
-# API endpoints
+# core/universal_client.py
+class UniversalLLMClient:
+    async def chat_completion(self, messages: List[StandardMessage], config: ModelConfig) -> ChatResponse
+    async def stream_completion(self, messages: List[StandardMessage], config: ModelConfig) -> AsyncGenerator[str, None]
+    async def validate_connection(self, provider: str) -> bool
+
+# models/messages.py
+class StandardMessage(BaseModel):
+    role: Literal["system", "user", "assistant", "tool"]
+    content: str
+    tool_calls: Optional[List[ToolCall]] = None
+    tool_call_id: Optional[str] = None
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    metadata: Optional[Dict[str, Any]] = None
+
+class ChatResponse(BaseModel):
+    content: str
+    conversation_id: UUID
+    message_count: int
+    model_used: str
+    metadata: Optional[Dict[str, Any]] = None
+
+class ConversationSummary(BaseModel):
+    id: UUID
+    title: str
+    created_at: datetime
+    last_activity: datetime
+    message_count: int
+    model_config: Optional[ModelConfig]
+    active_contexts: List[str]
+
+# API endpoints (conversations.py)
 @router.get("/conversations", response_model=List[ConversationSummary])
-async def get_conversations()
+async def get_conversations(limit: int = 50, offset: int = 0)
 
-@router.post("/conversations", response_model=ConversationResponse)  
+@router.post("/conversations", response_model=ConversationResponse)
 async def create_conversation(request: CreateConversationRequest)
 
 @router.get("/conversations/{conversation_id}/state", response_model=ConversationStateResponse)
 async def get_conversation_state(conversation_id: UUID)
 
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: UUID)
+
+# API endpoints (context.py)
 @router.put("/conversations/{conversation_id}/context")
 async def update_conversation_context(conversation_id: UUID, request: ContextUpdateRequest)
 
+@router.delete("/conversations/{conversation_id}/context")
+async def clear_conversation_context(conversation_id: UUID, source: Optional[str] = None)
+
+@router.get("/conversations/{conversation_id}/context")
+async def get_conversation_context(conversation_id: UUID)
+
 # Enhanced chat endpoints (MODIFY chat.py)
 @router.post("/chat/stateful", response_model=ChatResponse)
-async def chat_completion_stateful(request: ChatRequest)
+async def chat_completion_stateful(request: StatefulChatRequest)
 
 @router.post("/chat/stateful/stream")
-async def stream_chat_stateful(request: ChatRequest)
-Additional Dependencies:
-tomllanggraph = "^0.2.28"      # LangGraph state management
-sqlalchemy = "^2.0.0"      # Enhanced database models
-alembic = "^1.12.0"        # Database migrations
-FORBIDDEN Actions:
+async def stream_chat_stateful(request: StatefulChatRequest)
 
-Creating UI components or Gradio integration
-Implementing document processing or file handling logic
-Adding MCP tool calling or agent decision-making
-Modifying core LangChain ChatModel functionality from LLM-001
-Adding authentication or user management
-Implementing vector embeddings or semantic search
+# Provider endpoints (providers.py)
+@router.get("/providers", response_model=List[ModelProvider])
+async def get_providers()
 
-Integration Points
-1. LLM-001 Integration
-Backward Compatibility:
+@router.get("/providers/{provider_name}/models", response_model=List[str])
+async def get_provider_models(provider_name: str)
 
-All LLM-001 endpoints continue to work unchanged
-Stateless endpoints automatically create minimal state
-Gradual migration path from stateless to stateful
+@router.post("/providers/{provider_name}/validate")
+async def validate_provider_config(provider_name: str, config: ModelConfig)
+```
 
-Enhanced Functionality:
-python# LLM-001 stateless endpoint still works
-POST /chat  # Creates temporary state, discards after response
+### Additional Dependencies:
 
-# LLM-002 adds stateful endpoints
-POST /chat/stateful  # Uses persistent conversation state
-POST /chat/stateful/stream  # Stateful streaming
-2. UI-001 Integration
-Enhanced Conversation Management:
-python# Provides additional endpoints for UI-001:
-GET /conversations                    # List conversations with state info
-POST /conversations                   # Create with model config
-GET /conversations/{id}/state         # Get full conversation state
-PUT /conversations/{id}/context       # Update context (for future use)
-3. DOC-001 Integration Preparation
-Context Integration Interface:
-python# DOC-001 can update conversation context via:
-PUT /conversations/{id}/context
-{
-  "context_data": {"documents": [...], "summaries": [...]},
-  "sources": ["doc1.pdf", "web_page_1"]
-}
+```toml
+# Core functionality (minimal, stable)
+fastapi = "^0.104.0"
+pydantic = "^2.5.0"
+sqlalchemy = "^2.0.0"
+alembic = "^1.12.0"
+httpx = "^0.25.0"          # For OpenAI-compatible HTTP requests
+asyncio = "^3.9.0"         # Async support
+uuid = "^1.30.0"           # UUID generation
+python-dotenv = "^1.0.0"   # Environment configuration
 
-# Context flows naturally through state to chat completion
-4. AGENT-001 Foundation
-State Extension Ready:
-python# Future agent state extends conversation state
-class AgentState(ConversationState):
-    active_tools: List[str]
-    tool_results: Dict[str, Any]
-    agent_reasoning: Optional[str]
-    
-# Same state management infrastructure supports agent workflows
-Migration Strategy
-Phase 1: Infrastructure Setup
+# Database and persistence
+aiosqlite = "^0.19.0"      # Async SQLite support
+asyncpg = "^0.29.0"        # PostgreSQL async support (optional)
 
-Deploy database schema changes
-Implement state management infrastructure
-Add stateful endpoints alongside existing ones
+# Optional enhancements
+tenacity = "^8.2.0"        # Retry logic for HTTP requests
+structlog = "^23.2.0"      # Structured logging
+```
 
-Phase 2: Gradual Migration
+### FORBIDDEN Actions:
 
-UI-001 can optionally use stateful endpoints
-Existing conversations automatically upgrade on first stateful access
-Performance monitoring and optimization
+- Adding LangChain, LangGraph, or LiteLLM dependencies
+- Creating UI components or Gradio integration
+- Implementing document processing or file handling logic
+- Adding MCP tool calling or agent decision-making
+- Implementing vector embeddings or semantic search
+- Adding authentication or user management
+- Creating framework-specific adapters or wrappers
 
-Phase 3: Context Integration
+## Success Criteria
 
-DOC-001 integrates via context update endpoints
-Full context-aware conversations
-Advanced conversation management features
-
-Success Criteria
-Core State Management:
-
- LangGraph state persistence working correctly
- All conversation state automatically saved/loaded
- Context integration interface functional
- Migration from LLM-001 conversations seamless
-
-Integration Requirements:
-
- Backward compatibility with LLM-001 maintained
- Enhanced conversation management endpoints working
- Context update endpoints ready for DOC-001 integration
- State performance acceptable (<500ms for state operations)
-
-Database & Migration:
-
- Database schema migrations successful
- Existing conversations migrate to stateful without data loss
- State compression working for long conversations
- Context source tracking accurate
-
-Foundation for Future:
-
- State structure extensible for agent workflows
- Context integration tested with mock external data
- Performance benchmarks established for state operations
- >90% test coverage for state management functionality
-
-Implementation Philosophy
-LLM-002 transforms the stateless chat foundation from LLM-001 into a context-aware, persistent conversation system. The key architectural principle is state as the communication channel between components:
-Memory Persistence: Conversations maintain full context across sessions, solving the "goldfish memory" problem of traditional stateless LLMs
-Context Flow: External systems integrate by updating conversation state rather than complex injection APIs
-Future Foundation: The LangGraph state architecture provides the foundation for agent workflows while maintaining the simplicity of the chat interface
-Seamless Evolution: Existing LLM-001 functionality remains unchanged, with stateful capabilities added as enhancements rather than replacements
-This approach creates a robust, scalable foundation for advanced AI workbench capabilities while preserving the reliability and simplicity established in LLM-001.
+- [ ] Conversation state persistence working correctly across sessions
+- [ ] Context integration interface functional for external systems
+- [ ] Migration from LLM-001 conversations seamless with no data loss
+- [ ] Universal provider support for OpenAI, OpenRouter, vLLM, Ollama
+- [ ] OpenAI-compatible message format works across all providers
+- [ ] State operations complete in <500ms for good user experience
+- [ ] Backward compatibility with LLM-001 maintained completely
+- [ ] >90% test coverage for state management functionality
