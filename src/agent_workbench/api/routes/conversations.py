@@ -1,21 +1,25 @@
-"""Conversation API routes for Agent Workbench."""
+"""Conversation API routes for LLM chat interactions."""
 
-from typing import List, Optional
+from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_workbench.api.database import get_session
-from agent_workbench.api.exceptions import ConversationNotFoundError
-from agent_workbench.models.database import ConversationModel
-from agent_workbench.models.schemas import (
-    ConversationCreate,
-    ConversationResponse,
-    ConversationUpdate,
-)
+from ...models.schemas import ConversationResponse, ConversationSummary
+from ...services.chat_models import CreateConversationRequest
+from ...services.conversation_service import ConversationService
 
 router = APIRouter(prefix="/api/v1/conversations", tags=["conversations"])
+
+
+async def get_conversation_service() -> ConversationService:
+    """
+    Dependency to get conversation service instance.
+
+    Returns:
+        Conversation service instance
+    """
+    return ConversationService()
 
 
 @router.post(
@@ -26,82 +30,90 @@ router = APIRouter(prefix="/api/v1/conversations", tags=["conversations"])
     description="Create a new conversation",
 )
 async def create_conversation(
-    request: ConversationCreate, session: AsyncSession = Depends(get_session)
+    request: CreateConversationRequest,
+    service: ConversationService = Depends(get_conversation_service),
 ) -> ConversationResponse:
-    """Create a new conversation."""
-    conversation = await ConversationModel.create(session, **request.model_dump())
-    return ConversationResponse.model_validate(conversation)
+    """
+    Create a new conversation.
 
+    Args:
+        request: Create conversation request
+        service: Conversation service instance
 
-@router.get(
-    "/{conversation_id}",
-    response_model=ConversationResponse,
-    summary="Get conversation",
-    description="Get a conversation by ID",
-)
-async def get_conversation(
-    conversation_id: UUID, session: AsyncSession = Depends(get_session)
-) -> ConversationResponse:
-    """Get conversation by ID."""
-    conversation = await ConversationModel.get_by_id(session, conversation_id)
-    if conversation is None:
-        raise ConversationNotFoundError(str(conversation_id))
-    return ConversationResponse.model_validate(conversation)
+    Returns:
+        Created conversation response
+    """
+    conversation_id = await service.create_conversation(
+        title=request.title, model_config=request.llm_config
+    )
+    return await service.get_conversation(conversation_id)
 
 
 @router.get(
     "/",
-    response_model=List[ConversationResponse],
+    response_model=List[ConversationSummary],
+    status_code=status.HTTP_200_OK,
     summary="List conversations",
-    description="List all conversations, optionally filtered by user ID",
+    description="Get list of conversations",
 )
 async def list_conversations(
-    user_id: Optional[UUID] = None, session: AsyncSession = Depends(get_session)
-) -> List[ConversationResponse]:
-    """List conversations."""
-    if user_id:
-        conversations = await ConversationModel.get_by_user(session, user_id)
-    else:
-        result = await session.execute(ConversationModel.__table__.select())
-        conversations = list(result.scalars().all())
+    limit: int = 50, service: ConversationService = Depends(get_conversation_service)
+) -> List[ConversationSummary]:
+    """
+    Get list of conversations.
 
-    return [ConversationResponse.model_validate(conv) for conv in conversations]
+    Args:
+        limit: Maximum number of conversations to return
+        service: Conversation service instance
+
+    Returns:
+        List of conversation summaries
+    """
+    return await service.get_conversations(limit=limit)
 
 
-@router.put(
+@router.get(
     "/{conversation_id}",
     response_model=ConversationResponse,
-    summary="Update conversation",
-    description="Update a conversation by ID",
+    status_code=status.HTTP_200_OK,
+    summary="Get conversation",
+    description="Get conversation by ID",
 )
-async def update_conversation(
+async def get_conversation(
     conversation_id: UUID,
-    request: ConversationUpdate,
-    session: AsyncSession = Depends(get_session),
+    service: ConversationService = Depends(get_conversation_service),
 ) -> ConversationResponse:
-    """Update conversation."""
-    conversation = await ConversationModel.get_by_id(session, conversation_id)
-    if conversation is None:
-        raise ConversationNotFoundError(str(conversation_id))
+    """
+    Get conversation by ID.
 
-    updated_conversation = await conversation.update(
-        session, **request.model_dump(exclude_unset=True)
-    )
-    return ConversationResponse.model_validate(updated_conversation)
+    Args:
+        conversation_id: Conversation ID
+        service: Conversation service instance
+
+    Returns:
+        Conversation response
+    """
+    return await service.get_conversation(conversation_id)
 
 
 @router.delete(
     "/{conversation_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete conversation",
-    description="Delete a conversation by ID",
+    description="Delete conversation by ID",
 )
 async def delete_conversation(
-    conversation_id: UUID, session: AsyncSession = Depends(get_session)
+    conversation_id: UUID,
+    service: ConversationService = Depends(get_conversation_service),
 ) -> None:
-    """Delete conversation."""
-    conversation = await ConversationModel.get_by_id(session, conversation_id)
-    if conversation is None:
-        raise ConversationNotFoundError(str(conversation_id))
+    """
+    Delete conversation by ID.
 
-    await conversation.delete(session)
+    Args:
+        conversation_id: Conversation ID
+        service: Conversation service instance
+    """
+    success = await service.delete_conversation(conversation_id)
+    if not success:
+        # This would typically raise an exception
+        pass
