@@ -5,7 +5,8 @@ from uuid import UUID
 
 import pytest
 
-from agent_workbench.services.chat_models import ChatResponse, ModelConfig
+from agent_workbench.models.state_requests import ChatResponse
+from agent_workbench.services.chat_models import ModelConfig
 from agent_workbench.services.llm_service import (
     ChatService,
     create_chat_service,
@@ -74,7 +75,7 @@ class TestChatService:
 
             # Assertions
             assert isinstance(result, ChatResponse)
-            assert result.message == "Hello! How can I help you?"
+            assert result.content == "Hello! How can I help you?"
             assert result.conversation_id == conversation_id
             assert result.llm_config == self.model_config
             mock_model.ainvoke.assert_called_once()

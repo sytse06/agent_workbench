@@ -4,9 +4,6 @@ from typing import List, Optional
 from uuid import UUID, uuid4
 
 from ..core.exceptions import ConversationError
-
-# Database models will be used when implemented
-# from ..models.database import ConversationModel, MessageModel
 from ..models.schemas import ConversationResponse, ConversationSummary
 from .chat_models import ModelConfig
 
@@ -15,7 +12,10 @@ class ConversationService:
     """Service for managing conversation lifecycle and persistence."""
 
     async def create_conversation(
-        self, title: Optional[str] = None, model_config: Optional[ModelConfig] = None
+        self,
+        title: Optional[str] = None,
+        model_config: Optional[ModelConfig] = None,
+        is_temporary: bool = False,
     ) -> UUID:
         """
         Create a new conversation.
@@ -23,6 +23,7 @@ class ConversationService:
         Args:
             title: Optional conversation title
             model_config: Optional model configuration
+            is_temporary: Whether this is a temporary conversation
 
         Returns:
             Conversation ID
@@ -36,7 +37,8 @@ class ConversationService:
             conversation_id = uuid4()
             return conversation_id
         except Exception as e:
-            raise ConversationError(f"Failed to create conversation: {str(e)}") from e
+            error_msg = f"Failed to create conversation: {str(e)}"
+            raise ConversationError(error_msg) from e
 
     async def get_conversations(self, limit: int = 50) -> List[ConversationSummary]:
         """
@@ -56,7 +58,8 @@ class ConversationService:
             # For now, return empty list
             return []
         except Exception as e:
-            raise ConversationError(f"Failed to fetch conversations: {str(e)}") from e
+            error_msg = f"Failed to fetch conversations: {str(e)}"
+            raise ConversationError(error_msg) from e
 
     async def delete_conversation(self, conversation_id: UUID) -> bool:
         """
@@ -76,9 +79,8 @@ class ConversationService:
             # For now, return True
             return True
         except Exception as e:
-            raise ConversationError(
-                f"Failed to delete conversation {conversation_id}: {str(e)}"
-            ) from e
+            error_msg = f"Failed to delete conversation {conversation_id}: {str(e)}"
+            raise ConversationError(error_msg) from e
 
     async def get_conversation(self, conversation_id: UUID) -> ConversationResponse:
         """
@@ -107,6 +109,5 @@ class ConversationService:
                 llm_config=None,
             )
         except Exception as e:
-            raise ConversationError(
-                f"Failed to fetch conversation {conversation_id}: {str(e)}"
-            ) from e
+            error_msg = f"Failed to fetch conversation {conversation_id}: {str(e)}"
+            raise ConversationError(error_msg) from e

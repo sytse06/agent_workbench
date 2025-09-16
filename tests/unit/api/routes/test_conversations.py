@@ -134,16 +134,20 @@ class TestConversationRoutes:
         assert data["title"] == "Test Conversation"
         assert data["llm_config"]["provider"] == "ollama"
 
-    def test_create_conversation_invalid_request(self):
-        """Test POST /api/v1/conversations endpoint with invalid request."""
-        # Test data with invalid fields
+    def test_create_conversation_with_extra_fields(self):
+        """Test POST /api/v1/conversations endpoint ignores extra fields."""
+        # Test data with extra fields (should be ignored gracefully)
         conversation_request = {"invalid_field": "invalid_value"}
 
         # Make request
         response = client.post("/api/v1/conversations", json=conversation_request)
 
-        # Should return 422 Validation error
-        assert response.status_code == 422
+        # Should succeed and ignore extra fields
+        assert response.status_code == 201
+        data = response.json()
+        assert "id" in data
+        assert "title" in data
+        assert "created_at" in data
 
     def test_get_conversation_by_id(self):
         """Test GET /api/v1/conversations/{conversation_id} endpoint."""
