@@ -5,15 +5,12 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 from uuid import UUID
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ..core.exceptions import LLMProviderError, ModelConfigurationError, StreamingError
 from ..core.retry import retry_llm_call
-
-# Conversation models will be used when implemented
-# from ..models.database import ConversationModel, MessageModel
-# from ..models.schemas import MessageCreate
-from .chat_models import ChatResponse, ModelConfig
+from ..models.state_requests import ChatResponse
+from .chat_models import ModelConfig
 from .providers import PROVIDER_FACTORIES, ProviderFactory
 
 logger = logging.getLogger(__name__)
@@ -62,11 +59,11 @@ class ChatService:
         provider_name = self.model_config.provider.lower()
 
         if provider_name not in PROVIDER_FACTORIES:
-            raise LLMProviderError(
+            error_msg = (
                 f"Unsupported provider: {provider_name}. "
-                f"Supported providers: {list(PROVIDER_FACTORIES.keys())}",
-                provider=provider_name,
+                f"Supported providers: {list(PROVIDER_FACTORIES.keys())}"
             )
+            raise LLMProviderError(error_msg, provider=provider_name)
 
         try:
             factory_class = PROVIDER_FACTORIES[provider_name]
@@ -85,7 +82,10 @@ class ChatService:
 
     @retry_llm_call
     async def chat_completion(
-        self, message: str, conversation_id: Optional[UUID] = None
+        self,
+        message: str,
+        conversation_id: Optional[UUID] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> ChatResponse:
         """
         Generate chat completion response.
@@ -93,6 +93,7 @@ class ChatService:
         Args:
             message: User message
             conversation_id: Existing conversation ID (optional)
+            context: Additional context data (optional)
 
         Returns:
             Chat response with assistant message
@@ -103,7 +104,7 @@ class ChatService:
         """
         try:
             # Get conversation history if provided
-            messages = await self._prepare_messages(message, conversation_id)
+            messages = await self._prepare_messages(message, conversation_id, context)
 
             # Generate response
             response = await self.chat_model.ainvoke(messages)
@@ -121,8 +122,9 @@ class ChatService:
                 )
 
             return ChatResponse(
-                message=assistant_message,
+                content=assistant_message,
                 conversation_id=conversation_id or UUID(int=0),
+                model_used=f"{self.model_config.provider}:{self.model_config.model_name}",
                 llm_config=self.model_config,
             )
 
@@ -134,7 +136,10 @@ class ChatService:
 
     @retry_llm_call
     async def stream_completion(
-        self, message: str, conversation_id: Optional[UUID] = None
+        self,
+        message: str,
+        conversation_id: Optional[UUID] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[str, None]:
         """
         Stream chat completion response.
@@ -142,6 +147,7 @@ class ChatService:
         Args:
             message: User message
             conversation_id: Existing conversation ID (optional)
+            context: Additional context data (optional)
 
         Yields:
             Streamed response chunks
@@ -152,7 +158,7 @@ class ChatService:
         """
         try:
             # Get conversation history if provided
-            messages = await self._prepare_messages(message, conversation_id)
+            messages = await self._prepare_messages(message, conversation_id, context)
 
             # Stream response
             full_response = ""
@@ -180,19 +186,31 @@ class ChatService:
             raise StreamingError(f"Stream completion failed: {str(e)}") from e
 
     async def _prepare_messages(
-        self, message: str, conversation_id: Optional[UUID] = None
-    ) -> List[Dict[str, Any]]:
+        self,
+        message: str,
+        conversation_id: Optional[UUID] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> List[BaseMessage]:
         """
         Prepare messages for chat model including history.
 
         Args:
             message: Current user message
             conversation_id: Conversation ID for history (optional)
+            context: Additional context data (optional)
 
         Returns:
-            List of message dictionaries
+            List of LangChain messages
         """
         messages = []
+
+        # Add context as system message if provided
+        if context:
+            context_parts = []
+            for key, value in context.items():
+                context_parts.append(f"{key}: {value}")
+            context_prompt = "Context Information:\n" + "\n".join(context_parts)
+            messages.append(SystemMessage(content=context_prompt))
 
         # Add system prompt if provided
         if self.model_config.system_prompt:
@@ -210,7 +228,7 @@ class ChatService:
 
     async def _get_conversation_history(
         self, conversation_id: UUID
-    ) -> List[Dict[str, Any]]:
+    ) -> List[BaseMessage]:
         """
         Get conversation history from database.
 
@@ -218,7 +236,7 @@ class ChatService:
             conversation_id: Conversation ID
 
         Returns:
-            List of message dictionaries
+            List of LangChain messages
         """
         try:
             # This would typically fetch from database
@@ -256,6 +274,65 @@ class ChatService:
         # This would typically fetch from provider API
         # For now, return empty list - models will be validated at runtime
         return []
+
+    # Internal methods for stateful service integration
+    async def _chat_with_model(
+        self, messages: List[BaseMessage], model_config: ModelConfig
+    ) -> str:
+        """
+        Internal method to chat with model using provided messages.
+
+        Args:
+            messages: List of LangChain messages
+            model_config: Model configuration
+
+        Returns:
+            Response content
+        """
+        # Temporarily override model config if different
+        original_config = self.model_config
+        if model_config != original_config:
+            self.model_config = model_config
+            try:
+                chat_model = self._create_chat_model()
+                response = await chat_model.ainvoke(messages)
+            finally:
+                self.model_config = original_config
+        else:
+            response = await self.chat_model.ainvoke(messages)
+
+        return str(response.content)
+
+    async def _stream_chat_with_model(
+        self, messages: List[BaseMessage], model_config: ModelConfig
+    ) -> AsyncGenerator[str, None]:
+        """
+        Internal method to stream chat with model using provided messages.
+
+        Args:
+            messages: List of LangChain messages
+            model_config: Model configuration
+
+        Yields:
+            Response content chunks
+        """
+        # Temporarily override model config if different
+        original_config = self.model_config
+        if model_config != original_config:
+            self.model_config = model_config
+            try:
+                chat_model = self._create_chat_model()
+                async for chunk in chat_model.astream(messages):
+                    content = chunk.content
+                    if content:
+                        yield content
+            finally:
+                self.model_config = original_config
+        else:
+            async for chunk in self.chat_model.astream(messages):
+                content = chunk.content
+                if content:
+                    yield content
 
 
 # Convenience functions for common use cases

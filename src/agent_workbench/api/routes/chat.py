@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, status
 from fastapi.responses import StreamingResponse
 
 from ...core.exceptions import LLMProviderError, StreamingError
-from ...services.chat_models import ChatRequest, ChatResponse, ModelConfig
+from ...models.schemas import ModelConfig
+from ...models.state_requests import ChatRequest, ChatResponse
 from ...services.llm_service import ChatService, create_chat_service
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
@@ -26,7 +27,12 @@ async def get_chat_service(request: ChatRequest) -> ChatService:
     if isinstance(request.llm_config, dict):
         model_config = ModelConfig(**request.llm_config)
     else:
-        model_config = request.llm_config
+        model_config = request.llm_config or ModelConfig(
+            provider="ollama",
+            model_name="llama3.1",
+            temperature=0.7,
+            max_tokens=1000,
+        )
 
     return await create_chat_service(model_config)
 
@@ -36,7 +42,7 @@ async def get_chat_service(request: ChatRequest) -> ChatService:
     response_model=ChatResponse,
     status_code=status.HTTP_200_OK,
     summary="Chat completion",
-    description="Generate a chat completion response",
+    description="Generate a chat completion response (stateless or stateful)",
 )
 async def chat_completion(
     request: ChatRequest, service: ChatService = Depends(get_chat_service)
@@ -56,7 +62,9 @@ async def chat_completion(
     """
     try:
         response: ChatResponse = await service.chat_completion(
-            message=request.message, conversation_id=request.conversation_id
+            message=request.message,
+            conversation_id=request.conversation_id,
+            context=request.context if request.use_context else None,
         )
         return response
     except LLMProviderError:
@@ -68,7 +76,7 @@ async def chat_completion(
 @router.post(
     "/stream",
     summary="Stream chat completion",
-    description="Stream a chat completion response",
+    description="Stream a chat completion response (stateless or stateful)",
 )
 async def stream_chat(
     request: ChatRequest, service: ChatService = Depends(get_chat_service)
@@ -90,7 +98,9 @@ async def stream_chat(
 
         async def generate() -> AsyncGenerator[str, None]:
             async for chunk in service.stream_completion(
-                message=request.message, conversation_id=request.conversation_id
+                message=request.message,
+                conversation_id=request.conversation_id,
+                context=request.context if request.use_context else None,
             ):
                 yield chunk
 
