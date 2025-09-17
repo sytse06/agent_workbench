@@ -26,7 +26,7 @@ class ConversationState(BaseModel):
 
     conversation_id: UUID
     messages: List[StandardMessage]
-    model_config: "ModelConfig"  # Forward reference
+    llm_config: "ModelConfig"  # Forward reference - renamed to avoid Pydantic conflict
     context_data: Dict[str, Any]
     active_contexts: List[str]
     metadata: Dict[str, Any]
@@ -38,7 +38,7 @@ class ConversationState(BaseModel):
             self,
             conversation_id: UUID,
             messages: List[StandardMessage],
-            model_config: "ModelConfig",
+            llm_config: "ModelConfig",
             context_data: Dict[str, Any],
             active_contexts: List[str],
             metadata: Dict[str, Any],

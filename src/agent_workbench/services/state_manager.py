@@ -60,7 +60,7 @@ class StateManager:
                 state = ConversationState(
                     conversation_id=conversation_id,
                     messages=state_db.state_data.get("messages", []),
-                    model_config=state_db.state_data.get("model_config"),
+                    llm_config=state_db.state_data.get("model_config"),
                     context_data=state_db.context_data or {},
                     active_contexts=state_db.active_contexts or [],
                     metadata=state_db.state_data.get("metadata", {}),
@@ -71,7 +71,7 @@ class StateManager:
                 state = ConversationState(
                     conversation_id=conversation_id,
                     messages=[],
-                    model_config=ModelConfig(
+                    llm_config=ModelConfig(
                         provider="ollama",
                         model_name="llama3.1",
                         temperature=0.7,
@@ -104,7 +104,7 @@ class StateManager:
             # Prepare state data for storage
             state_data = {
                 "messages": [msg.model_dump() for msg in state.messages],
-                "model_config": state.model_config.model_dump(),
+                "model_config": state.llm_config.model_dump(),
                 "metadata": state.metadata,
             }
 
@@ -170,7 +170,7 @@ class StateManager:
             initial_state = ConversationState(
                 conversation_id=conversation_id,
                 messages=[],
-                model_config=model_config,
+                llm_config=model_config,
                 context_data={},
                 active_contexts=[],
                 metadata={
@@ -319,7 +319,7 @@ class StateManager:
             state = ConversationState(
                 conversation_id=conversation_id,
                 messages=standard_messages,
-                model_config=ModelConfig(
+                llm_config=ModelConfig(
                     provider="ollama",
                     model_name="llama3.1",
                     temperature=0.7,
