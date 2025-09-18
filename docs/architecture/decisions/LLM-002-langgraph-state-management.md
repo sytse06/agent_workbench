@@ -1,4 +1,4 @@
-# LLM-002: LangGraph State Management Integration
+# LLM-002: LangGraph State Management Integration (Revised)
 
 ## Status
 
