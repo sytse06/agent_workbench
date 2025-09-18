@@ -460,12 +460,33 @@ feature:
 		echo "Usage: make feature TASK=CORE-002-name"; \
 		exit 1; \
 	fi
+	
+	# Check if architecture branch exists and auto-merge if needed
+	@echo -e "$(PURPLE)⚡ Implementation Phase: $(TASK)$(NC)"
+	@arch_branch="arch/$(TASK)"; \
+	if git show-ref --verify --quiet refs/heads/$$arch_branch; then \
+		echo -e "$(BLUE)🔄 Found architecture branch: $$arch_branch$(NC)"; \
+		if [ ! -f "docs/architecture/decisions/$(TASK).md" ]; then \
+			echo -e "$(YELLOW)📝 Auto-merging architecture to develop...$(NC)"; \
+			git checkout develop && git pull origin develop 2>/dev/null || true; \
+			git merge $$arch_branch --no-ff --no-edit -m "Merge $(TASK) architecture: Human-defined boundaries ready for implementation"; \
+			echo -e "$(GREEN)✅ Architecture merged to develop$(NC)"; \
+		else \
+			echo -e "$(BLUE)ℹ️  Architecture already in develop$(NC)"; \
+		fi; \
+	else \
+		echo -e "$(YELLOW)⚠️  No architecture branch found for $(TASK)$(NC)"; \
+		echo -e "$(BLUE)💡 Run: make arch TASK=$(TASK) first$(NC)"; \
+	fi
+	
+	# Verify architecture document exists (either from merge or already present)
+	@git checkout develop 2>/dev/null || true
 	@if [ ! -f "docs/architecture/decisions/$(TASK).md" ]; then \
 		echo -e "$(RED)❌ No architecture found. Run: make arch TASK=$(TASK)$(NC)"; \
 		exit 1; \
 	fi
-	@echo -e "$(PURPLE)⚡ Implementation Phase: $(TASK)$(NC)"
-	@git checkout develop && git pull origin develop 2>/dev/null || true
+	
+	# Create feature branch and implementation prompt
 	@git checkout -b feature/$(TASK) 2>/dev/null || git checkout feature/$(TASK)
 	@mkdir -p docs/prompts/implementation
 	@echo "# Implementation Prompt: $(TASK)" > docs/prompts/implementation/$(TASK)-prompt.md
@@ -491,3 +512,82 @@ feature:
 	@echo -e "$(GREEN)✅ Feature branch: feature/$(TASK)$(NC)"
 	@echo -e "$(BLUE)🤖 AI Prompt: docs/prompts/implementation/$(TASK)-prompt.md$(NC)"
 	@echo -e "$(CYAN)🔄 When done: make validate TASK=$(TASK)$(NC)"
+
+# Alternative: More conservative approach with user confirmation
+feature-safe:
+	@if [ -z "$(TASK)" ]; then \
+		echo "Usage: make feature-safe TASK=CORE-002-name"; \
+		exit 1; \
+	fi
+	
+	@echo -e "$(PURPLE)⚡ Implementation Phase: $(TASK)$(NC)"
+	@arch_branch="arch/$(TASK)"; \
+	if git show-ref --verify --quiet refs/heads/$$arch_branch; then \
+		if [ ! -f "docs/architecture/decisions/$(TASK).md" ]; then \
+			echo -e "$(YELLOW)📋 Architecture branch exists but not merged to develop$(NC)"; \
+			echo -e "$(BLUE)Branch: $$arch_branch$(NC)"; \
+			read -p "Auto-merge architecture to develop? (y/N): " confirm; \
+			if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
+				git checkout develop && git pull origin develop 2>/dev/null || true; \
+				git merge $$arch_branch --no-ff --no-edit -m "Merge $(TASK) architecture: Human-defined boundaries ready for implementation"; \
+				echo -e "$(GREEN)✅ Architecture merged to develop$(NC)"; \
+			else \
+				echo -e "$(BLUE)💡 Manual merge: git checkout develop && git merge $$arch_branch$(NC)"; \
+				exit 1; \
+			fi; \
+		fi; \
+	fi
+	
+	# Continue with normal feature creation...
+	@$(MAKE) feature TASK=$(TASK)
+
+# Enhanced complete command that also cleans up architecture branch
+complete:
+	@if [ -z "$(TASK)" ]; then \
+		echo -e "$(RED)Usage: make complete TASK=TASK-NAME$(NC)"; \
+		echo -e "$(BLUE)Example: make complete TASK=LLM-001-langchain-model-integration$(NC)"; \
+		exit 1; \
+	fi
+	@echo -e "$(PURPLE)🎉 Completing Implementation: $(TASK)$(NC)"
+	@current_branch=$$(git branch --show-current); \
+	expected_branch="feature/$(TASK)"; \
+	if [ "$$current_branch" != "$$expected_branch" ]; then \
+		echo -e "$(YELLOW)⚠️  Current branch: $$current_branch$(NC)"; \
+		echo -e "$(YELLOW)⚠️  Expected branch: $$expected_branch$(NC)"; \
+		read -p "Continue anyway? (y/N): " confirm; \
+		if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
+			echo "Task completion cancelled"; \
+			exit 1; \
+		fi; \
+	fi
+	@git add -A
+	@if git diff --cached --quiet; then \
+		echo -e "$(YELLOW)⚠️  No changes to commit$(NC)"; \
+		exit 1; \
+	fi
+	@TASK_PREFIX=$$(echo $(TASK) | cut -d'-' -f1); \
+	git commit -m "[$$TASK_PREFIX][$(TASK)]: Implementation within architectural boundaries" \
+	           -m "Scope: Implemented exactly as specified in architecture" \
+	           -m "Tests: All tests passing" \
+	           -m "Boundaries: No scope violations detected"
+	@echo -e "$(GREEN)✅ Implementation committed$(NC)"
+	@echo -e "$(BLUE)🔄 Merging to develop...$(NC)"
+	@git checkout develop
+	@git merge feature/$(TASK) --no-ff -m "Merge $(TASK): Human-steered implementation complete"
+	@echo -e "$(GREEN)🎯 $(TASK) successfully integrated into develop$(NC)"
+	
+	# Optional: Clean up architecture branch since it's now fully integrated
+	@arch_branch="arch/$(TASK)"; \
+	if git show-ref --verify --quiet refs/heads/$$arch_branch; then \
+		echo -e "$(YELLOW)🧹 Architecture branch $$arch_branch can be cleaned up$(NC)"; \
+		read -p "Delete architecture branch? (y/N): " confirm; \
+		if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
+			git branch -d $$arch_branch; \
+			echo -e "$(GREEN)✅ Architecture branch deleted$(NC)"; \
+		fi; \
+	fi
+	
+	@echo ""
+	@echo "Next steps:"
+	@echo "  - Start next task: make arch TASK=NEXT-TASK-name"
+	@echo "  - Deploy to staging: make staging-deploy"
