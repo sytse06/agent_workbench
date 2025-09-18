@@ -318,6 +318,77 @@ class LangGraphStateBridge:
 
         return lg_state
 
+    async def prepare_for_workflow(
+        self, consolidated_state, user_message: str
+    ) -> Dict[str, Any]:
+        """Convert ConsolidatedState to LangGraph workflow state."""
+
+        workflow_state = {
+            "conversation_id": str(consolidated_state.conversation_id),
+            "user_message": user_message,
+            "assistant_response": None,
+            "model_config": consolidated_state.model_config.dict(),
+            "provider_name": consolidated_state.provider_name,
+            "context_data": consolidated_state.context_data,
+            "active_contexts": consolidated_state.active_contexts,
+            "conversation_history": [msg.dict() for msg in consolidated_state.messages],
+            "workflow_mode": consolidated_state.coaching_phase or "workbench",
+            "workflow_steps": [],
+            "current_operation": None,
+            "execution_successful": True,
+            "current_error": None,
+            "retry_count": 0,
+            "debug_mode": consolidated_state.debug_mode,
+            "parameter_overrides": consolidated_state.parameter_overrides,
+            "workflow_data": consolidated_state.workflow_data or {},
+        }
+
+        return workflow_state
+
+    async def extract_from_workflow(
+        self, workflow_state: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Convert LangGraph workflow state back to ConsolidatedState format."""
+
+        # Convert back to ConsolidatedState format
+        messages = [
+            StandardMessage(**msg) for msg in workflow_state["conversation_history"]
+        ]
+
+        # Add assistant response if generated
+        if workflow_state.get("assistant_response"):
+            messages.append(
+                StandardMessage(
+                    role="assistant",
+                    content=workflow_state["assistant_response"],
+                    timestamp=datetime.utcnow(),
+                )
+            )
+
+        # Return dict instead of trying to create ConsolidatedState object
+        # since we don't have the actual class definition
+        return {
+            "conversation_id": UUID(workflow_state["conversation_id"]),
+            "messages": messages,
+            "model_config": ModelConfig(**workflow_state["model_config"]),
+            "provider_name": workflow_state["provider_name"],
+            "context_data": workflow_state["context_data"],
+            "active_contexts": workflow_state["active_contexts"],
+            "coaching_phase": workflow_state.get("workflow_mode"),
+            "debug_mode": workflow_state.get("debug_mode", False),
+            "parameter_overrides": workflow_state.get("parameter_overrides", {}),
+            "workflow_data": workflow_state.get("workflow_data", {}),
+            "updated_at": datetime.utcnow(),
+        }
+
+    def merge_workflow_context(
+        self, base_context: Dict, workflow_context: Dict
+    ) -> Dict:
+        """Merge workflow context with base context."""
+        merged = base_context.copy()
+        merged.update(workflow_context)
+        return merged
+
     async def _save_workflow_execution(self, lg_state: WorkbenchState) -> None:
         """
         Save workflow execution details for monitoring.
