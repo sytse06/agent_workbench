@@ -122,7 +122,7 @@ class ChatService:
                 )
 
             return ChatResponse(
-                content=assistant_message,
+                reply=assistant_message,
                 conversation_id=conversation_id or UUID(int=0),
                 model_used=f"{self.model_config.provider}:{self.model_config.model_name}",
                 llm_config=self.model_config,

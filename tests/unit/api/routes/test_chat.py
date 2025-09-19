@@ -27,7 +27,7 @@ class TestChatRoutes:
         # Setup mock
         mock_service_instance = AsyncMock()
         mock_response = ChatResponse(
-            content="Hello! How can I help you?",
+            reply="Hello! How can I help you?",
             conversation_id=UUID("12345678-1234-5678-1234-567812345678"),
             model_used="ollama:llama3",
             llm_config=self.model_config,
@@ -52,7 +52,7 @@ class TestChatRoutes:
         # Assertions
         assert response.status_code == 200
         data = response.json()
-        assert data["content"] == "Hello! How can I help you?"
+        assert data["reply"] == "Hello! How can I help you?"
         assert data["conversation_id"] == "12345678-1234-5678-1234-567812345678"
         mock_service_instance.chat_completion.assert_called_once()
 
@@ -62,7 +62,7 @@ class TestChatRoutes:
         # Setup mock
         mock_service_instance = AsyncMock()
         mock_response = ChatResponse(
-            content="Hello! How can I help you?",
+            reply="Hello! How can I help you?",
             conversation_id=UUID("12345678-1234-5678-1234-567812345678"),
             model_used="ollama:llama3",
             llm_config=self.model_config,
@@ -88,7 +88,7 @@ class TestChatRoutes:
         # Assertions
         assert response.status_code == 200
         data = response.json()
-        assert data["content"] == "Hello! How can I help you?"
+        assert data["reply"] == "Hello! How can I help you?"
         assert data["conversation_id"] == "12345678-1234-5678-1234-567812345678"
         mock_service_instance.chat_completion.assert_called_once()
 
@@ -98,7 +98,7 @@ class TestChatRoutes:
         # Setup mock
         mock_service_instance = AsyncMock()
         mock_response = ChatResponse(
-            content="Hello! How can I help you?",
+            reply="Hello! How can I help you?",
             conversation_id=None,
             model_used="ollama:llama3.1",
             llm_config=ModelConfig(
@@ -123,7 +123,7 @@ class TestChatRoutes:
         # Assertions - should succeed with defaults
         assert response.status_code == 200
         data = response.json()
-        assert data["content"] == "Hello! How can I help you?"
+        assert data["reply"] == "Hello! How can I help you?"
         assert data["model_used"] == "ollama:llama3.1"
 
     def test_stream_chat(self):

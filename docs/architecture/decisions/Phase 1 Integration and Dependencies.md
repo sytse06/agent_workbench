@@ -51,6 +51,9 @@ Implementation Order & Dependencies
 CORE-001: Must be completed first (foundation for all others)
 CORE-002: Depends on CORE-001 FastAPI app structure
 LLM-001: Depends on CORE-002 for conversation persistence
+LLM-001B: Depends on LLM-001
+LLM-001C: Depends on LLM-001B
+LLM-002: Depends on CORE-002 and LLM-001C
 UI-001: Depends on all previous components for full functionality
 
 Each component can be implemented independently after its dependencies are complete, following the exact implementation boundaries defined above.

@@ -75,7 +75,7 @@ class TestChatService:
 
             # Assertions
             assert isinstance(result, ChatResponse)
-            assert result.content == "Hello! How can I help you?"
+            assert result.reply == "Hello! How can I help you?"
             assert result.conversation_id == conversation_id
             assert result.llm_config == self.model_config
             mock_model.ainvoke.assert_called_once()

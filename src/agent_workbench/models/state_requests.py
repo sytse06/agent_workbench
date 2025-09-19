@@ -36,7 +36,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     """Enhanced chat response with state management information."""
 
-    content: str = Field(..., description="Assistant response content")
+    reply: str = Field(..., description="Assistant response content")
     conversation_id: Optional[UUID] = Field(
         None, description="Conversation ID (None for stateless)"
     )
