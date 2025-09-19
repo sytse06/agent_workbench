@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from .api.database import get_session
 from .api.routes import agent_configs, chat, conversations, health, messages, models
@@ -11,6 +12,15 @@ from .services.state_manager import StateManager
 
 app = FastAPI(
     title="Agent Workbench", description="Agent Workbench API", version="0.1.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include API routes
@@ -81,6 +91,14 @@ async def get_langgraph_service() -> WorkbenchLangGraphService:
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+# Mount Gradio app
+@app.on_event("startup")
+async def mount_gradio_app():
+    """Mount the Gradio interface"""
+    # The Gradio app will be launched separately, but we can set up the route
+    pass
 
 
 if __name__ == "__main__":
