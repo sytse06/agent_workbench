@@ -136,6 +136,7 @@ async def get_conversation_state(
             "coaching_context": state.get("coaching_context"),
             "coaching_phase": state.get("coaching_phase"),
             "debug_mode": state.get("debug_mode"),
+            "conversation_history": state.get("conversation_history", []),
         }
 
     except ConversationError as e:
@@ -144,6 +145,25 @@ async def get_conversation_state(
     except Exception as e:
         logger.error(f"Unexpected error getting conversation state: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# NEW: Required API endpoint for UI conversation state
+@router.get("/conversations/{conversation_id}/state")
+async def get_conversation_state_for_ui(
+    conversation_id: str,
+    service: ConsolidatedWorkbenchService = Depends(get_consolidated_service),
+):
+    """Get conversation state for UI history display"""
+    try:
+        state = await service.get_conversation_state(UUID(conversation_id))
+        return {
+            "conversation_id": conversation_id,
+            "conversation_history": state.get("conversation_history", []),
+            "workflow_mode": state.get("workflow_mode", "workbench"),
+            "context_data": state.get("context_data", {}),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Conversation not found: {str(e)}")
 
 
 # SEO Coach specific endpoints

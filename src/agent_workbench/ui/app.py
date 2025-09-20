@@ -1,26 +1,25 @@
-# Main Gradio Application Entry Point
+# Enhanced Gradio Application for Consolidated Service Integration
 
 import uuid
 
 import gradio as gr
 
-from .components.simple_client import LangGraphClient
+from .components.simple_client import SimpleLangGraphClient
 
 
 def create_workbench_app() -> gr.Blocks:
-    """Create simplified workbench interface - no dual modes"""
+    """Create enhanced workbench interface with consolidated service integration"""
 
-    client = LangGraphClient()
+    client = SimpleLangGraphClient()
 
-    with gr.Blocks(title="Agent Workbench") as app:
-        gr.Markdown("# 🛠️ Agent Workbench")
+    with gr.Blocks(title="Agent Workbench - Enhanced") as app:
+        gr.Markdown("# 🛠️ Agent Workbench - Enhanced with LangGraph")
 
-        # Minimal state - just conversation ID
         conversation_id = gr.State(str(uuid.uuid4()))
 
         with gr.Row():
             with gr.Column(scale=1):
-                # Simple model selection
+                # Enhanced model configuration
                 provider = gr.Dropdown(
                     choices=["openrouter", "ollama"],
                     value="openrouter",
@@ -28,70 +27,111 @@ def create_workbench_app() -> gr.Blocks:
                 )
 
                 model = gr.Dropdown(
-                    choices=["claude-3-5-sonnet-20241022", "gpt-4"],
-                    value="claude-3-5-sonnet-20241022",
+                    choices=["qwen/qwq-32b-preview", "claude-3-5-sonnet-20241022"],
+                    value="qwen/qwq-32b-preview",
                     label="Model",
                 )
 
-                temperature = gr.Slider(
-                    minimum=0.0, maximum=2.0, value=0.7, step=0.1, label="Temperature"
-                )
+                temperature = gr.Slider(0.0, 2.0, 0.7, label="Temperature")
+                max_tokens = gr.Slider(100, 4000, 2000, label="Max Tokens")
+
+                # NEW: Workflow monitoring
+                gr.Markdown("### 🔄 Workflow Status")
+                workflow_status = gr.HTML(value="<div class='info'>Ready</div>")
+
+                # NEW: Debug mode toggle
+                debug_mode = gr.Checkbox(label="Debug Mode", value=False)
 
             with gr.Column(scale=2):
-                # Simple chat interface - no complex state management
-                chatbot = gr.Chatbot(height=400, label="Chat", type="messages")
+                chatbot = gr.Chatbot(height=400, label="Enhanced Chat", type="messages")
 
                 with gr.Row():
                     message = gr.Textbox(
-                        placeholder="Enter your message...",
+                        placeholder="Enter your message (now powered by LangGraph)...",
                         label="Message",
                         scale=4,
                         lines=2,
                     )
                     send = gr.Button("Send", variant="primary", scale=1)
 
-        # Simple event handler - no complex state sync
-        async def handle_message(msg, conv_id, provider_val, model_val, temp_val):
+        # Enhanced message handler
+        async def handle_enhanced_message(
+            msg, conv_id, provider_val, model_val, temp_val, max_tokens_val, debug_val
+        ):
             if not msg.strip():
-                return "", gr.update()
+                return "", gr.update(), "<div class='info'>Ready</div>"
 
             try:
-                # Send to LangGraph
-                await client.send_message(
-                    message=msg,
-                    conversation_id=conv_id,
-                    model_config={
-                        "provider": provider_val,
-                        "model": model_val,
-                        "temperature": temp_val,
-                    },
+                # Enhanced model config
+                model_config = {
+                    "provider": provider_val,
+                    "model_name": model_val,
+                    "temperature": temp_val,
+                    "max_tokens": max_tokens_val,
+                }
+
+                # Send through consolidated service
+                response = await client.send_message(
+                    message=msg, conversation_id=conv_id, model_config=model_config
                 )
 
-                # Get updated history from LangGraph (single source of truth)
+                # Get updated history
                 history = await client.get_chat_history(conv_id)
 
-                return "", history
+                # Show success status with workflow info
+                mode = response["workflow_mode"]
+                success = response["execution_successful"]
+                provider_used = response.get("metadata", {}).get(
+                    "provider_used", "Unknown"
+                )
+                success_html = f"""
+                <div class='success'>
+                    ✅ Workflow completed successfully<br>
+                    <strong>Mode:</strong> {mode}<br>
+                    <strong>Execution:</strong> {'Success' if success else 'Failed'}<br>
+                    <strong>Provider:</strong> {provider_used}
+                </div>
+                """
+
+                return "", history, success_html
 
             except Exception as e:
-                # Simple error handling
-                error_history = await client.get_chat_history(conv_id)
-                error_history.append({"role": "user", "content": msg})
-                error_history.append(
-                    {"role": "assistant", "content": f"Error: {str(e)}"}
-                )
-                return "", error_history
+                error_html = f"<div class='error'>❌ Workflow failed: {str(e)}</div>"
+                try:
+                    history = await client.get_chat_history(conv_id)
+                except Exception:
+                    history = []
+                history.append({"role": "user", "content": msg})
+                history.append({"role": "assistant", "content": f"Error: {str(e)}"})
+                return "", history, error_html
 
         # Wire up events
         send.click(
-            fn=handle_message,
-            inputs=[message, conversation_id, provider, model, temperature],
-            outputs=[message, chatbot],
+            fn=handle_enhanced_message,
+            inputs=[
+                message,
+                conversation_id,
+                provider,
+                model,
+                temperature,
+                max_tokens,
+                debug_mode,
+            ],
+            outputs=[message, chatbot, workflow_status],
         )
 
         message.submit(
-            fn=handle_message,
-            inputs=[message, conversation_id, provider, model, temperature],
-            outputs=[message, chatbot],
+            fn=handle_enhanced_message,
+            inputs=[
+                message,
+                conversation_id,
+                provider,
+                model,
+                temperature,
+                max_tokens,
+                debug_mode,
+            ],
+            outputs=[message, chatbot, workflow_status],
         )
 
     return app
