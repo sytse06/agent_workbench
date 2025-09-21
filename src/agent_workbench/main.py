@@ -9,6 +9,7 @@ from .services.langgraph_bridge import LangGraphStateBridge
 from .services.langgraph_service import WorkbenchLangGraphService
 from .services.llm_service import ChatService
 from .services.state_manager import StateManager
+from .ui.mode_factory import create_interface_for_mode, get_mode_from_environment
 
 app = FastAPI(
     title="Agent Workbench", description="Agent Workbench API", version="0.1.0"
@@ -93,12 +94,37 @@ async def health_check():
     return {"status": "healthy"}
 
 
-# Mount Gradio app
+# Mount Gradio app with mode factory integration
 @app.on_event("startup")
 async def mount_gradio_app():
-    """Mount the Gradio interface"""
-    # The Gradio app will be launched separately, but we can set up the route
-    pass
+    """Mount the Gradio interface based on APP_MODE configuration"""
+    try:
+        # Create interface based on environment configuration
+        current_mode = get_mode_from_environment()
+        gradio_app = create_interface_for_mode(current_mode)
+
+        # Mount the interface
+        app.mount("/", gradio_app.app, name="gradio")
+        print(f"✅ Mounted {current_mode} interface successfully")
+    except Exception as e:
+        print(f"❌ Failed to mount Gradio interface: {e}")
+        # Continue without interface - API-only mode
+        pass
+
+
+@app.get("/api/mode")
+async def get_mode_info():
+    """Get current mode information for UI-002 deployment"""
+    current_mode = get_mode_from_environment()
+    return {
+        "current_mode": current_mode,
+        "available_modes": ["workbench", "seo_coach"],
+        "phase": "1",
+        "features": {
+            "workbench": "Technical AI development interface",
+            "seo_coach": "Dutch SEO coaching for businesses",
+        },
+    }
 
 
 if __name__ == "__main__":
