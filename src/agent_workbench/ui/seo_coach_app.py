@@ -1,6 +1,7 @@
 """
 Dutch SEO Coaching Interface - UI-002 SEO Coach Interface.
-Complete SEO coach Gradio application with Dutch business forms and direct httpx integration.
+Complete SEO coach Gradio application with Dutch business forms and direct httpx
+integration.
 """
 
 import uuid
@@ -30,9 +31,12 @@ def create_seo_coach_app() -> gr.Blocks:
         css="""
         .business-panel { background: #f8f9fa; padding: 20px; border-radius: 8px; }
         .coaching-panel { min-height: 500px; }
-        .success { color: #155724; background: #d4edda; padding: 10px; border-radius: 4px; }
-        .error { color: #721c24; background: #f8d7da; padding: 10px; border-radius: 4px; }
-        .processing { color: #0c5460; background: #d1ecf1; padding: 10px; border-radius: 4px; }
+        .success { color: #155724; background: #d4edda; padding: 10px;
+                   border-radius: 4px; }
+        .error { color: #721c24; background: #f8d7da; padding: 10px;
+                 border-radius: 4px; }
+        .processing { color: #0c5460; background: #d1ecf1; padding: 10px;
+                      border-radius: 4px; }
         """,
     ) as interface:
 
@@ -62,7 +66,10 @@ def create_seo_coach_app() -> gr.Blocks:
                 # Status display
                 gr.Markdown("### 📊 Status")
                 analysis_status = gr.HTML(
-                    value="<div class='info'>Vul je bedrijfsgegevens in om te beginnen</div>"
+                    value=(
+                        "<div class='info'>Vul je bedrijfsgegevens in om "
+                        "te beginnen</div>"
+                    )
                 )
 
                 # Phase 2 feature stubs
@@ -176,7 +183,10 @@ async def _handle_website_analysis(
             response = await client.post(
                 "http://localhost:8000/api/v1/chat/consolidated",
                 json={
-                    "user_message": f"Analyseer mijn {biz_type.lower()} website {url} voor SEO verbeteringen",
+                    "user_message": (
+                        f"Analyseer mijn {biz_type.lower()} website {url} "
+                        f"voor SEO verbeteringen"
+                    ),
                     "conversation_id": conv_id,
                     "workflow_mode": "seo_coach",
                     "business_profile": profile,
@@ -188,11 +198,14 @@ async def _handle_website_analysis(
 
         # Create initial chat history
         welcome_message = (
-            f"Welkom {biz_name}! Ik heb je {biz_type.lower()} website geanalyseerd."
+            f"Welkom {biz_name}! Ik heb je {biz_type.lower()} website " f"geanalyseerd."
         )
         chat_history = [
             {"role": "assistant", "content": welcome_message},
-            {"role": "assistant", "content": result.get("assistant_response", "")},
+            {
+                "role": "assistant",
+                "content": result.get("assistant_response", ""),
+            },
         ]
 
         # Success status
@@ -207,7 +220,10 @@ async def _handle_website_analysis(
         return chat_history, profile, success_html
 
     except Exception as e:
-        error_html = f"<div class='error'>❌ {get_dutch_message('error_general')}: {str(e)}</div>"
+        error_html = (
+            f"<div class='error'>❌ {get_dutch_message('error_general')}: "
+            f"{str(e)}</div>"
+        )
         return [], {}, error_html
 
 
@@ -246,7 +262,6 @@ async def _handle_coaching_message(
                 },
             )
             response.raise_for_status()
-            result = response.json()
 
         # Get updated chat history
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -279,7 +294,7 @@ async def _handle_coaching_message(
                 {"role": "user", "content": msg},
                 {
                     "role": "assistant",
-                    "content": f"{get_dutch_message('error_general')}: {str(e)}",
+                    "content": (f"{get_dutch_message('error_general')}: {str(e)}"),
                 },
             ]
         )
@@ -302,7 +317,10 @@ async def _handle_quick_action(
         Updated chat history
     """
     messages = {
-        "audit": "Geef me een snelle SEO-check van mijn website. Wat zijn de 3 belangrijkste verbeterpunten?",
+        "audit": (
+            "Geef me een snelle SEO-check van mijn website. "
+            "Wat zijn de 3 belangrijkste verbeterpunten?"
+        ),
         "keywords": (
             "Help me goede zoekwoorden te vinden voor mijn bedrijf. "
             "Welke zoekwoorden gebruikt mijn doelgroep?"
