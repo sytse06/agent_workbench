@@ -42,6 +42,14 @@ help:
 	@echo "  make git-status   - Show git overview"
 	@echo "  make deploy ENV=staging   - Deploy to staging"
 	@echo "  make deploy ENV=prod      - Deploy to production"
+	@echo ""
+	@echo "🐳 Docker Extensions (Orthogonal):"
+	@echo "  make docker-dev          - Development in container"
+	@echo "  make docker-staging      - Staging container (mirrors prod)"
+	@echo "  make docker-prod         - Production container"
+	@echo "  make docker-test         - Run tests in clean container"
+	@echo "  make docker-validate TASK=name - Validate in isolated environment"
+	@echo "  make docker-fresh        - Completely clean environment"
 
 # Enhanced environment management with validation
 dev:
@@ -586,8 +594,196 @@ complete:
 			echo -e "$(GREEN)✅ Architecture branch deleted$(NC)"; \
 		fi; \
 	fi
-	
+
 	@echo ""
 	@echo "Next steps:"
 	@echo "  - Start next task: make arch TASK=NEXT-TASK-name"
 	@echo "  - Deploy to staging: make staging-deploy"
+
+# =============================================================================
+# DOCKER EXTENSIONS - Orthogonal to Core Workflow
+# =============================================================================
+# These commands provide containerized alternatives without disrupting
+# the existing human-steered development workflow
+
+# Docker environment variables
+DOCKER_IMAGE_NAME := agent-workbench
+DOCKER_TAG := latest
+DOCKER_PORT := 8000
+GRADIO_PORT := 7860
+
+# Docker development environment (orthogonal to make dev)
+docker-dev:
+	@echo -e "$(BLUE)🐳 Starting Docker development environment...$(NC)"
+	@if [ ! -f "config/development.env" ]; then \
+		echo -e "$(RED)❌ config/development.env not found$(NC)"; \
+		exit 1; \
+	fi
+	@echo -e "$(CYAN)📦 Building development image...$(NC)"
+	@docker build -t $(DOCKER_IMAGE_NAME):dev .
+	@echo -e "$(CYAN)🚀 Starting development container...$(NC)"
+	@docker run --rm -it \
+		--name agent-workbench-dev \
+		-p $(DOCKER_PORT):$(DOCKER_PORT) \
+		-p $(GRADIO_PORT):$(GRADIO_PORT) \
+		--env-file config/development.env \
+		-e APP_ENV=development \
+		$(DOCKER_IMAGE_NAME):dev
+	@echo -e "$(GREEN)✅ Docker development environment ready$(NC)"
+
+# Docker staging environment (mirrors production)
+docker-staging:
+	@echo -e "$(YELLOW)🐳 Starting Docker staging environment...$(NC)"
+	@current_branch=$$(git branch --show-current); \
+	if [ "$$current_branch" != "develop" ]; then \
+		echo -e "$(YELLOW)⚠️  Currently on branch: $$current_branch$(NC)"; \
+		echo -e "$(YELLOW)⚠️  Staging typically uses 'develop' branch$(NC)"; \
+		read -p "Continue anyway? (y/N): " confirm; \
+		if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
+			echo -e "$(BLUE)💡 Switch to develop: git checkout develop$(NC)"; \
+			exit 1; \
+		fi; \
+	fi
+	@if [ ! -f "config/staging.env" ]; then \
+		echo -e "$(RED)❌ config/staging.env not found$(NC)"; \
+		exit 1; \
+	fi
+	@echo -e "$(CYAN)📦 Building staging image...$(NC)"
+	@docker build -t $(DOCKER_IMAGE_NAME):staging .
+	@echo -e "$(CYAN)🚀 Starting staging container...$(NC)"
+	@docker run --rm -it \
+		--name agent-workbench-staging \
+		-p $(DOCKER_PORT):$(DOCKER_PORT) \
+		-p $(GRADIO_PORT):$(GRADIO_PORT) \
+		--env-file config/staging.env \
+		-e APP_ENV=staging \
+		$(DOCKER_IMAGE_NAME):staging
+	@echo -e "$(GREEN)✅ Docker staging environment ready$(NC)"
+
+# Docker production environment
+docker-prod:
+	@echo -e "$(RED)🐳 Starting Docker production environment...$(NC)"
+	@if [ "$$(git branch --show-current)" != "main" ]; then \
+		echo -e "$(RED)❌ Switch to main branch first: git checkout main$(NC)"; \
+		exit 1; \
+	fi
+	@if [ ! -f "config/production.env" ]; then \
+		echo -e "$(RED)❌ config/production.env not found$(NC)"; \
+		exit 1; \
+	fi
+	@echo -e "$(YELLOW)⚠️  PRODUCTION DOCKER ENVIRONMENT$(NC)"
+	@read -p "Are you sure? (y/N): " confirm; \
+	if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
+		echo "Production Docker cancelled"; \
+		exit 1; \
+	fi
+	@echo -e "$(CYAN)📦 Building production image...$(NC)"
+	@docker build -t $(DOCKER_IMAGE_NAME):prod .
+	@echo -e "$(CYAN)🚀 Starting production container...$(NC)"
+	@docker run --rm -it \
+		--name agent-workbench-prod \
+		-p $(DOCKER_PORT):$(DOCKER_PORT) \
+		-p $(GRADIO_PORT):$(GRADIO_PORT) \
+		--env-file config/production.env \
+		-e APP_ENV=production \
+		$(DOCKER_IMAGE_NAME):prod
+	@echo -e "$(GREEN)✅ Docker production environment ready$(NC)"
+
+# Docker test environment (clean isolated testing)
+docker-test:
+	@echo -e "$(BLUE)🐳 Running tests in clean Docker environment...$(NC)"
+	@echo -e "$(CYAN)📦 Building test image...$(NC)"
+	@docker build -t $(DOCKER_IMAGE_NAME):test .
+	@echo -e "$(CYAN)🧪 Running test suite...$(NC)"
+	@docker run --rm \
+		--name agent-workbench-test \
+		--env-file config/development.env \
+		-e APP_ENV=test \
+		$(DOCKER_IMAGE_NAME):test \
+		uv run pytest tests/ -v --cov=src/agent_workbench
+	@echo -e "$(GREEN)✅ Docker tests complete$(NC)"
+
+# Docker validation (orthogonal to make validate)
+docker-validate:
+	@if [ -z "$(TASK)" ]; then \
+		echo -e "$(RED)Usage: make docker-validate TASK=CORE-002-name$(NC)"; \
+		exit 1; \
+	fi
+	@echo -e "$(CYAN)🐳 Docker validation: $(TASK)$(NC)"
+	@echo -e "$(CYAN)📦 Building validation image...$(NC)"
+	@docker build -t $(DOCKER_IMAGE_NAME):validate .
+	@echo -e "$(CYAN)🔍 Running validation in container...$(NC)"
+	@docker run --rm \
+		--name agent-workbench-validate \
+		--env-file config/development.env \
+		-e APP_ENV=test \
+		$(DOCKER_IMAGE_NAME):validate \
+		sh -c "uv run pytest tests/ -v && uv run ruff check src/ tests/ && uv run mypy src/"
+	@echo -e "$(GREEN)✅ Docker validation complete: $(TASK)$(NC)"
+
+# Docker fresh environment (completely clean)
+docker-fresh:
+	@echo -e "$(BLUE)🐳 Creating completely fresh Docker environment...$(NC)"
+	@echo -e "$(CYAN)🧹 Cleaning up existing containers and images...$(NC)"
+	@docker rm -f agent-workbench-dev agent-workbench-staging agent-workbench-prod agent-workbench-test 2>/dev/null || true
+	@docker rmi -f $(DOCKER_IMAGE_NAME):dev $(DOCKER_IMAGE_NAME):staging $(DOCKER_IMAGE_NAME):prod $(DOCKER_IMAGE_NAME):test 2>/dev/null || true
+	@echo -e "$(CYAN)📦 Building fresh image...$(NC)"
+	@docker build --no-cache -t $(DOCKER_IMAGE_NAME):fresh .
+	@if [ ! -f "config/development.env" ]; then \
+		echo -e "$(RED)❌ config/development.env not found$(NC)"; \
+		exit 1; \
+	fi
+	@echo -e "$(CYAN)🚀 Starting fresh container...$(NC)"
+	@docker run --rm -it \
+		--name agent-workbench-fresh \
+		-p $(DOCKER_PORT):$(DOCKER_PORT) \
+		-p $(GRADIO_PORT):$(GRADIO_PORT) \
+		--env-file config/development.env \
+		-e APP_ENV=development \
+		$(DOCKER_IMAGE_NAME):fresh
+	@echo -e "$(GREEN)✅ Fresh Docker environment ready$(NC)"
+
+# Docker database operations (stateless Phase 1)
+docker-migrate:
+	@echo -e "$(BLUE)🐳 Running database migrations in container...$(NC)"
+	@docker build -t $(DOCKER_IMAGE_NAME):migrate .
+	@docker run --rm \
+		--name agent-workbench-migrate \
+		--env-file config/development.env \
+		$(DOCKER_IMAGE_NAME):migrate \
+		uv run alembic upgrade head
+	@echo -e "$(GREEN)✅ Docker migrations complete$(NC)"
+
+docker-db-clean:
+	@echo -e "$(BLUE)🐳 Creating fresh database in container...$(NC)"
+	@docker build -t $(DOCKER_IMAGE_NAME):db-clean .
+	@docker run --rm \
+		--name agent-workbench-db-clean \
+		--env-file config/development.env \
+		$(DOCKER_IMAGE_NAME):db-clean \
+		sh -c "rm -f data/*.db && uv run alembic upgrade head"
+	@echo -e "$(GREEN)✅ Fresh database created in container$(NC)"
+
+# Docker utility commands
+docker-shell:
+	@echo -e "$(BLUE)🐳 Opening shell in development container...$(NC)"
+	@docker build -t $(DOCKER_IMAGE_NAME):shell .
+	@docker run --rm -it \
+		--name agent-workbench-shell \
+		--env-file config/development.env \
+		$(DOCKER_IMAGE_NAME):shell \
+		/bin/bash
+
+docker-logs:
+	@echo -e "$(BLUE)🐳 Docker container logs...$(NC)"
+	@docker logs agent-workbench-dev 2>/dev/null || \
+	 docker logs agent-workbench-staging 2>/dev/null || \
+	 docker logs agent-workbench-prod 2>/dev/null || \
+	 echo -e "$(YELLOW)⚠️  No running containers found$(NC)"
+
+docker-cleanup:
+	@echo -e "$(BLUE)🐳 Cleaning up Docker resources...$(NC)"
+	@docker rm -f agent-workbench-dev agent-workbench-staging agent-workbench-prod agent-workbench-test agent-workbench-fresh 2>/dev/null || true
+	@docker rmi -f $(DOCKER_IMAGE_NAME):dev $(DOCKER_IMAGE_NAME):staging $(DOCKER_IMAGE_NAME):prod $(DOCKER_IMAGE_NAME):test $(DOCKER_IMAGE_NAME):fresh 2>/dev/null || true
+	@docker system prune -f
+	@echo -e "$(GREEN)✅ Docker cleanup complete$(NC)"
