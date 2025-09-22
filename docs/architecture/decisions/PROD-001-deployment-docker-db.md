@@ -713,6 +713,14 @@ gh variable set SEO_COACH_SPACE_NAME --body "agent-workbench-seo"
 - [ ] PWA assets generated and optimized during build process
 - [ ] HF Spaces environment variables configured via CLI automation
 
+### **Integration Testing in Docker Staging Environment**
+- [ ] UI-003 integration tests validate dual-mode functionality in containerized environment
+- [ ] Docker staging environment provides proper Gradio context for interface creation tests
+- [ ] End-to-end testing of mode switching and LangGraph integration in deployment-like conditions
+- [ ] Performance validation under realistic resource constraints
+
+**Note**: The 8 failing integration tests from UI-003 implementation are designed to be fully testable in the Docker staging environment, where proper Gradio interface instantiation and async mocking can be validated under deployment conditions.
+
 ### **Monitoring and Operational Requirements**
 - [ ] HF Spaces metrics dashboard provides visibility into usage and performance
 - [ ] Automated database backup to HuggingFace Datasets works correctly

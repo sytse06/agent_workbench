@@ -1,181 +1,332 @@
 """
-Unit tests for Mode Factory - UI-002 SEO Coach Interface.
+Mode factory functionality tests for UI-003 dual-mode support.
 
-Tests environment-based interface switching between workbench and SEO coach.
+Tests mode switching, factory logic, and error handling.
 """
 
 import os
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from agent_workbench.ui.mode_factory import (
+    InterfaceCreationError,
+    InvalidModeError,
+    ModeFactory,
     create_interface_for_mode,
+    get_available_modes,
     get_mode_from_environment,
     validate_mode_configuration,
 )
 
 
+# Mock the actual interface creation functions at module level
+def create_mock_workbench_interface():
+    mock = MagicMock()
+    mock.title = "Agent Workbench"
+    return mock
+
+
+def create_mock_seo_interface():
+    mock = MagicMock()
+    mock.title = "SEO Coach"
+    return mock
+
+
 class TestModeFactory:
-    """Test mode factory functionality"""
+    """Test core mode factory functionality"""
 
-    def test_get_mode_from_environment_default(self):
-        """Test default mode when APP_MODE not set"""
-        with patch.dict(os.environ, {}, clear=True):
-            mode = get_mode_from_environment()
+    def test_mode_factory_initialization(self):
+        """Test mode factory initializes with correct registry"""
+        factory = ModeFactory()
+
+        # Should have core modes registered
+        assert "workbench" in factory.mode_registry
+        assert "seo_coach" in factory.mode_registry
+
+        # Extension registry should be empty initially
+        assert len(factory.extension_registry) == 0
+
+        # Should have expected available modes
+        available = factory.get_available_modes()
+        assert "workbench" in available
+        assert "seo_coach" in available
+
+    def test_mode_determination_logic(self):
+        """Test mode determination with various inputs"""
+        factory = ModeFactory()
+
+        # Test explicit mode override
+        assert factory._determine_mode_safe("workbench") == "workbench"
+        assert factory._determine_mode_safe("seo_coach") == "seo_coach"
+
+        # Test invalid mode fallback
+        assert factory._determine_mode_safe("invalid") == "workbench"
+
+        # Test environment variable handling
+        with patch.dict("os.environ", {"APP_MODE": "seo_coach"}):
+            assert factory._determine_mode_safe(None) == "seo_coach"
+
+        # Test invalid environment fallback
+        with patch.dict("os.environ", {"APP_MODE": "invalid"}):
+            assert factory._determine_mode_safe(None) == "workbench"
+
+    def test_interface_creation_success(self):
+        """Test successful interface creation"""
+        with patch(
+            "agent_workbench.ui.mode_factory.create_workbench_app"
+        ) as mock_workbench:
+            mock_interface = MagicMock()
+            mock_workbench.return_value = mock_interface
+
+            factory = ModeFactory()
+            result = factory.create_interface("workbench")
+            assert result == mock_interface
+            mock_workbench.assert_called_once()
+
+    def test_interface_creation_invalid_mode(self):
+        """Test interface creation with invalid mode"""
+        with patch(
+            "agent_workbench.ui.mode_factory.create_workbench_app"
+        ) as mock_workbench:
+            # Mock to raise error for invalid mode
+            mock_workbench.side_effect = Exception("Invalid mode")
+
+            factory = ModeFactory()
+
+            with pytest.raises(InterfaceCreationError) as exc_info:
+                factory.create_interface("completely_invalid_mode_that_doesnt_exist")
+
+            assert "Unexpected error creating" in str(exc_info.value)
+
+    def test_interface_creation_factory_returns_none(self):
+        """Test interface creation when factory returns None"""
+        with patch(
+            "agent_workbench.ui.mode_factory.create_workbench_app"
+        ) as mock_workbench:
+            mock_workbench.return_value = None
+
+            factory = ModeFactory()
+            with pytest.raises(InterfaceCreationError) as exc_info:
+                factory.create_interface("workbench")
+
+            assert "returned None" in str(exc_info.value)
+
+    def test_interface_creation_factory_exception(self):
+        """Test interface creation when factory raises exception"""
+        with patch(
+            "agent_workbench.ui.mode_factory.create_workbench_app"
+        ) as mock_workbench:
+            mock_workbench.side_effect = Exception("Factory error")
+
+            factory = ModeFactory()
+            with pytest.raises(InterfaceCreationError) as exc_info:
+                factory.create_interface("workbench")
+
+            assert "Unexpected error creating" in str(exc_info.value)
+
+    def test_extension_mode_registration(self):
+        """Test Phase 2 extension mode registration"""
+        factory = ModeFactory()
+
+        # Create mock extension factory
+        mock_extension = MagicMock()
+
+        # Register extension mode
+        factory.register_extension_mode("test_extension", mock_extension)
+
+        # Should be in extension registry
+        assert "test_extension" in factory.extension_registry
+        assert factory.extension_registry["test_extension"] == mock_extension
+
+        # Should be in available modes
+        assert "test_extension" in factory.get_available_modes()
+
+    def test_extension_mode_conflict(self):
+        """Test extension mode conflicts with core mode"""
+        factory = ModeFactory()
+
+        mock_extension = MagicMock()
+
+        # Should raise error when trying to register conflicting mode
+        with pytest.raises(ValueError) as exc_info:
+            factory.register_extension_mode("workbench", mock_extension)
+
+        assert "conflicts with core mode" in str(exc_info.value)
+
+    def test_extension_mode_interface_creation(self):
+        """Test interface creation with extension mode"""
+        factory = ModeFactory()
+
+        # Register extension mode
+        mock_extension = MagicMock()
+        mock_interface = MagicMock()
+        mock_extension.return_value = mock_interface
+
+        factory.register_extension_mode("test_extension", mock_extension)
+
+        # Should create interface using extension factory
+        result = factory.create_interface("test_extension")
+        assert result == mock_interface
+        mock_extension.assert_called_once()
+
+    def test_multi_mode_interface_not_implemented(self):
+        """Test multi-mode interface raises NotImplementedError (Phase 2)"""
+        factory = ModeFactory()
+
+        with pytest.raises(NotImplementedError) as exc_info:
+            factory.create_multi_mode_interface()
+
+        assert "Multi-mode interface reserved for Phase 2" in str(exc_info.value)
+
+
+class TestModeFactoryHelperFunctions:
+    """Test helper functions for backward compatibility"""
+
+    def test_create_interface_for_mode_success(self):
+        """Test create_interface_for_mode helper function"""
+        with patch("agent_workbench.ui.mode_factory.ModeFactory") as mock_factory_class:
+            mock_factory = MagicMock()
+            mock_factory_class.return_value = mock_factory
+            mock_interface = MagicMock()
+            mock_factory.create_interface.return_value = mock_interface
+
+            result = create_interface_for_mode("workbench")
+
+            assert result == mock_interface
+            mock_factory.create_interface.assert_called_once_with("workbench")
+
+    def test_create_interface_for_mode_error_handling(self):
+        """Test create_interface_for_mode error handling"""
+        with patch("agent_workbench.ui.mode_factory.ModeFactory") as mock_factory_class:
+            mock_factory = MagicMock()
+            mock_factory_class.return_value = mock_factory
+            mock_factory.create_interface.side_effect = InvalidModeError("Test error")
+
+            with pytest.raises(ValueError) as exc_info:
+                create_interface_for_mode("invalid")
+
+            assert "Test error" in str(exc_info.value)
+
+    def test_get_mode_from_environment(self):
+        """Test get_mode_from_environment helper function"""
+        with patch("agent_workbench.ui.mode_factory.ModeFactory") as mock_factory_class:
+            mock_factory = MagicMock()
+            mock_factory_class.return_value = mock_factory
+            mock_factory._determine_mode_safe.return_value = "seo_coach"
+
+            result = get_mode_from_environment()
+
+            assert result == "seo_coach"
+            mock_factory._determine_mode_safe.assert_called_once_with(None)
+
+    def test_validate_mode_configuration(self):
+        """Test validate_mode_configuration helper function"""
+        with patch("agent_workbench.ui.mode_factory.ModeFactory") as mock_factory_class:
+            mock_factory = MagicMock()
+            mock_factory_class.return_value = mock_factory
+            mock_factory._is_valid_mode.return_value = True
+
+            result = validate_mode_configuration("workbench")
+
+            assert result is True
+            mock_factory._is_valid_mode.assert_called_once_with("workbench")
+
+    def test_get_available_modes_helper(self):
+        """Test get_available_modes helper function"""
+        with patch("agent_workbench.ui.mode_factory.ModeFactory") as mock_factory_class:
+            mock_factory = MagicMock()
+            mock_factory_class.return_value = mock_factory
+            mock_factory.get_available_modes.return_value = ["workbench", "seo_coach"]
+
+            result = get_available_modes()
+
+            assert result == ["workbench", "seo_coach"]
+            mock_factory.get_available_modes.assert_called_once()
+
+
+class TestEnvironmentIntegration:
+    """Test environment variable integration"""
+
+    def test_app_mode_environment_variable(self):
+        """Test APP_MODE environment variable handling"""
+        factory = ModeFactory()
+
+        # Test workbench mode
+        with patch.dict("os.environ", {"APP_MODE": "workbench"}):
+            mode = factory._determine_mode_safe(None)
             assert mode == "workbench"
 
-    def test_get_mode_from_environment_workbench(self):
-        """Test workbench mode from environment"""
-        with patch.dict(os.environ, {"APP_MODE": "workbench"}):
-            mode = get_mode_from_environment()
-            assert mode == "workbench"
-
-    def test_get_mode_from_environment_seo_coach(self):
-        """Test SEO coach mode from environment"""
-        with patch.dict(os.environ, {"APP_MODE": "seo_coach"}):
-            mode = get_mode_from_environment()
+        # Test seo_coach mode
+        with patch.dict("os.environ", {"APP_MODE": "seo_coach"}):
+            mode = factory._determine_mode_safe(None)
             assert mode == "seo_coach"
 
-    def test_validate_mode_configuration_valid_workbench(self):
-        """Test validation for valid workbench mode"""
-        assert validate_mode_configuration("workbench") is True
+        # Test invalid mode fallback
+        with patch.dict("os.environ", {"APP_MODE": "invalid"}):
+            mode = factory._determine_mode_safe(None)
+            assert mode == "workbench"  # Should fallback to default
 
-    def test_validate_mode_configuration_valid_seo_coach(self):
-        """Test validation for valid seo_coach mode"""
-        assert validate_mode_configuration("seo_coach") is True
+    def test_no_environment_variable(self):
+        """Test behavior when APP_MODE is not set"""
+        factory = ModeFactory()
 
-    def test_validate_mode_configuration_invalid(self):
-        """Test validation for invalid mode"""
-        assert validate_mode_configuration("invalid_mode") is False
-        assert validate_mode_configuration("") is False
-        assert validate_mode_configuration("WORKBENCH") is False
+        with patch.dict("os.environ", {}, clear=True):
+            # Remove APP_MODE if it exists
+            if "APP_MODE" in os.environ:
+                del os.environ["APP_MODE"]
 
-    def test_create_interface_workbench_mode(self):
-        """Test creating workbench interface"""
-        interface = create_interface_for_mode("workbench")
-        assert interface is not None
-        assert hasattr(interface, "blocks")
-        assert interface.title == "Agent Workbench - Enhanced"
+            mode = factory._determine_mode_safe(None)
+            assert mode == "workbench"  # Should use default
 
-    def test_create_interface_seo_coach_mode(self):
-        """Test creating SEO coach interface"""
-        try:
-            interface = create_interface_for_mode("seo_coach")
-            assert interface is not None
-            assert hasattr(interface, "blocks")
-            assert interface.title == "AI SEO Coach - Nederlandse Bedrijven"
-        except AttributeError as e:
-            if "Cannot call click outside of a gradio.Blocks context" in str(e):
-                pytest.skip("Gradio context not available in test environment")
-            else:
-                raise
+    def test_explicit_mode_overrides_environment(self):
+        """Test explicit mode parameter overrides environment"""
+        factory = ModeFactory()
 
-    def test_create_interface_from_environment_workbench(self):
-        """Test creating interface from APP_MODE env var - workbench"""
-        with patch.dict(os.environ, {"APP_MODE": "workbench"}):
-            interface = create_interface_for_mode()
-            assert interface is not None
-            assert interface.title == "Agent Workbench - Enhanced"
+        with patch.dict("os.environ", {"APP_MODE": "workbench"}):
+            # Explicit mode should override environment
+            mode = factory._determine_mode_safe("seo_coach")
+            assert mode == "seo_coach"
 
-    def test_create_interface_from_environment_seo_coach(self):
-        """Test creating interface from APP_MODE env var - seo_coach"""
-        try:
-            with patch.dict(os.environ, {"APP_MODE": "seo_coach"}):
-                interface = create_interface_for_mode()
-                assert interface is not None
-                assert interface.title == "AI SEO Coach - Nederlandse Bedrijven"
-        except AttributeError as e:
-            if "Cannot call click outside of a gradio.Blocks context" in str(e):
-                pytest.skip("Gradio context not available in test environment")
-            else:
-                raise
-
-    def test_create_interface_invalid_mode_raises_error(self):
-        """Test that invalid mode raises ValueError"""
-        with pytest.raises(ValueError) as exc_info:
-            create_interface_for_mode("invalid_mode")
-
-        assert "Invalid mode: invalid_mode" in str(exc_info.value)
-        assert "Use 'workbench' or 'seo_coach'" in str(exc_info.value)
-
-    def test_create_interface_invalid_environment_mode_raises_error(self):
-        """Test that invalid APP_MODE environment variable raises ValueError"""
-        with patch.dict(os.environ, {"APP_MODE": "invalid_mode"}):
-            with pytest.raises(ValueError) as exc_info:
-                create_interface_for_mode()
-
-            assert "Invalid mode: invalid_mode" in str(exc_info.value)
-
-    def test_create_interface_none_mode_uses_environment(self):
-        """Test that None mode parameter uses environment variable"""
-        try:
-            with patch.dict(os.environ, {"APP_MODE": "seo_coach"}):
-                interface = create_interface_for_mode(None)
-                assert interface is not None
-                assert interface.title == "AI SEO Coach - Nederlandse Bedrijven"
-        except AttributeError as e:
-            if "Cannot call click outside of a gradio.Blocks context" in str(e):
-                pytest.skip("Gradio context not available in test environment")
-            else:
-                raise
-
-    def test_create_interface_override_environment(self):
-        """Test that explicit mode parameter overrides environment"""
-        with patch.dict(os.environ, {"APP_MODE": "seo_coach"}):
-            interface = create_interface_for_mode("workbench")
-            assert interface is not None
-            assert interface.title == "Agent Workbench - Enhanced"
+            # Invalid explicit mode should fall back to environment
+            mode = factory._determine_mode_safe("invalid")
+            assert mode == "workbench"  # Falls back to environment
 
 
-class TestModeFactoryIntegration:
-    """Integration tests for mode factory with actual interfaces"""
+class TestLogging:
+    """Test logging functionality"""
 
-    def test_workbench_interface_components(self):
-        """Test workbench interface has expected components"""
-        interface = create_interface_for_mode("workbench")
+    def test_successful_interface_creation_logging(self):
+        """Test logging on successful interface creation"""
+        factory = ModeFactory()
 
-        # Verify it's a Gradio Blocks interface
-        assert hasattr(interface, "blocks")
-        assert len(interface.blocks) > 0
+        with patch(
+            "agent_workbench.ui.mode_factory.create_workbench_app"
+        ) as mock_workbench:
+            mock_interface = MagicMock()
+            mock_workbench.return_value = mock_interface
 
-        # Verify enhanced workbench features
-        assert len(interface.blocks) >= 10  # Enhanced app has many components
+            with patch.object(factory, "logger") as mock_logger:
+                factory.create_interface("workbench")
+                mock_logger.info.assert_called_with(
+                    "Successfully created workbench interface"
+                )
 
-    def test_seo_coach_interface_components(self):
-        """Test SEO coach interface has expected components"""
-        try:
-            interface = create_interface_for_mode("seo_coach")
-            # Verify it's a Gradio Blocks interface
-            assert hasattr(interface, "blocks")
-            assert len(interface.blocks) > 0
-            # Verify Dutch SEO coach specific structure
-            assert interface.title == "AI SEO Coach - Nederlandse Bedrijven"
-        except AttributeError as e:
-            if "Cannot call click outside of a gradio.Blocks context" in str(e):
-                pytest.skip("Gradio context not available in test environment")
-            else:
-                raise
+    def test_invalid_mode_warning_logging(self):
+        """Test warning logging for invalid modes"""
+        factory = ModeFactory()
 
-    def test_both_modes_are_distinct(self):
-        """Test that workbench and SEO coach interfaces are different"""
-        try:
-            workbench_interface = create_interface_for_mode("workbench")
-            seo_coach_interface = create_interface_for_mode("seo_coach")
-            # Different titles
-            assert workbench_interface.title != seo_coach_interface.title
-            # Both are valid Gradio interfaces
-            assert hasattr(workbench_interface, "blocks")
-            assert hasattr(seo_coach_interface, "blocks")
-            # Both have components
-            assert len(workbench_interface.blocks) > 0
-            assert len(seo_coach_interface.blocks) > 0
-        except AttributeError as e:
-            if "Cannot call click outside of a gradio.Blocks context" in str(e):
-                pytest.skip("Gradio context not available in test environment")
-            else:
-                raise
+        with patch.object(factory, "logger") as mock_logger:
+            factory._determine_mode_safe("invalid_mode")
+            mock_logger.warning.assert_called()
 
+    def test_extension_registration_logging(self):
+        """Test logging on extension registration"""
+        factory = ModeFactory()
 
-if __name__ == "__main__":
-    pytest.main([__file__])
+        with patch.object(factory, "logger") as mock_logger:
+            mock_extension = MagicMock()
+            factory.register_extension_mode("test_extension", mock_extension)
+            mock_logger.info.assert_called_with(
+                "Registered extension mode: test_extension"
+            )

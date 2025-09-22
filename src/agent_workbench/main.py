@@ -9,7 +9,8 @@ from .services.langgraph_bridge import LangGraphStateBridge
 from .services.langgraph_service import WorkbenchLangGraphService
 from .services.llm_service import ChatService
 from .services.state_manager import StateManager
-from .ui.mode_factory import create_interface_for_mode, get_mode_from_environment
+
+# Mode factory imports will be done within functions to avoid circular imports
 
 app = FastAPI(
     title="Agent Workbench", description="Agent Workbench API", version="0.1.0"
@@ -94,37 +95,140 @@ async def health_check():
     return {"status": "healthy"}
 
 
-# Mount Gradio app with mode factory integration
+# Enhanced Gradio mounting with comprehensive error handling
 @app.on_event("startup")
-async def mount_gradio_app():
-    """Mount the Gradio interface based on APP_MODE configuration"""
-    try:
-        # Create interface based on environment configuration
-        current_mode = get_mode_from_environment()
-        gradio_app = create_interface_for_mode(current_mode)
+async def mount_gradio_interface_safe():
+    """Mount Gradio interface with comprehensive error handling (UI-003)"""
+    import logging
 
-        # Mount the interface
-        app.mount("/", gradio_app.app, name="gradio")
-        print(f"✅ Mounted {current_mode} interface successfully")
+    from .ui.mode_factory import InterfaceCreationError, InvalidModeError, ModeFactory
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Create mode factory
+        factory = ModeFactory()
+
+        # Get current mode
+        current_mode = factory._determine_mode_safe(None)
+
+        # Create interface
+        gradio_interface = factory.create_interface(current_mode)
+
+        # Mount interface
+        app.mount("/", gradio_interface.app, name="gradio")
+
+        logger.info(f"✅ Successfully mounted {current_mode} interface")
+
+    except InvalidModeError as e:
+        # Configuration error - should not start
+        error_msg = f"Invalid mode configuration: {e}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+
+    except InterfaceCreationError as e:
+        # Interface creation failed - fallback to API-only mode
+        error_msg = f"Interface creation failed: {e}"
+        logger.error(error_msg)
+        logger.warning("Starting in API-only mode")
+
+        # Add error endpoint for monitoring
+        error_message = str(e)
+
+        @app.get("/api/interface-error")
+        async def get_interface_error():
+            return {
+                "error": "Interface not available",
+                "message": error_message,
+                "mode": "api_only",
+            }
+
     except Exception as e:
-        print(f"❌ Failed to mount Gradio interface: {e}")
-        # Continue without interface - API-only mode
-        pass
+        # Unexpected error - fallback to API-only mode
+        error_msg = f"Unexpected error mounting interface: {e}"
+        logger.error(error_msg, exc_info=True)
+        logger.warning("Starting in API-only mode")
+
+        @app.get("/api/interface-error")
+        async def get_interface_error():
+            return {
+                "error": "Interface not available",
+                "message": "Unexpected error during interface mounting",
+                "mode": "api_only",
+            }
 
 
 @app.get("/api/mode")
 async def get_mode_info():
-    """Get current mode information for UI-002 deployment"""
-    current_mode = get_mode_from_environment()
-    return {
-        "current_mode": current_mode,
-        "available_modes": ["workbench", "seo_coach"],
-        "phase": "1",
-        "features": {
-            "workbench": "Technical AI development interface",
-            "seo_coach": "Dutch SEO coaching for businesses",
-        },
-    }
+    """Get current mode information with enhanced error handling (UI-003)"""
+    import logging
+
+    from .ui.mode_factory import ModeFactory
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        factory = ModeFactory()
+        current_mode = factory._determine_mode_safe(None)
+
+        return {
+            "current_mode": current_mode,
+            "available_modes": factory.get_available_modes(),
+            "extension_modes": list(factory.extension_registry.keys()),
+            "status": "healthy",
+            "interface_available": True,
+            "phase": "1",
+            "features": {
+                "workbench": "Technical AI development interface",
+                "seo_coach": "Dutch SEO coaching for businesses",
+            },
+        }
+    except Exception as e:
+        logger.error(f"Failed to get mode info: {e}")
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=500, detail=f"Failed to determine current mode: {str(e)}"
+        )
+
+
+@app.get("/api/health/detailed")
+async def detailed_health_check():
+    """Detailed health check including mode factory status (UI-003)"""
+    import logging
+    from datetime import datetime
+
+    from .ui.mode_factory import ModeFactory
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        factory = ModeFactory()
+        current_mode = factory._determine_mode_safe(None)
+
+        # Test interface creation
+        interface = factory.create_interface(current_mode)
+        interface_available = interface is not None
+
+        return {
+            "status": "healthy",
+            "mode": current_mode,
+            "interface_available": interface_available,
+            "available_modes": factory.get_available_modes(),
+            "extension_modes": list(factory.extension_registry.keys()),
+            "timestamp": datetime.now().isoformat(),
+            "phase": "1",
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "degraded",
+            "mode": "api_only",
+            "interface_available": False,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat(),
+            "phase": "1",
+        }
 
 
 if __name__ == "__main__":
