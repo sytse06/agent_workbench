@@ -107,16 +107,16 @@ class TestDocumentProcessingExtension:
 
     def test_document_extension_isolation(self):
         """Test document extension doesn't interfere with core modes"""
-        factory = ModeFactory()
-
-        # Register document extension
-        mock_doc_factory = MagicMock()
-        factory.register_extension_mode("document_processor", mock_doc_factory)
-
-        # Core modes should still work
         with patch("agent_workbench.ui.mode_factory.create_workbench_app") as mock_wb:
             mock_wb.return_value = MagicMock()
 
+            factory = ModeFactory()
+
+            # Register document extension
+            mock_doc_factory = MagicMock()
+            factory.register_extension_mode("document_processor", mock_doc_factory)
+
+            # Core modes should still work
             workbench = factory.create_interface("workbench")
             assert workbench is not None
             mock_wb.assert_called_once()
@@ -144,7 +144,9 @@ class TestDocumentProcessingExtension:
         # Should be registered but not implemented
         assert "document_processor" in factory.extension_registry
 
-        with pytest.raises(NotImplementedError) as exc_info:
+        from agent_workbench.ui.mode_factory import InterfaceCreationError
+
+        with pytest.raises(InterfaceCreationError) as exc_info:
             factory.create_interface("document_processor")
 
         assert "Document processing - Phase 2" in str(exc_info.value)
@@ -204,7 +206,9 @@ class TestMCPToolExtension:
         assert "tool_manager" in factory.extension_registry
         assert "workbench_plus" in factory.extension_registry
 
-        with pytest.raises(NotImplementedError):
+        from agent_workbench.ui.mode_factory import InterfaceCreationError
+
+        with pytest.raises(InterfaceCreationError):
             factory.create_interface("tool_manager")
 
 
