@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -229,6 +231,95 @@ async def detailed_health_check():
             "timestamp": datetime.now().isoformat(),
             "phase": "1",
         }
+
+
+def create_hf_spaces_app(mode: Optional[str] = None):
+    """
+    Create HuggingFace Spaces optimized Gradio app.
+
+    This function is called by the generated HF Spaces app.py files
+    to create a properly configured Gradio interface for deployment.
+
+    Args:
+        mode: Override mode (workbench or seo_coach)
+
+    Returns:
+        Gradio Blocks interface optimized for HF Spaces
+    """
+    import logging
+    import os
+
+    from .ui.mode_factory import InterfaceCreationError, InvalidModeError, ModeFactory
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Override mode if specified
+        if mode:
+            os.environ["APP_MODE"] = mode
+
+        # Create mode factory
+        factory = ModeFactory()
+
+        # Get current mode
+        current_mode = factory._determine_mode_safe(None)
+        logger.info(f"Creating HF Spaces app for mode: {current_mode}")
+
+        # Create interface
+        interface = factory.create_interface(current_mode)
+
+        if interface is None:
+            raise InterfaceCreationError(f"Failed to create {current_mode} interface")
+
+        # Configure for HF Spaces deployment
+        interface.queue(
+            concurrency_count=5 if current_mode == "seo_coach" else 3,
+            max_size=30 if current_mode == "seo_coach" else 20,
+            api_open=False,  # Disable API access for security
+        )
+
+        logger.info(f"✅ Successfully created {current_mode} interface for HF Spaces")
+        return interface
+
+    except (InvalidModeError, InterfaceCreationError) as e:
+        logger.error(f"Failed to create HF Spaces app: {e}")
+        # Create fallback error interface
+        import gradio as gr
+
+        error_msg = (
+            "❌ Import Fout: Ontbrekende afhankelijkheden."
+            if mode == "seo_coach"
+            else "❌ Import Error: Missing dependencies."
+        )
+        title = "SEO Coach - Fout" if mode == "seo_coach" else "Agent Workbench - Error"
+
+        error_interface = gr.Interface(
+            fn=lambda: error_msg,
+            inputs=[],
+            outputs=gr.Textbox(label="Error" if mode != "seo_coach" else "Fout"),
+            title=title,
+            description=(
+                "Er was een fout bij het starten van de applicatie."
+                if mode == "seo_coach"
+                else "There was an error starting the application."
+            ),
+        )
+        return error_interface
+
+    except Exception as e:
+        logger.error(f"Unexpected error creating HF Spaces app: {e}", exc_info=True)
+        # Create fallback error interface
+        import gradio as gr
+
+        error_msg = f"❌ Startup Error: {str(e)}"
+        error_interface = gr.Interface(
+            fn=lambda: error_msg,
+            inputs=[],
+            outputs=gr.Textbox(label="Error"),
+            title="Application Error",
+            description="There was an unexpected error starting the application.",
+        )
+        return error_interface
 
 
 if __name__ == "__main__":
