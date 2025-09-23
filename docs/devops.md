@@ -161,12 +161,43 @@ make verify-staging      # Comprehensive staging verification
 
 ### Production Deployment
 
+#### Local/Docker Production
+
 ```bash
 # Production deployment (main branch required)
 make deploy ENV=prod
 # Requires: main branch, confirmation
 # Runs: dependency sync, database migrations
 ```
+
+#### HuggingFace Spaces Production (PROD-001)
+
+**Deployment Architecture**: Agent Workbench deploys to HuggingFace Spaces as Progressive Web Apps with dual-mode support.
+
+**Production URLs**:
+- **Technical Users**: `https://huggingface.co/spaces/[org]/agent-workbench-technical`
+- **Dutch Business Users**: `https://huggingface.co/spaces/[org]/agent-workbench-seo`
+
+**Deployment Process**:
+```bash
+# Automated via GitHub Actions on main branch push
+# Manual deployment via GitHub Actions workflow_dispatch
+
+# Generated deployment artifacts:
+deploy/hf-spaces/workbench/app.py      # Technical mode entry point
+deploy/hf-spaces/seo-coach/app.py      # SEO coach mode entry point
+
+# Environment configuration:
+config/production.env                   # Base production config with APP_MODE=workbench
+deploy/config/hf-spaces-seo-coach.env  # SEO coach specific overrides
+```
+
+**Key Features**:
+- **Progressive Web App**: Full PWA with offline functionality and mobile optimization
+- **Dual-Mode Deployment**: Separate HF Spaces for workbench and SEO coach modes
+- **Generated Artifacts**: HF Spaces app.py files reference main application via `create_hf_spaces_app()`
+- **Resource Optimization**: Configured for HF Spaces CPU Basic (16GB RAM, 8 vCPUs)
+- **Security**: API keys managed via GitHub Secrets → HF Spaces environment variables
 
 ### Application Management
 

@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>{{ app_title | default("Agent Workbench") }}</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="{{ app_description | default('AI-powered workbench for technical users and SEO coaching') }}">
+    <meta name="theme-color" content="{{ pwa_theme_color | default('#3b82f6') }}">
+    <meta name="background-color" content="#ffffff">
+    
+    <!-- Apple PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="{{ pwa_short_name | default('AgentWB') }}">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    
+    <!-- Microsoft PWA Meta Tags -->
+    <meta name="msapplication-TileColor" content="{{ pwa_theme_color | default('#3b82f6') }}">
+    <meta name="msapplication-config" content="/static/browserconfig.xml">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-192.png">
+    
+    <!-- Preload Critical Resources -->
+    <link rel="preload" href="/static/sw.js" as="script">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Mobile Optimization -->
+    <meta name="format-detection" content="telephone=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    
+    <!-- PWA Styles -->
+    <style>
+        /* PWA Loading Screen */
+        .pwa-loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, {{ pwa_theme_color | default('#3b82f6') }}, #8b5cf6);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            z-index: 9999;
+            transition: opacity 0.5s ease-out;
+        }
+        
+        .pwa-loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .pwa-logo {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            margin-bottom: 24px;
+            animation: pulse 2s infinite;
+        }
+        
+        .pwa-title {
+            font-size: 24px;
+            font-weight: 300;
+            margin-bottom: 8px;
+        }
+        
+        .pwa-subtitle {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-bottom: 32px;
+        }
+        
+        .pwa-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* PWA Install Banner */
+        .pwa-install-banner {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 16px;
+            border-radius: 12px;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+        
+        .pwa-install-text {
+            flex: 1;
+            margin-right: 16px;
+        }
+        
+        .pwa-install-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .pwa-install-subtitle {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        .pwa-install-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .pwa-install-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .pwa-install-btn.primary {
+            background: {{ pwa_theme_color | default('#3b82f6') }};
+            color: white;
+        }
+        
+        .pwa-install-btn.secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        
+        .pwa-install-btn:hover {
+            transform: translateY(-1px);
+        }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .pwa-install-banner {
+                bottom: 10px;
+                left: 10px;
+                right: 10px;
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .pwa-install-text {
+                margin-right: 0;
+                margin-bottom: 12px;
+            }
+            
+            .pwa-install-buttons {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+        
+        /* Touch-friendly interface */
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        input, textarea, [contenteditable] {
+            -webkit-user-select: text;
+            user-select: text;
+        }
+        
+        /* Ensure minimum touch target size */
+        button, .btn, [role="button"] {
+            min-height: 44px;
+            min-width: 44px;
+        }
+    </style>
+</head>
+<body>
+    <!-- PWA Loading Screen -->
+    <div id="pwa-loading" class="pwa-loading">
+        <div class="pwa-logo">
+            {% if app_mode == 'seo_coach' %}🚀{% else %}🛠️{% endif %}
+        </div>
+        <div class="pwa-title">{{ pwa_name | default("Agent Workbench") }}</div>
+        <div class="pwa-subtitle">{{ app_description | default("Loading your AI assistant...") }}</div>
+        <div class="pwa-spinner"></div>
+    </div>
+    
+    <!-- PWA Install Banner -->
+    <div id="pwa-install-banner" class="pwa-install-banner">
+        <div class="pwa-install-text">
+            <div class="pwa-install-title">Install {{ pwa_name | default("Agent Workbench") }}</div>
+            <div class="pwa-install-subtitle">Get the full app experience with offline access</div>
+        </div>
+        <div class="pwa-install-buttons">
+            <button id="pwa-install-btn" class="pwa-install-btn primary">Install</button>
+            <button id="pwa-dismiss-btn" class="pwa-install-btn secondary">Later</button>
+        </div>
+    </div>
+    
+    <!-- Main Application Container -->
+    <div id="app-container">
+        <!-- Gradio app will be mounted here -->
+        {{ gradio_app | safe }}
+    </div>
+    
+    <!-- PWA JavaScript -->
+    <script>
+        // PWA Configuration
+        const PWA_CONFIG = {
+            appMode: '{{ app_mode | default("workbench") }}',
+            appTitle: '{{ app_title | default("Agent Workbench") }}',
+            pwaName: '{{ pwa_name | default("Agent Workbench") }}',
+            themeColor: '{{ pwa_theme_color | default("#3b82f6") }}',
+            enablePwa: {{ enable_pwa | default(true) | tojson }}
+        };
+        
+        // Service Worker Registration
+        if ('serviceWorker' in navigator && PWA_CONFIG.enablePwa) {
+            window.addEventListener('load', async () => {
+                try {
+                    const registration = await navigator.serviceWorker.register('/static/sw.js');
+                    console.log('PWA: Service Worker registered', registration);
+                    
+                    // Check for updates
+                    registration.addEventListener('updatefound', () => {
+                        const newWorker = registration.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                // New content available, show update notification
+                                showUpdateNotification();
+                            }
+                        });
+                    });
+                } catch (error) {
+                    console.error('PWA: Service Worker registration failed', error);
+                }
+            });
+        }
+        
+        // PWA Install Prompt
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Show install banner after a delay
+            setTimeout(() => {
+                if (!localStorage.getItem('pwa-install-dismissed')) {
+                    showInstallBanner();
+                }
+            }, 5000);
+        });
+        
+        function showInstallBanner() {
+            const banner = document.getElementById('pwa-install-banner');
+            banner.style.display = 'flex';
+            
+            document.getElementById('pwa-install-btn').addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    console.log('PWA: Install prompt outcome:', outcome);
+                    deferredPrompt = null;
+                }
+                hideInstallBanner();
+            });
+            
+            document.getElementById('pwa-dismiss-btn').addEventListener('click', () => {
+                localStorage.setItem('pwa-install-dismissed', 'true');
+                hideInstallBanner();
+            });
+        }
+        
+        function hideInstallBanner() {
+            const banner = document.getElementById('pwa-install-banner');
+            banner.style.display = 'none';
+        }
+        
+        // App Loading Management
+        function hideLoadingScreen() {
+            const loading = document.getElementById('pwa-loading');
+            loading.classList.add('hidden');
+            setTimeout(() => {
+                loading.style.display = 'none';
+            }, 500);
+        }
+        
+        // Hide loading screen when app is ready
+        window.addEventListener('load', () => {
+            // Wait for Gradio to initialize
+            setTimeout(hideLoadingScreen, 2000);
+        });
+        
+        // Gradio ready detection
+        const checkGradioReady = () => {
+            if (window.gradio || document.querySelector('.gradio-container')) {
+                hideLoadingScreen();
+            } else {
+                setTimeout(checkGradioReady, 100);
+            }
+        };
+        
+        // Start checking for Gradio
+        setTimeout(checkGradioReady, 1000);
+        
+        // Update notification
+        function showUpdateNotification() {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('App Updated', {
+                    body: 'A new version is available. Refresh to update.',
+                    icon: '/static/icons/icon-192.png',
+                    tag: 'app-update'
+                });
+            }
+        }
+        
+        // Request notification permission
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+        
+        // Offline/Online status
+        window.addEventListener('online', () => {
+            console.log('PWA: Back online');
+            // Trigger background sync if available
+            if ('serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
+                navigator.serviceWorker.ready.then(registration => {
+                    return registration.sync.register('conversation-sync');
+                });
+            }
+        });
+        
+        window.addEventListener('offline', () => {
+            console.log('PWA: Gone offline');
+        });
+        
+        // Prevent zoom on double tap (iOS)
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', (event) => {
+            const now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, false);
+        
+        // Prevent pull-to-refresh on mobile
+        document.body.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1 && window.scrollY === 0) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        document.body.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && window.scrollY === 0) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        console.log('PWA: Wrapper initialized for', PWA_CONFIG.appMode);
+    </script>
+</body>
+</html>
