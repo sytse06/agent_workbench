@@ -729,18 +729,52 @@ gh variable set SEO_COACH_SPACE_NAME --body "agent-workbench-seo"
 - [ ] Deployment rollback procedures tested and documented
 - [ ] Environment configuration validation prevents deployment with missing variables
 
+## Critical Implementation Issues (Identified During Architecture Review)
+
+### **Issue 1: Environment Configuration Gaps**
+- **Problem**: Current config/production.env lacks APP_MODE environment variable required for HF Spaces mode switching
+- **Impact**: Dual-mode deployment will fail without proper mode detection
+- **Solution**: Add APP_MODE=workbench to config/production.env and create config/hf-spaces-seo-coach.env with APP_MODE=seo_coach
+- **Priority**: HIGH - Must fix before implementation
+
+### **Issue 2: Main.py Integration Challenge**
+- **Problem**: Current main.py has hardcoded Gradio mounting in startup event, incompatible with HF Spaces separate app.py entry points
+- **Impact**: Cannot create separate HF Spaces applications without refactoring
+- **Solution**: Refactor main.py to separate application creation from interface mounting, create dedicated HF Spaces entry points
+- **Priority**: HIGH - Core architecture dependency
+
+### **Issue 3: PWA Infrastructure Missing**
+- **Problem**: No existing PWA infrastructure (manifest.json, service worker, static assets) in current codebase
+- **Impact**: PWA features specified in architecture cannot be implemented without foundation
+- **Solution**: Create complete deploy/pwa/ directory structure with all PWA components as specified
+- **Priority**: HIGH - All PWA functionality depends on this foundation
+
+### **Issue 4: Docker Strategy Clarification**
+- **Clarification**: Docker commands in Makefile are orthogonal contingency options, not primary deployment path
+- **Understanding**: `make docker-staging` provides HF Spaces constraint validation, `make docker-prod` offers fallback hosting
+- **Implementation**: Docker staging validates HF Spaces deployment before production push
+- **Priority**: MEDIUM - Enhances deployment reliability
+
+### **Issue 5: Security Configuration**
+- **Note**: config/ directory and *.env files are properly gitignored, preventing credential leakage
+- **Verification**: All API keys will use placeholder pattern in production.env, real keys managed via GitHub Secrets
+- **Implementation**: Follow existing pattern of placeholder keys replaced during CI/CD
+- **Priority**: LOW - Already properly secured
+
 ## Implementation Scope
 
 ### **INCLUDED in PROD-001:**
 - **HuggingFace Spaces Production Deployment**: Two separate spaces for workbench and SEO coach modes
-- **Progressive Web App Implementation**: Complete PWA with service worker, manifest, and offline capabilities
+- **Progressive Web App Implementation**: Complete PWA with service worker, manifest, and offline capabilities (ALL PWA necessities will be coded in this feature)
 - **DevOps CI/CD Pipeline**: Complete GitHub Actions workflows leveraging existing config/*.env files
-- **Environment Configuration Management**: Automated sync from development.env, staging.env, production.env
+- **Environment Configuration Management**: Automated sync from development.env, staging.env, production.env with APP_MODE additions
 - **GitHub Secrets Integration**: Secure API key management with HF Spaces environment variable automation
 - **Automated Testing and Validation**: Pre-deployment testing and environment validation
 - **Mobile-Optimized User Experience**: Responsive design and touch-friendly interfaces
 - **Database Persistence on HF Spaces**: SQLite optimization with automated backup to HF Datasets
 - **Performance Optimization**: Resource-efficient builds for HF Spaces hardware constraints
+- **Main.py Refactoring**: Separate application creation from interface mounting for HF Spaces compatibility
+- **Docker Staging Validation**: Use docker-staging to validate HF Spaces constraints before deployment
 
 ### **EXCLUDED from PROD-001:**
 - **Custom Domain Configuration**: Basic HF Spaces URLs sufficient for Phase 1
