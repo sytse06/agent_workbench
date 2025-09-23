@@ -283,7 +283,7 @@ class LangGraphStateBridge:
         else:
             model_config = ModelConfig(
                 provider="openrouter",
-                model_name="qwen/qwq-32b-preview",
+                model_name="anthropic/claude-3.5-sonnet",
                 temperature=0.7,
                 max_tokens=2000,
                 streaming=True,

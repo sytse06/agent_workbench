@@ -37,6 +37,8 @@ help:
 	@echo "  make staging-deploy               - Full staging deployment"
 	@echo "  make verify-staging               - Comprehensive staging tests"
 	@echo "  make start-app                    - Start application"
+	@echo "  make start-app-debug              - Start with debug logging"
+	@echo "  make start-app-verbose            - Start with maximum debug info"
 	@echo ""
 	@echo "📊 Git & Deployment:"
 	@echo "  make git-status   - Show git overview"
@@ -144,45 +146,6 @@ git-status:
 	@echo "Feature branches:"
 	@git branch -a | grep "feature/" | sed 's/.*feature\//  ⚡  /' || echo "  (none)"
 
-# Enhanced complete with better error handling
-complete:
-	@if [ -z "$(TASK)" ]; then \
-		echo -e "$(RED)Usage: make complete TASK=TASK-NAME$(NC)"; \
-		echo -e "$(BLUE)Example: make complete TASK=LLM-001-langchain-model-integration$(NC)"; \
-		exit 1; \
-	fi
-	@echo -e "$(PURPLE)🎉 Completing Implementation: $(TASK)$(NC)"
-	@current_branch=$$(git branch --show-current); \
-	expected_branch="feature/$(TASK)"; \
-	if [ "$$current_branch" != "$$expected_branch" ]; then \
-		echo -e "$(YELLOW)⚠️  Current branch: $$current_branch$(NC)"; \
-		echo -e "$(YELLOW)⚠️  Expected branch: $$expected_branch$(NC)"; \
-		read -p "Continue anyway? (y/N): " confirm; \
-		if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
-			echo "Task completion cancelled"; \
-			exit 1; \
-		fi; \
-	fi
-	@git add -A
-	@if git diff --cached --quiet; then \
-		echo -e "$(YELLOW)⚠️  No changes to commit$(NC)"; \
-		exit 1; \
-	fi
-	@TASK_PREFIX=$$(echo $(TASK) | cut -d'-' -f1); \
-	git commit -m "[$$TASK_PREFIX][$(TASK)]: Implementation within architectural boundaries" \
-	           -m "Scope: Implemented exactly as specified in architecture" \
-	           -m "Tests: All tests passing" \
-	           -m "Boundaries: No scope violations detected"
-	@echo -e "$(GREEN)✅ Implementation committed$(NC)"
-	@echo -e "$(BLUE)🔄 Merging to develop...$(NC)"
-	@git checkout develop
-	@git merge feature/$(TASK) --no-ff -m "Merge $(TASK): Human-steered implementation complete"
-	@echo -e "$(GREEN)🎯 $(TASK) successfully integrated into develop$(NC)"
-	@echo ""
-	@echo "Next steps:"
-	@echo "  - Start next task: make arch TASK=NEXT-TASK-name"
-	@echo "  - Deploy to staging: make staging-deploy"
-
 # New: Combined staging deployment
 staging-deploy: staging deploy-staging
 	@echo -e "$(GREEN)🎯 Staging deployment complete$(NC)"
@@ -229,6 +192,60 @@ start-app:
 	@env_type=$$(grep "APP_ENV=" .env | cut -d'=' -f2); \
 	echo -e "$(CYAN)Environment: $$env_type$(NC)"
 	@uv run python -m agent_workbench
+
+# New: Debug mode application starter
+start-app-debug:
+	@echo -e "$(BLUE)🔍 Starting Agent Workbench in DEBUG mode...$(NC)"
+	@if [ ! -f ".env" ]; then \
+		echo -e "$(RED)❌ No .env file found. Run make dev/staging/prod first$(NC)"; \
+		exit 1; \
+	fi
+	@env_type=$$(grep "APP_ENV=" .env | cut -d'=' -f2); \
+	echo -e "$(CYAN)Environment: $$env_type$(NC)"
+	@echo -e "$(YELLOW)🔍 Debug Features Enabled:$(NC)"
+	@echo "  📊 Detailed logging"
+	@echo "  🔍 Request/response tracing"
+	@echo "  🛠️  FastAPI debug mode"
+	@echo "  📝 SQL query logging"
+	@echo ""
+	@FASTAPI_DEBUG=1 LOG_LEVEL=DEBUG uv run python -m agent_workbench
+
+# New: Verbose debug mode with API endpoint testing
+start-app-verbose:
+	@echo -e "$(BLUE)🔍 Starting Agent Workbench in VERBOSE DEBUG mode...$(NC)"
+	@if [ ! -f ".env" ]; then \
+		echo -e "$(RED)❌ No .env file found. Run make dev/staging/prod first$(NC)"; \
+		exit 1; \
+	fi
+	@env_type=$$(grep "APP_ENV=" .env | cut -d'=' -f2); \
+	echo -e "$(CYAN)Environment: $$env_type$(NC)"
+	@echo -e "$(YELLOW)🔍 Verbose Debug Features:$(NC)"
+	@echo "  📊 Maximum logging detail"
+	@echo "  🔍 HTTP request/response dumps"
+	@echo "  🛠️  FastAPI debug + docs enabled"
+	@echo "  📝 SQL queries with timing"
+	@echo "  🌐 CORS debug headers"
+	@echo "  🔧 API endpoint testing enabled"
+	@echo ""
+	@echo -e "$(CYAN)📖 Available endpoints when running:$(NC)"
+	@echo "  🏠 App: http://localhost:8000/"
+	@echo "  📚 API Docs: http://localhost:8000/docs"
+	@echo "  🔍 Direct Chat: http://localhost:8000/api/v1/chat/direct"
+	@echo "  🧪 Health Check: http://localhost:8000/api/v1/health"
+	@echo ""
+	@FASTAPI_DEBUG=1 LOG_LEVEL=DEBUG SQLALCHEMY_ECHO=1 CORS_DEBUG=1 uv run python -m agent_workbench
+
+# New: Test debug setup without starting full app
+test-debug-setup:
+	@echo -e "$(BLUE)🧪 Testing debug setup...$(NC)"
+	@echo "Testing environment variable support:"
+	@FASTAPI_DEBUG=1 LOG_LEVEL=DEBUG python -c "import os; print(f'FASTAPI_DEBUG: {os.getenv(\"FASTAPI_DEBUG\")}'); print(f'LOG_LEVEL: {os.getenv(\"LOG_LEVEL\")}')"
+	@echo ""
+	@echo "Testing application import:"
+	@LOG_LEVEL=DEBUG python -c "from src.agent_workbench.main import app; print('✅ Application imports successfully in debug mode')"
+	@echo ""
+	@echo -e "$(GREEN)✅ Debug setup working correctly$(NC)"
+	@echo -e "$(CYAN)Ready to run: make start-app-debug$(NC)"
 
 # New: Comprehensive staging verification
 verify-staging:

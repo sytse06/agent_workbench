@@ -1,10 +1,17 @@
+import logging
+import os
+import time
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+# Load environment variables from .env file, overriding existing ones
+load_dotenv(override=True)
 
 from .api.database import get_session
-from .api.routes import agent_configs, chat, conversations, health, messages, models
+from .api.routes import agent_configs, chat, consolidated_chat, conversations, direct_chat, health, messages, models
 from .models.schemas import ModelConfig
 from .services.context_service import ContextService
 from .services.langgraph_bridge import LangGraphStateBridge
@@ -19,6 +26,7 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+cors_debug = os.getenv("CORS_DEBUG", "").lower() == "1"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,9 +35,52 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add debug middleware if enabled
+if os.getenv("LOG_LEVEL", "").upper() == "DEBUG":
+    logger = logging.getLogger("agent_workbench.debug")
+
+    @app.middleware("http")
+    async def debug_middleware(request: Request, call_next):
+        """Debug middleware for request/response logging."""
+        start_time = time.time()
+
+        # Log request details
+        logger.debug(f"🔵 REQUEST: {request.method} {request.url}")
+        logger.debug(f"📄 Headers: {dict(request.headers)}")
+
+        # Get request body for POST requests (only for debug)
+        if request.method in ["POST", "PUT", "PATCH"]:
+            body = await request.body()
+            if body:
+                try:
+                    # Try to decode as text (don't parse JSON to avoid errors)
+                    body_text = body.decode('utf-8')
+                    # Only log first 500 chars to avoid spam
+                    logger.debug(f"📤 Body (first 500 chars): {body_text[:500]}")
+                except:
+                    logger.debug(f"📤 Body: {len(body)} bytes (binary)")
+
+        # Process request
+        response = await call_next(request)
+
+        # Log response details
+        process_time = time.time() - start_time
+        logger.debug(f"🔴 RESPONSE: {response.status_code} ({process_time:.3f}s)")
+        logger.debug(f"📄 Response headers: {dict(response.headers)}")
+
+        # Add debug headers if CORS debug is enabled
+        if cors_debug:
+            response.headers["X-Debug-Process-Time"] = str(process_time)
+            response.headers["X-Debug-Request-Method"] = request.method
+
+        return response
+
 # Include API routes
 app.include_router(health.router)
-app.include_router(chat.router)
+# Register consolidated routes BEFORE legacy chat routes to avoid conflicts
+app.include_router(consolidated_chat.router, prefix="/api/v1")
+app.include_router(direct_chat.router, prefix="/api/v1")  # Direct LLM baseline
+app.include_router(chat.router)  # Legacy routes
 app.include_router(conversations.router)
 app.include_router(messages.router)
 app.include_router(models.router)
@@ -50,13 +101,10 @@ async def get_langgraph_service() -> WorkbenchLangGraphService:
         state_manager = StateManager(db_session)
         context_service = ContextService()
 
-        # Create default model config for ChatService
-        default_config = ModelConfig(
-            provider="ollama",
-            model_name="llama3.1",
-            temperature=0.7,
-            max_tokens=1000,
-        )
+        # Create default model config using configuration service
+        from .services.model_config_service import model_config_service
+        default_config_dict = model_config_service.get_default_model_config()
+        default_config = ModelConfig(**default_config_dict)
 
         # Initialize LLM service with required model config
         llm_service = ChatService(default_config)
@@ -76,11 +124,12 @@ async def get_langgraph_service() -> WorkbenchLangGraphService:
     # If no database session is available, create service with minimal setup
     # This should not happen in normal operation but ensures function always returns
     context_service = ContextService()
+    import os
     default_config = ModelConfig(
-        provider="ollama",
-        model_name="llama3.1",
-        temperature=0.7,
-        max_tokens=1000,
+        provider="anthropic",
+        model_name=os.getenv("DEFAULT_PRIMARY_MODEL", "claude-3-5-sonnet-20241022"),
+        temperature=float(os.getenv("DEFAULT_TEMPERATURE", "0.7")),
+        max_tokens=int(os.getenv("DEFAULT_MAX_TOKENS", "2000")),
     )
     llm_service = ChatService(default_config)
 

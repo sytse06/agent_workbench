@@ -1,7 +1,7 @@
 """LangGraph state models for unified dual-mode workflow system."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -63,7 +63,7 @@ class WorkbenchState(TypedDict):
 class ConsolidatedWorkflowRequest(BaseModel):
     """Request model for consolidated workflow execution."""
 
-    conversation_id: Optional[UUID] = None
+    conversation_id: Optional[Union[UUID, str]] = None
     user_message: str = Field(..., min_length=1, max_length=10000)
     workflow_mode: Optional[Literal["workbench", "seo_coach"]] = None
     llm_config: Optional[ModelConfig] = None
@@ -76,7 +76,7 @@ class ConsolidatedWorkflowRequest(BaseModel):
 class ConsolidatedWorkflowResponse(BaseModel):
     """Response model for consolidated workflow execution."""
 
-    conversation_id: UUID
+    conversation_id: Union[UUID, str]
     assistant_response: str
     workflow_mode: str
     execution_successful: bool

@@ -5,6 +5,7 @@ import uuid
 import gradio as gr
 
 from .components.simple_client import SimpleLangGraphClient
+from ..services.model_config_service import model_config_service
 
 
 def create_workbench_app() -> gr.Blocks:
@@ -12,28 +13,45 @@ def create_workbench_app() -> gr.Blocks:
 
     client = SimpleLangGraphClient()
 
-    with gr.Blocks(title="Agent Workbench - Enhanced") as app:
-        gr.Markdown("# 🛠️ Agent Workbench - Enhanced with LangGraph")
+    # Get dynamic configuration from environment
+    provider_choices, default_provider = model_config_service.get_provider_choices_for_ui()
+    model_choices, default_model = model_config_service.get_model_choices_for_ui()
+
+    # Get active mode for title
+    import os
+    active_mode = os.getenv("APP_MODE", "workbench")
+    title = f"Agent Workbench - {active_mode.title()} Mode"
+
+    with gr.Blocks(title=title) as app:
+        gr.Markdown(f"# 🛠️ Agent Workbench - {active_mode.title()} Mode")
 
         conversation_id = gr.State(str(uuid.uuid4()))
 
         with gr.Row():
             with gr.Column(scale=1):
-                # Enhanced model configuration
+                # Dynamic model configuration from .env
                 provider = gr.Dropdown(
-                    choices=["openrouter", "ollama"],
-                    value="openrouter",
+                    choices=provider_choices,
+                    value=default_provider,
                     label="Provider",
                 )
 
                 model = gr.Dropdown(
-                    choices=["qwen/qwq-32b-preview", "claude-3-5-sonnet-20241022"],
-                    value="qwen/qwq-32b-preview",
-                    label="Model",
+                    choices=model_choices,
+                    value=default_model,
+                    label="Model Configuration",
                 )
 
-                temperature = gr.Slider(0.0, 2.0, 0.7, label="Temperature")
-                max_tokens = gr.Slider(100, 4000, 2000, label="Max Tokens")
+                temperature = gr.Slider(
+                    0.0, 2.0,
+                    model_config_service.default_temperature,
+                    label="Temperature"
+                )
+                max_tokens = gr.Slider(
+                    100, 4000,
+                    model_config_service.default_max_tokens,
+                    label="Max Tokens"
+                )
 
                 # NEW: Workflow monitoring
                 gr.Markdown("### 🔄 Workflow Status")
@@ -62,10 +80,13 @@ def create_workbench_app() -> gr.Blocks:
                 return "", gr.update(), "<div class='info'>Ready</div>"
 
             try:
+                # Parse model selection to get provider and model name
+                selected_provider, selected_model = model_config_service.parse_model_selection(model_val)
+
                 # Enhanced model config
                 model_config = {
-                    "provider": provider_val,
-                    "model_name": model_val,
+                    "provider": selected_provider,
+                    "model_name": selected_model,
                     "temperature": temp_val,
                     "max_tokens": max_tokens_val,
                 }

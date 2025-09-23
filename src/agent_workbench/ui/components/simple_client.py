@@ -1,9 +1,12 @@
 # Enhanced SimpleLangGraphClient for Consolidated Service Integration
 
 import asyncio
+import logging
 from typing import Any, Dict, List
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class SimpleLangGraphClient:
@@ -18,21 +21,50 @@ class SimpleLangGraphClient:
     ) -> Dict[str, Any]:
         """Send message to consolidated workflow service"""
 
-        # NEW: Use consolidated endpoint
-        response = await self.client.post(
-            f"{self.base_url}/api/v1/chat/consolidated",
-            json={
-                "user_message": message,  # NEW: Correct name
-                "conversation_id": conversation_id,
-                "workflow_mode": "workbench",  # NEW: workbench mode
-                "llm_config": model_config,  # NEW: Correct name
-                "streaming": False,  # NEW: Non-streaming
-                "parameter_overrides": None,  # NEW: extensibility
-                "context_data": {},  # NEW: Future context
+        payload = {
+            "user_message": message,  # NEW: Correct name
+            "conversation_id": conversation_id,  # This is a string from Gradio
+            "workflow_mode": "workbench",  # NEW: workbench mode
+            "llm_config": {
+                "provider": model_config["provider"],
+                "model_name": model_config["model_name"],
+                "temperature": model_config["temperature"],
+                "max_tokens": model_config["max_tokens"],
+                "streaming": False  # Ensure streaming is set correctly
             },
-        )
-        response.raise_for_status()
-        result = await response.json()
+            "streaming": False,  # NEW: Non-streaming
+            "parameter_overrides": None,  # NEW: extensibility
+            "context_data": {},  # NEW: Future context
+        }
+
+        logger.info(f"🚀 Sending request to {self.base_url}/api/v1/chat/consolidated")
+        logger.debug(f"📤 Payload: {payload}")
+
+        try:
+            # NEW: Use consolidated endpoint
+            response = await self.client.post(
+                f"{self.base_url}/api/v1/chat/consolidated",
+                json=payload,
+            )
+
+            logger.info(f"📊 Response status: {response.status_code}")
+            logger.debug(f"📄 Response headers: {dict(response.headers)}")
+
+            response.raise_for_status()
+            result = await response.json()
+
+            logger.info(f"✅ Response received successfully")
+            logger.debug(f"📥 Response data: {result}")
+
+        except httpx.TimeoutException as e:
+            logger.error(f"⏱️ Request timeout: {e}")
+            raise Exception(f"Request timeout after 30s: {e}")
+        except httpx.HTTPStatusError as e:
+            logger.error(f"🔴 HTTP error {e.response.status_code}: {e.response.text}")
+            raise Exception(f"API error {e.response.status_code}: {e.response.text}")
+        except Exception as e:
+            logger.error(f"💥 Unexpected error: {e}")
+            raise Exception(f"Connection error: {e}")
 
         # NEW: Handle ConsolidatedWorkflowResponse format
         # Also support legacy format for backward compatibility

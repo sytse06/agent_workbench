@@ -44,3 +44,17 @@ class ConversationState(BaseModel):
             metadata: Dict[str, Any],
             updated_at: datetime,
         ) -> None: ...
+
+
+# Rebuild the model after ModelConfig is imported to resolve forward references
+def _rebuild_models():
+    """Rebuild models to resolve forward references."""
+    try:
+        from .schemas import ModelConfig  # Import ModelConfig
+        ConversationState.model_rebuild()  # Rebuild the model
+    except ImportError:
+        pass  # ModelConfig not available yet
+
+
+# Call rebuild when module is imported
+_rebuild_models()

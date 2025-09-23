@@ -3,6 +3,7 @@
 import logging
 from typing import Any, Dict, Literal, Optional
 from uuid import UUID, uuid4
+from typing import Union
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,7 +35,7 @@ class ConsolidatedWorkbenchService:
         # Core LLM-001B components (preserved)
         self.default_model_config = ModelConfig(
             provider="openrouter",
-            model_name="qwen/qwq-32b-preview",
+            model_name="anthropic/claude-3.5-sonnet",
             temperature=0.7,
             max_tokens=2000,
         )
@@ -54,6 +55,18 @@ class ConsolidatedWorkbenchService:
         # Mode handlers
         self.workbench_handler: Optional[WorkbenchModeHandler] = None
         self.seo_coach_handler: Optional[SEOCoachModeHandler] = None
+
+    def _ensure_uuid(self, conversation_id: Optional[Union[UUID, str]]) -> Optional[UUID]:
+        """Convert string UUID to UUID object if needed."""
+        if conversation_id is None:
+            return None
+        if isinstance(conversation_id, str):
+            try:
+                return UUID(conversation_id)
+            except ValueError:
+                logger.warning(f"Invalid UUID string: {conversation_id}")
+                return None
+        return conversation_id
 
     async def initialize(self, db_session: AsyncSession) -> None:
         """
@@ -106,10 +119,13 @@ class ConsolidatedWorkbenchService:
             LLMProviderError: If LLM processing fails
         """
         try:
+            # Convert conversation_id to UUID if it's a string
+            conversation_id = self._ensure_uuid(request.conversation_id)
+
             # Determine effective workflow mode
             effective_mode = (
                 await self.mode_detector.get_effective_mode(
-                    conversation_id=request.conversation_id,
+                    conversation_id=conversation_id,
                     requested_mode=request.workflow_mode,
                     request_data=request.model_dump(),
                 )
@@ -118,7 +134,6 @@ class ConsolidatedWorkbenchService:
             )
 
             # Create or use existing conversation
-            conversation_id = request.conversation_id
             if not conversation_id:
                 conversation_id = await self._create_conversation(
                     request, effective_mode
@@ -136,12 +151,27 @@ class ConsolidatedWorkbenchService:
                 else initial_state
             )
 
+            # CRITICAL: Ensure assistant_response is never None
+            if final_state.get("assistant_response") is None:
+                # Direct LLM fallback when workflow fails
+                final_state["assistant_response"] = await self._direct_llm_fallback(request)
+                final_state["workflow_steps"].append("Direct LLM fallback used")
+
             # Convert to response format
             return self._convert_to_response(final_state)
 
         except Exception as e:
             logger.error(f"Workflow execution failed: {str(e)}")
-            raise ConversationError(f"Workflow execution failed: {str(e)}") from e
+            # Return error response instead of raising exception
+            return ConsolidatedWorkflowResponse(
+                conversation_id=request.conversation_id or uuid4(),
+                assistant_response=f"Error: {str(e)}",
+                workflow_mode=request.workflow_mode or "workbench",
+                execution_successful=False,
+                workflow_steps=["error"],
+                context_data={},
+                metadata={"error": str(e)}
+            )
 
     # This is a stub implementation for mypy validation
     # The actual implementation will be added in a future PR
@@ -385,6 +415,35 @@ class ConsolidatedWorkbenchService:
 
         return initial_state
 
+    async def _direct_llm_fallback(self, request: ConsolidatedWorkflowRequest) -> str:
+        """
+        Direct LLM fallback when workflow fails.
+
+        Args:
+            request: Original workflow request
+
+        Returns:
+            Direct LLM response
+        """
+        try:
+            # Use model config from request or default
+            model_config = request.llm_config or self.default_model_config
+
+            # Create fresh LLM service for fallback
+            fallback_service = ChatService(model_config)
+
+            # Get direct response
+            response = await fallback_service.chat_completion(
+                message=request.user_message,
+                conversation_id=None  # No state persistence in fallback
+            )
+
+            return response.content
+
+        except Exception as e:
+            logger.error(f"Direct LLM fallback failed: {str(e)}")
+            return f"Fallback failed: {str(e)}. Original message: {request.user_message}"
+
     def _convert_to_response(
         self, final_state: WorkbenchState
     ) -> ConsolidatedWorkflowResponse:
@@ -399,7 +458,7 @@ class ConsolidatedWorkbenchService:
         """
         return ConsolidatedWorkflowResponse(
             conversation_id=final_state["conversation_id"],
-            assistant_response=final_state.get("assistant_response", ""),
+            assistant_response=final_state.get("assistant_response") or "",
             workflow_mode=final_state["workflow_mode"],
             execution_successful=final_state["execution_successful"],
             workflow_steps=final_state["workflow_steps"],
@@ -417,11 +476,11 @@ class ConsolidatedWorkbenchService:
 
 
 # Dependency injection for FastAPI
-async def get_consolidated_service() -> ConsolidatedWorkbenchService:  # type: ignore
+async def get_consolidated_service():  # type: ignore
     """
     Get initialized consolidated service instance.
 
-    Returns:
+    Yields:
         Consolidated workbench service
     """
     service = ConsolidatedWorkbenchService()
@@ -430,4 +489,4 @@ async def get_consolidated_service() -> ConsolidatedWorkbenchService:  # type: i
     async for db_session in get_session():
         await service.initialize(db_session)
         yield service
-        break
+        # Clean up happens automatically when the request ends

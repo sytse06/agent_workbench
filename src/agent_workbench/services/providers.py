@@ -120,14 +120,22 @@ class OpenRouterProvider(ProviderFactory):
     def create_model(self, model_config: BaseModel) -> BaseChatModel:
         """Create OpenRouter chat model."""
         try:
+            import os
             from langchain_openai import ChatOpenAI
+
+            # Get API key from environment or model config
+            api_key = (
+                model_config.extra_params.get("api_key")
+                if hasattr(model_config, 'extra_params') and model_config.extra_params
+                else os.getenv("OPENROUTER_API_KEY")
+            )
 
             return ChatOpenAI(
                 model=model_config.model_name,
                 temperature=model_config.temperature,
                 max_tokens=model_config.max_tokens,
                 base_url="https://openrouter.ai/api/v1",
-                api_key=model_config.extra_params.get("api_key"),
+                api_key=api_key,
             )
         except ImportError as e:
             raise ImportError(
@@ -163,13 +171,21 @@ class OpenAIProvider(ProviderFactory):
     def create_model(self, model_config: BaseModel) -> BaseChatModel:
         """Create OpenAI chat model."""
         try:
+            import os
             from langchain_openai import ChatOpenAI
+
+            # Get API key from environment
+            api_key = (
+                model_config.extra_params.get("api_key")
+                if hasattr(model_config, 'extra_params') and model_config.extra_params
+                else os.getenv("OPENAI_API_KEY")
+            )
 
             return ChatOpenAI(
                 model=model_config.model_name,
                 temperature=model_config.temperature,
                 max_tokens=model_config.max_tokens,
-                **model_config.extra_params,
+                api_key=api_key,
             )
         except ImportError as e:
             raise ImportError(
@@ -184,13 +200,21 @@ class AnthropicProvider(ProviderFactory):
     def create_model(self, model_config: BaseModel) -> BaseChatModel:
         """Create Anthropic chat model."""
         try:
+            import os
             from langchain_anthropic import ChatAnthropic
+
+            # Get API key from environment
+            api_key = (
+                model_config.extra_params.get("api_key")
+                if hasattr(model_config, 'extra_params') and model_config.extra_params
+                else os.getenv("ANTHROPIC_API_KEY")
+            )
 
             return ChatAnthropic(
                 model=model_config.model_name,
                 temperature=model_config.temperature,
                 max_tokens=model_config.max_tokens,
-                **model_config.extra_params,
+                api_key=api_key,
             )
         except ImportError as e:
             raise ImportError(
