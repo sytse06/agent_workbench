@@ -7,8 +7,28 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-# Load environment variables from .env file, overriding existing ones
-load_dotenv(override=True)
+
+def load_environment():
+    """Load environment using standard APP_ENV pattern."""
+    # 1. Load base .env (backwards compatibility)
+    load_dotenv(".env", override=False)
+    
+    # 2. Get environment
+    app_env = os.getenv("APP_ENV", "development")
+    
+    # 3. Load environment-specific config
+    env_file = f"config/{app_env}.env"
+    if os.path.exists(env_file):
+        load_dotenv(env_file, override=True)
+        print(f"✅ Loaded {app_env} environment from {env_file}")
+    else:
+        print(f"⚠️  No config file found for {app_env}, using base .env")
+    
+    return app_env
+
+# Load environment at startup
+current_env = load_environment()
+print(f"🚀 Starting Agent Workbench in {current_env} mode")
 
 from .api.database import get_session
 from .api.routes import agent_configs, chat, consolidated_chat, conversations, direct_chat, health, messages, models
@@ -146,46 +166,52 @@ async def health_check():
     return {"status": "healthy"}
 
 
-# Enhanced Gradio mounting with comprehensive error handling
+# Complex UI mounting with queue fix - Testing the same solution on layered architecture
 @app.on_event("startup")
-async def mount_gradio_interface_safe():
-    """Mount Gradio interface with comprehensive error handling (UI-003)"""
+async def mount_complex_interface_with_queue_fix():
+    """Mount complex layered UI with the same queue fix that worked for simple UI."""
     import logging
-
-    from .ui.mode_factory import InterfaceCreationError, InvalidModeError, ModeFactory
-
+    
     logger = logging.getLogger(__name__)
-
+    
     try:
+        # Import complex mode factory
+        from .ui.mode_factory import InterfaceCreationError, InvalidModeError, ModeFactory
+        
         # Create mode factory
         factory = ModeFactory()
-
+        
         # Get current mode
         current_mode = factory._determine_mode_safe(None)
-
-        # Create interface
+        
+        # Create complex interface
         gradio_interface = factory.create_interface(current_mode)
-
+        
+        # CRITICAL FIX: Apply the same queue fix that worked for simple UI
+        # This should resolve the original responsiveness issues
+        gradio_interface.queue()
+        gradio_interface.run_startup_events()
+        
         # Mount interface
         app.mount("/", gradio_interface.app, name="gradio")
-
-        logger.info(f"✅ Successfully mounted {current_mode} interface")
-
+        
+        logger.info(f"✅ Successfully mounted {current_mode} interface with queue fix")
+        
     except InvalidModeError as e:
         # Configuration error - should not start
         error_msg = f"Invalid mode configuration: {e}"
         logger.error(error_msg)
         raise RuntimeError(error_msg)
-
+        
     except InterfaceCreationError as e:
         # Interface creation failed - fallback to API-only mode
         error_msg = f"Interface creation failed: {e}"
         logger.error(error_msg)
         logger.warning("Starting in API-only mode")
-
+        
         # Add error endpoint for monitoring
         error_message = str(e)
-
+        
         @app.get("/api/interface-error")
         async def get_interface_error():
             return {
@@ -193,13 +219,13 @@ async def mount_gradio_interface_safe():
                 "message": error_message,
                 "mode": "api_only",
             }
-
+            
     except Exception as e:
         # Unexpected error - fallback to API-only mode
         error_msg = f"Unexpected error mounting interface: {e}"
         logger.error(error_msg, exc_info=True)
         logger.warning("Starting in API-only mode")
-
+        
         @app.get("/api/interface-error")
         async def get_interface_error():
             return {

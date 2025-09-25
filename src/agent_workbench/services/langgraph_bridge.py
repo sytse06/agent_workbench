@@ -104,7 +104,7 @@ class LangGraphStateBridge:
             ConversationError: If state saving fails
         """
         try:
-            # Convert to LLM-001B ConversationState
+            # Convert to LLM-001B ConversationState with proper datetime handling
             conversation_state = ConversationState(
                 conversation_id=lg_state["conversation_id"],
                 messages=lg_state["conversation_history"],
@@ -119,6 +119,8 @@ class LangGraphStateBridge:
                     "coaching_context": lg_state.get("coaching_context"),
                     "debug_mode": lg_state.get("debug_mode"),
                     "parameter_overrides": lg_state.get("parameter_overrides"),
+                    # Store datetime as ISO string in metadata
+                    "last_updated": datetime.utcnow().isoformat(),
                 },
                 updated_at=datetime.utcnow(),
             )

@@ -25,7 +25,7 @@ class SimpleLangGraphClient:
             "user_message": message,  # NEW: Correct name
             "conversation_id": conversation_id,  # This is a string from Gradio
             "workflow_mode": "workbench",  # NEW: workbench mode
-            "llm_config": {
+            "llm_config": {  # FIXED: Use llm_config to match backend expectation
                 "provider": model_config["provider"],
                 "model_name": model_config["model_name"],
                 "temperature": model_config["temperature"],

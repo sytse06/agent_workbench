@@ -101,11 +101,11 @@ class StateManager:
             ConversationError: If state saving fails
         """
         try:
-            # Prepare state data for storage
+            # Prepare state data for storage with datetime serialization
             state_data = {
-                "messages": [msg.model_dump() for msg in state.messages],
+                "messages": [self._serialize_message(msg) for msg in state.messages],
                 "model_config": state.llm_config.model_dump(),
-                "metadata": state.metadata,
+                "metadata": self._serialize_metadata(state.metadata),
             }
 
             # Check if state already exists
@@ -366,3 +366,40 @@ class StateManager:
             raise ConversationError(
                 f"Failed to cleanup temporary conversations: {str(e)}"
             ) from e
+
+    def _serialize_message(self, msg: StandardMessage) -> Dict:
+        """
+        Serialize a message with proper datetime handling.
+
+        Args:
+            msg: StandardMessage to serialize
+
+        Returns:
+            Serialized message dict
+        """
+        msg_dict = msg.model_dump()
+        # Convert datetime to ISO string for JSON serialization
+        if isinstance(msg_dict.get("timestamp"), datetime):
+            msg_dict["timestamp"] = msg_dict["timestamp"].isoformat()
+        return msg_dict
+
+    def _serialize_metadata(self, metadata: Dict) -> Dict:
+        """
+        Serialize metadata with proper datetime handling.
+
+        Args:
+            metadata: Metadata dict to serialize
+
+        Returns:
+            Serialized metadata dict
+        """
+        serialized = {}
+        for key, value in metadata.items():
+            if isinstance(value, datetime):
+                serialized[key] = value.isoformat()
+            elif isinstance(value, dict):
+                # Recursively serialize nested dicts
+                serialized[key] = self._serialize_metadata(value)
+            else:
+                serialized[key] = value
+        return serialized

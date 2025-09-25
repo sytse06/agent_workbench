@@ -96,7 +96,7 @@ async def direct_chat(request: DirectChatRequest) -> DirectChatResponse:
         latency_ms = (time.time() - start_time) * 1000
 
         return DirectChatResponse(
-            content=response.content,
+            content=response.reply,  # Fixed: use .reply instead of .content
             conversation_id=str(uuid4()),
             model_used=request.model_name,
             provider_used=request.provider,
@@ -157,7 +157,7 @@ async def test_model_connectivity(request: ModelTestRequest) -> ModelTestRespons
             status="success",
             provider=request.provider,
             model=request.model_name,
-            response_length=len(response.content),
+            response_length=len(response.reply),  # Fixed: use .reply instead of .content
             latency_ms=latency_ms,
             api_key_source=api_key_source
         )

@@ -119,8 +119,11 @@ class ConsolidatedWorkbenchService:
             LLMProviderError: If LLM processing fails
         """
         try:
+            logger.info(f"🎯 DEBUG: Starting workflow execution")
+            
             # Convert conversation_id to UUID if it's a string
             conversation_id = self._ensure_uuid(request.conversation_id)
+            logger.info(f"🎯 DEBUG: Conversation ID: {conversation_id}")
 
             # Determine effective workflow mode
             effective_mode = (
@@ -132,32 +135,44 @@ class ConsolidatedWorkbenchService:
                 if self.mode_detector
                 else "workbench"
             )
+            logger.info(f"🎯 DEBUG: Effective workflow mode: {effective_mode}")
 
             # Create or use existing conversation
             if not conversation_id:
+                logger.info(f"🎯 DEBUG: Creating new conversation")
                 conversation_id = await self._create_conversation(
                     request, effective_mode
                 )
+                logger.info(f"🎯 DEBUG: Created conversation: {conversation_id}")
 
             # Prepare initial workflow state
+            logger.info(f"🎯 DEBUG: Preparing initial workflow state")
             initial_state = await self._prepare_initial_state(
                 request, conversation_id, effective_mode
             )
+            logger.info(f"🎯 DEBUG: Initial state prepared with model: {initial_state['model_config'].provider}/{initial_state['model_config'].model_name}")
 
             # Execute LangGraph workflow
+            logger.info(f"🎯 DEBUG: Executing LangGraph workflow (orchestrator available: {self.workflow_orchestrator is not None})")
             final_state = (
                 await self.workflow_orchestrator.execute_workflow(initial_state)
                 if self.workflow_orchestrator
                 else initial_state
             )
+            logger.info(f"🎯 DEBUG: Workflow execution completed")
 
             # CRITICAL: Ensure assistant_response is never None
             if final_state.get("assistant_response") is None:
+                logger.warning(f"🎯 DEBUG: Assistant response is None, using direct LLM fallback")
                 # Direct LLM fallback when workflow fails
                 final_state["assistant_response"] = await self._direct_llm_fallback(request)
                 final_state["workflow_steps"].append("Direct LLM fallback used")
+                logger.info(f"🎯 DEBUG: Fallback response generated: {len(final_state['assistant_response'])} chars")
+            else:
+                logger.info(f"🎯 DEBUG: Assistant response available: {len(final_state['assistant_response'])} chars")
 
             # Convert to response format
+            logger.info(f"🎯 DEBUG: Converting to response format")
             return self._convert_to_response(final_state)
 
         except Exception as e:

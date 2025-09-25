@@ -43,11 +43,22 @@ async def consolidated_chat(
         HTTPException: If workflow execution fails
     """
     try:
+        # Enhanced debug logging for request tracking
+        logger.info(f"🎯 DEBUG: Received consolidated chat request")
+        logger.info(f"🎯 DEBUG: Message: {request.user_message[:50]}...")
+        logger.info(f"🎯 DEBUG: Workflow mode: {request.workflow_mode}")
+        logger.info(f"🎯 DEBUG: Model config: {request.model_config}")
+        logger.info(f"🎯 DEBUG: Conversation ID: {request.conversation_id}")
+        
         logger.info(
             f"Processing consolidated chat request for mode: {request.workflow_mode}"
         )
 
         response = await service.execute_workflow(request)
+
+        logger.info(f"🎯 DEBUG: Workflow execution completed")
+        logger.info(f"🎯 DEBUG: Response success: {response.execution_successful}")
+        logger.info(f"🎯 DEBUG: Assistant response length: {len(response.assistant_response) if response.assistant_response else 0}")
 
         logger.info(
             f"Consolidated chat completed successfully for conversation: "

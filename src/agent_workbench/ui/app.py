@@ -72,89 +72,88 @@ def create_workbench_app() -> gr.Blocks:
                     )
                     send = gr.Button("Send", variant="primary", scale=1)
 
-        # Enhanced message handler with debug logging
-        async def handle_enhanced_message(
+        # Simple working handler using direct API call (FIXED for Gradio compatibility)
+        def handle_message(
             msg, conv_id, provider_val, model_val, temp_val, max_tokens_val, debug_val
         ):
-            print(f"🎯 DEBUG: handle_enhanced_message called with msg='{msg}'")
+            print(f"🎯 DEBUG: handle_message called with msg='{msg}'")
 
             if not msg.strip():
                 print("🎯 DEBUG: Empty message, returning early")
-                return "", gr.update(), "<div class='info'>Ready</div>"
+                return "", [], "<div class='info'>Ready</div>"
 
             try:
                 print(f"🎯 DEBUG: Processing message, model_val='{model_val}'")
+                
                 # Parse model selection to get provider and model name
-                print(f"🎯 DEBUG: Parsing model selection...")
                 selected_provider, selected_model = model_config_service.parse_model_selection(model_val)
                 print(f"🎯 DEBUG: Parsed provider='{selected_provider}', model='{selected_model}'")
 
-                # Enhanced model config
-                model_config = {
+                # Use requests instead of httpx for simplicity
+                import requests
+                print(f"🎯 DEBUG: Making direct API call...")
+                
+                # Prepare request payload
+                payload = {
+                    "message": msg,
                     "provider": selected_provider,
                     "model_name": selected_model,
                     "temperature": temp_val,
-                    "max_tokens": max_tokens_val,
+                    "max_tokens": max_tokens_val
                 }
-                print(f"🎯 DEBUG: Model config created: {model_config}")
-
-                # Send through consolidated service
-                print(f"🎯 DEBUG: Sending message to client...")
-                response = await client.send_message(
-                    message=msg, conversation_id=conv_id, model_config=model_config
+                print(f"🎯 DEBUG: Request payload: {payload}")
+                
+                # Make synchronous API call
+                response = requests.post(
+                    "http://localhost:8000/api/v1/chat/direct",
+                    json=payload,
+                    timeout=30  # 30 second timeout
                 )
-                print(f"🎯 DEBUG: Received response: {response.get('assistant_response', 'No response')[:50]}...")
-
-                # Build history locally from current interaction
-                # Try to get existing history, but don't fail if it doesn't work
-                try:
-                    history = await client.get_chat_history(conv_id)
-                except Exception:
-                    history = []
-
-                # Ensure we have the current exchange in history
-                assistant_response = response.get("assistant_response", "No response received")
-
-                # Add current interaction if not already in history
-                if not history or history[-1].get("content") != assistant_response:
-                    history.append({"role": "user", "content": msg})
-                    history.append({"role": "assistant", "content": assistant_response})
-
-                # Show success status with workflow info
-                mode = response["workflow_mode"]
-                success = response["execution_successful"]
-                provider_used = response.get("metadata", {}).get(
-                    "provider_used", "Unknown"
-                )
-                success_html = f"""
-                <div class='success'>
-                    ✅ Workflow completed successfully<br>
-                    <strong>Mode:</strong> {mode}<br>
-                    <strong>Execution:</strong> {'Success' if success else 'Failed'}<br>
-                    <strong>Provider:</strong> {provider_used}
-                </div>
-                """
-
-                return "", history, success_html
+                
+                print(f"🎯 DEBUG: Response status: {response.status_code}")
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    print(f"🎯 DEBUG: Response received: {result.get('content', '')[:50]}...")
+                    
+                    # Simple history format for Gradio
+                    history = [
+                        {"role": "user", "content": msg}, 
+                        {"role": "assistant", "content": result.get('content', 'No response')}
+                    ]
+                    
+                    # Show success status
+                    success_html = f"""
+                    <div class='success'>
+                        ✅ Direct chat successful<br>
+                        <strong>Provider:</strong> {selected_provider}<br>
+                        <strong>Model:</strong> {selected_model}<br>
+                        <strong>Latency:</strong> {result.get('latency_ms', 0):.0f}ms
+                    </div>
+                    """
+                    
+                    return "", history, success_html
+                else:
+                    error_msg = f"API Error {response.status_code}: {response.text}"
+                    print(f"🎯 DEBUG: Error: {error_msg}")
+                    history = [{"role": "user", "content": msg}, {"role": "assistant", "content": error_msg}]
+                    error_html = f"<div class='error'>❌ API Error: {error_msg}</div>"
+                    return "", history, error_html
 
             except Exception as e:
                 print(f"🎯 DEBUG: Exception caught: {str(e)}")
                 import traceback
                 print(f"🎯 DEBUG: Traceback: {traceback.format_exc()}")
 
-                error_html = f"<div class='error'>❌ Workflow failed: {str(e)}</div>"
-                try:
-                    history = await client.get_chat_history(conv_id)
-                except Exception:
-                    history = []
-                history.append({"role": "user", "content": msg})
-                history.append({"role": "assistant", "content": f"Error: {str(e)}"})
-                print(f"🎯 DEBUG: Returning error response with history length: {len(history)}")
+                error_msg = f"Connection Error: {str(e)}"
+                error_html = f"<div class='error'>❌ Connection failed: {str(e)}</div>"
+                history = [{"role": "user", "content": msg}, {"role": "assistant", "content": error_msg}]
+                print(f"🎯 DEBUG: Returning error response")
                 return "", history, error_html
 
-        # Wire up events
+        # Wire up events to use FastAPI consolidated service
         send.click(
-            fn=handle_enhanced_message,
+            fn=handle_message,
             inputs=[
                 message,
                 conversation_id,
@@ -168,7 +167,7 @@ def create_workbench_app() -> gr.Blocks:
         )
 
         message.submit(
-            fn=handle_enhanced_message,
+            fn=handle_message,
             inputs=[
                 message,
                 conversation_id,
