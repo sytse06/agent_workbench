@@ -45,6 +45,11 @@ help:
 	@echo "  make deploy ENV=staging   - Deploy to staging"
 	@echo "  make deploy ENV=prod      - Deploy to production"
 	@echo ""
+	@echo "🔍 Analysis Tools:"
+	@echo "  make code-analyze         - Show code structure (classes/methods)"
+	@echo "  make db-analyze           - Show database tables and row counts"
+	@echo "  make db-structure TABLE=name - Show specific table structure"
+	@echo ""
 	@echo "🐳 Docker Extensions (Orthogonal):"
 	@echo "  make docker-dev          - Development in container"
 	@echo "  make docker-staging      - Staging container (mirrors prod)"
@@ -193,7 +198,7 @@ start-app:
 	echo -e "$(CYAN)Environment: $$env_type$(NC)"
 	@uv run python -m agent_workbench
 
-# New: Debug mode application starter
+# Debug mode application starter
 start-app-debug:
 	@echo -e "$(BLUE)🔍 Starting Agent Workbench in DEBUG mode...$(NC)"
 	@if [ ! -f ".env" ]; then \
@@ -210,7 +215,7 @@ start-app-debug:
 	@echo ""
 	@FASTAPI_DEBUG=1 LOG_LEVEL=DEBUG uv run python -m agent_workbench
 
-# New: Verbose debug mode with API endpoint testing
+# Verbose debug mode with API endpoint testing
 start-app-verbose:
 	@echo -e "$(BLUE)🔍 Starting Agent Workbench in VERBOSE DEBUG mode...$(NC)"
 	@if [ ! -f ".env" ]; then \
@@ -804,3 +809,77 @@ docker-cleanup:
 	@docker rmi -f $(DOCKER_IMAGE_NAME):dev $(DOCKER_IMAGE_NAME):staging $(DOCKER_IMAGE_NAME):prod $(DOCKER_IMAGE_NAME):test $(DOCKER_IMAGE_NAME):fresh 2>/dev/null || true
 	@docker system prune -f
 	@echo -e "$(GREEN)✅ Docker cleanup complete$(NC)"
+
+# Database analysis using simple tools
+db-analyze:
+	@echo -e "$(BLUE)🗄️ Database Analysis$(NC)"
+	@uv run python scripts/scan/simple_db_scanner.py tables
+	@echo ""
+	@echo -e "$(CYAN)💡 For detailed analysis, use:$(NC)"
+	@echo "  make db-structure TABLE=table_name  # Show table structure"
+	@echo "  make db-query TABLE=table_name      # Query table data"
+
+db-structure:
+	@if [ -z "$(TABLE)" ]; then \
+		echo -e "$(RED)Usage: make db-structure TABLE=table_name$(NC)"; \
+		exit 1; \
+	fi
+	@uv run python scripts/scan/simple_db_scanner.py structure $(TABLE)
+
+db-query:
+	@if [ -z "$(TABLE)" ]; then \
+		echo -e "$(RED)Usage: make db-query TABLE=table_name [LIMIT=10]$(NC)"; \
+		exit 1; \
+	fi
+	@uv run python scripts/scan/simple_db_scanner.py query $(TABLE) $(or $(LIMIT),10)
+
+db-sql:
+	@if [ -z "$(SQL)" ]; then \
+		echo -e "$(RED)Usage: make db-sql SQL=\"SELECT * FROM table_name\"$(NC)"; \
+		exit 1; \
+	fi
+	@uv run python scripts/scan/simple_db_scanner.py sql "$(SQL)"
+
+# Code analysis using simple tools
+code-analyze:
+	@echo -e "$(BLUE)🔍 Code Structure Analysis$(NC)"
+	@uv run python scripts/scan/simple_ast_scanner.py overview
+
+code-search:
+	@if [ -z "$(TERM)" ]; then \
+		echo -e "$(RED)Usage: make code-search TERM=search_term$(NC)"; \
+		exit 1; \
+	fi
+	@uv run python scripts/scan/simple_ast_scanner.py search $(TERM)
+
+code-class:
+	@if [ -z "$(CLASS)" ]; then \
+		echo -e "$(RED)Usage: make code-class CLASS=ClassName$(NC)"; \
+		exit 1; \
+	fi
+	@uv run python scripts/scan/simple_ast_scanner.py class $(CLASS)
+
+code-method:
+	@if [ -z "$(METHOD)" ]; then \
+		echo -e "$(RED)Usage: make code-method METHOD=method_name$(NC)"; \
+		exit 1; \
+	fi
+	@uv run python scripts/scan/simple_ast_scanner.py method $(METHOD)
+
+db-validate:
+	@echo -e "$(BLUE)🔍 Basic Database Validation$(NC)"
+	@uv run python scripts/scan/simple_db_scanner.py sql "SELECT COUNT(*) as table_count FROM sqlite_master WHERE type='table'"
+	@uv run python scripts/scan/simple_db_scanner.py sql "SELECT version_num FROM alembic_version"
+
+db-check-migrations:
+	@echo -e "$(BLUE)🗄️ Migration Status$(NC)"
+	@alembic current
+	@alembic history -r-5:
+
+# Legacy command - removed complex AI validation
+db-validate-ai:
+	@echo -e "$(YELLOW)⚠️  Complex AI validation removed$(NC)"
+	@echo "Use these simple commands instead:"
+	@echo "  make db-analyze              # Show tables"
+	@echo "  make db-validate             # Basic validation"
+	@echo "  make code-analyze            # Code structure"

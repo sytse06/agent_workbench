@@ -51,7 +51,7 @@ class SimpleLangGraphClient:
             logger.debug(f"📄 Response headers: {dict(response.headers)}")
 
             response.raise_for_status()
-            result = await response.json()
+            result = response.json()
 
             logger.info(f"✅ Response received successfully")
             logger.debug(f"📥 Response data: {result}")
@@ -91,33 +91,39 @@ class SimpleLangGraphClient:
         return return_data
 
     async def get_chat_history(self, conversation_id: str) -> List[Dict[str, str]]:
-        """NEW: Get history from consolidated state with legacy fallback"""
-        # Try new consolidated state endpoint first
-        response = await self.client.get(
-            f"{self.base_url}/api/v1/conversations/{conversation_id}/state"
-        )
-        response.raise_for_status()
-        result = await response.json()
+        """Get chat history with graceful fallback"""
+        try:
+            # Try consolidated state endpoint first
+            response = await self.client.get(
+                f"{self.base_url}/api/v1/conversations/{conversation_id}/state"
+            )
+            response.raise_for_status()
+            result = response.json()
 
-        # Check if we got conversation_history directly
-        if "conversation_history" in result:
-            return result["conversation_history"]
+            # Check if we got conversation_history directly
+            if "conversation_history" in result:
+                return result["conversation_history"]
 
-        # Check if we got legacy messages format
-        if "messages" in result:
-            messages = result["messages"]
-            chat_messages = []
-            for msg in messages:
-                if msg["role"] == "user":
-                    chat_messages.append({"role": "user", "content": msg["content"]})
-                elif msg["role"] == "assistant":
-                    chat_messages.append(
-                        {
-                            "role": "assistant",
-                            "content": msg.get("response", msg.get("content", "")),
-                        }
-                    )
-            return chat_messages
+            # Check if we got legacy messages format
+            if "messages" in result:
+                messages = result["messages"]
+                chat_messages = []
+                for msg in messages:
+                    if msg["role"] == "user":
+                        chat_messages.append({"role": "user", "content": msg["content"]})
+                    elif msg["role"] == "assistant":
+                        chat_messages.append(
+                            {
+                                "role": "assistant",
+                                "content": msg.get("response", msg.get("content", "")),
+                            }
+                        )
+                return chat_messages
+
+        except Exception as e:
+            logger.warning(f"Failed to get chat history: {e}")
+            # Return empty history on failure - don't break the UI
+            return []
 
         return []
 

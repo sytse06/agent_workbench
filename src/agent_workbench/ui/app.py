@@ -72,16 +72,22 @@ def create_workbench_app() -> gr.Blocks:
                     )
                     send = gr.Button("Send", variant="primary", scale=1)
 
-        # Enhanced message handler
+        # Enhanced message handler with debug logging
         async def handle_enhanced_message(
             msg, conv_id, provider_val, model_val, temp_val, max_tokens_val, debug_val
         ):
+            print(f"🎯 DEBUG: handle_enhanced_message called with msg='{msg}'")
+
             if not msg.strip():
+                print("🎯 DEBUG: Empty message, returning early")
                 return "", gr.update(), "<div class='info'>Ready</div>"
 
             try:
+                print(f"🎯 DEBUG: Processing message, model_val='{model_val}'")
                 # Parse model selection to get provider and model name
+                print(f"🎯 DEBUG: Parsing model selection...")
                 selected_provider, selected_model = model_config_service.parse_model_selection(model_val)
+                print(f"🎯 DEBUG: Parsed provider='{selected_provider}', model='{selected_model}'")
 
                 # Enhanced model config
                 model_config = {
@@ -90,14 +96,29 @@ def create_workbench_app() -> gr.Blocks:
                     "temperature": temp_val,
                     "max_tokens": max_tokens_val,
                 }
+                print(f"🎯 DEBUG: Model config created: {model_config}")
 
                 # Send through consolidated service
+                print(f"🎯 DEBUG: Sending message to client...")
                 response = await client.send_message(
                     message=msg, conversation_id=conv_id, model_config=model_config
                 )
+                print(f"🎯 DEBUG: Received response: {response.get('assistant_response', 'No response')[:50]}...")
 
-                # Get updated history
-                history = await client.get_chat_history(conv_id)
+                # Build history locally from current interaction
+                # Try to get existing history, but don't fail if it doesn't work
+                try:
+                    history = await client.get_chat_history(conv_id)
+                except Exception:
+                    history = []
+
+                # Ensure we have the current exchange in history
+                assistant_response = response.get("assistant_response", "No response received")
+
+                # Add current interaction if not already in history
+                if not history or history[-1].get("content") != assistant_response:
+                    history.append({"role": "user", "content": msg})
+                    history.append({"role": "assistant", "content": assistant_response})
 
                 # Show success status with workflow info
                 mode = response["workflow_mode"]
@@ -117,6 +138,10 @@ def create_workbench_app() -> gr.Blocks:
                 return "", history, success_html
 
             except Exception as e:
+                print(f"🎯 DEBUG: Exception caught: {str(e)}")
+                import traceback
+                print(f"🎯 DEBUG: Traceback: {traceback.format_exc()}")
+
                 error_html = f"<div class='error'>❌ Workflow failed: {str(e)}</div>"
                 try:
                     history = await client.get_chat_history(conv_id)
@@ -124,6 +149,7 @@ def create_workbench_app() -> gr.Blocks:
                     history = []
                 history.append({"role": "user", "content": msg})
                 history.append({"role": "assistant", "content": f"Error: {str(e)}"})
+                print(f"🎯 DEBUG: Returning error response with history length: {len(history)}")
                 return "", history, error_html
 
         # Wire up events
