@@ -78,7 +78,7 @@ async def direct_chat(request: DirectChatRequest) -> DirectChatResponse:
             model_name=request.model_name,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
-            streaming=request.streaming
+            streaming=request.streaming,
         )
 
         # Initialize LLM service
@@ -86,11 +86,11 @@ async def direct_chat(request: DirectChatRequest) -> DirectChatResponse:
 
         # Get response
         import time
+
         start_time = time.time()
 
         response = await llm_service.chat_completion(
-            message=request.message,
-            conversation_id=None  # No conversation persistence
+            message=request.message, conversation_id=None  # No conversation persistence
         )
 
         latency_ms = (time.time() - start_time) * 1000
@@ -101,15 +101,12 @@ async def direct_chat(request: DirectChatRequest) -> DirectChatResponse:
             model_used=request.model_name,
             provider_used=request.provider,
             latency_ms=latency_ms,
-            status="success"
+            status="success",
         )
 
     except Exception as e:
         logger.error(f"Direct chat failed: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Direct chat failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Direct chat failed: {str(e)}")
 
 
 @router.post("/test-model", response_model=ModelTestResponse)
@@ -129,7 +126,7 @@ async def test_model_connectivity(request: ModelTestRequest) -> ModelTestRespons
             provider=request.provider,
             model_name=request.model_name,
             temperature=0.7,
-            max_tokens=100
+            max_tokens=100,
         )
 
         # Override API key if provided
@@ -144,11 +141,11 @@ async def test_model_connectivity(request: ModelTestRequest) -> ModelTestRespons
 
         # Test with simple message
         import time
+
         start_time = time.time()
 
         response = await llm_service.chat_completion(
-            message=request.test_message,
-            conversation_id=None
+            message=request.test_message, conversation_id=None
         )
 
         latency_ms = (time.time() - start_time) * 1000
@@ -157,9 +154,11 @@ async def test_model_connectivity(request: ModelTestRequest) -> ModelTestRespons
             status="success",
             provider=request.provider,
             model=request.model_name,
-            response_length=len(response.reply),  # Fixed: use .reply instead of .content
+            response_length=len(
+                response.reply
+            ),  # Fixed: use .reply instead of .content
             latency_ms=latency_ms,
-            api_key_source=api_key_source
+            api_key_source=api_key_source,
         )
 
     except Exception as e:
@@ -169,7 +168,9 @@ async def test_model_connectivity(request: ModelTestRequest) -> ModelTestRespons
             provider=request.provider,
             model=request.model_name,
             error=str(e),
-            api_key_source=api_key_source if 'api_key_source' in locals() else "unknown"
+            api_key_source=(
+                api_key_source if "api_key_source" in locals() else "unknown"
+            ),
         )
 
 
@@ -183,13 +184,13 @@ async def list_available_providers():
         providers[provider_name] = {
             "name": provider_name,
             "factory_class": factory_class.__name__,
-            "supported": True  # Could add actual availability check
+            "supported": True,  # Could add actual availability check
         }
 
     return {
         "providers": providers,
         "default_provider": "openrouter",
-        "default_model": "anthropic/claude-3.5-sonnet"
+        "default_model": "anthropic/claude-3.5-sonnet",
     }
 
 
@@ -199,11 +200,6 @@ async def direct_chat_health():
     return {
         "status": "healthy",
         "service": "direct_chat",
-        "endpoints": [
-            "/direct",
-            "/test-model",
-            "/providers",
-            "/health"
-        ],
-        "description": "Direct LLM chat bypassing workflow complexity"
+        "endpoints": ["/direct", "/test-model", "/providers", "/health"],
+        "description": "Direct LLM chat bypassing workflow complexity",
     }

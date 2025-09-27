@@ -25,19 +25,28 @@ async def test_end_to_end_chat_flow():
     ):
 
         # Setup mock responses
-        mock_post.return_value.json.return_value = {
+        from unittest.mock import Mock
+        mock_response = Mock()
+        mock_response.json.return_value = {
             "reply": "Hello! How can I assist you today?",
             "conversation_id": "test-flow-id",
         }
-        mock_post.return_value.raise_for_status = AsyncMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_post.return_value = mock_response
 
-        mock_get.return_value.json.return_value = {
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = {
             "messages": [
                 {"content": "Hello", "role": "user"},
                 {"content": "Hello! How can I assist you today?", "role": "assistant"},
             ]
         }
-        mock_get.return_value.raise_for_status = AsyncMock()
+        mock_get_response.raise_for_status.return_value = None
+        mock_get_response.status_code = 200
+        mock_get_response.headers = {}
+        mock_get.return_value = mock_get_response
 
         # Test sending message
         result = await client.send_message(
@@ -69,11 +78,16 @@ async def test_empty_message_handling():
 
     # Mock the HTTP client
     with patch.object(client.client, "post") as mock_post:
-        mock_post.return_value.json.return_value = {
+        from unittest.mock import Mock
+        mock_response = Mock()
+        mock_response.json.return_value = {
             "reply": "",
             "conversation_id": "test-empty-id",
         }
-        mock_post.return_value.raise_for_status = AsyncMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_post.return_value = mock_response
 
         result = await client.send_message(
             message="",

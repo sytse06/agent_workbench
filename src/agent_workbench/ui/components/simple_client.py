@@ -27,10 +27,10 @@ class SimpleLangGraphClient:
             "workflow_mode": "workbench",  # NEW: workbench mode
             "llm_config": {  # FIXED: Use llm_config to match backend expectation
                 "provider": model_config["provider"],
-                "model_name": model_config["model_name"],
-                "temperature": model_config["temperature"],
-                "max_tokens": model_config["max_tokens"],
-                "streaming": False  # Ensure streaming is set correctly
+                "model_name": model_config.get("model_name", model_config.get("model", "anthropic/claude-3.5-sonnet")),
+                "temperature": model_config.get("temperature", 0.7),
+                "max_tokens": model_config.get("max_tokens", 2000),
+                "streaming": False,  # Ensure streaming is set correctly
             },
             "streaming": False,  # NEW: Non-streaming
             "parameter_overrides": None,  # NEW: extensibility
@@ -53,7 +53,7 @@ class SimpleLangGraphClient:
             response.raise_for_status()
             result = response.json()
 
-            logger.info(f"✅ Response received successfully")
+            logger.info("✅ Response received successfully")
             logger.debug(f"📥 Response data: {result}")
 
         except httpx.TimeoutException as e:
@@ -110,7 +110,9 @@ class SimpleLangGraphClient:
                 chat_messages = []
                 for msg in messages:
                     if msg["role"] == "user":
-                        chat_messages.append({"role": "user", "content": msg["content"]})
+                        chat_messages.append(
+                            {"role": "user", "content": msg["content"]}
+                        )
                     elif msg["role"] == "assistant":
                         chat_messages.append(
                             {

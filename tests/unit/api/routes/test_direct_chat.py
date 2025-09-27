@@ -1,7 +1,8 @@
 """Tests for direct chat endpoint (Phase 0 baseline)."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from src.agent_workbench.api.routes.direct_chat import (
     DirectChatRequest,
@@ -9,7 +10,7 @@ from src.agent_workbench.api.routes.direct_chat import (
     ModelTestRequest,
     ModelTestResponse,
     direct_chat,
-    test_model_connectivity,
+    test_model_connectivity as model_connectivity_endpoint,
 )
 
 
@@ -18,15 +19,19 @@ async def test_direct_chat_success():
     """Test successful direct chat response."""
     # Mock the LLM service response
     mock_response = AsyncMock()
-    mock_response.content = "Hello! This is a test response."
+    mock_response.reply = "Hello! This is a test response."
 
-    with patch("src.agent_workbench.api.routes.direct_chat.ChatService") as mock_service:
-        mock_service.return_value.chat_completion = AsyncMock(return_value=mock_response)
+    with patch(
+        "src.agent_workbench.api.routes.direct_chat.ChatService"
+    ) as mock_service:
+        mock_service.return_value.chat_completion = AsyncMock(
+            return_value=mock_response
+        )
 
         request = DirectChatRequest(
             message="Hello, test message",
             provider="openrouter",
-            model_name="qwen/qwq-32b-preview"
+            model_name="qwen/qwq-32b-preview",
         )
 
         response = await direct_chat(request)
@@ -42,7 +47,9 @@ async def test_direct_chat_success():
 @pytest.mark.asyncio
 async def test_direct_chat_failure():
     """Test direct chat error handling."""
-    with patch("src.agent_workbench.api.routes.direct_chat.ChatService") as mock_service:
+    with patch(
+        "src.agent_workbench.api.routes.direct_chat.ChatService"
+    ) as mock_service:
         # Mock service to raise an exception
         mock_service.return_value.chat_completion = AsyncMock(
             side_effect=Exception("API connection failed")
@@ -51,7 +58,7 @@ async def test_direct_chat_failure():
         request = DirectChatRequest(
             message="Hello, test message",
             provider="openrouter",
-            model_name="qwen/qwq-32b-preview"
+            model_name="qwen/qwq-32b-preview",
         )
 
         # Should raise HTTPException
@@ -63,17 +70,20 @@ async def test_direct_chat_failure():
 async def test_model_connectivity_success():
     """Test successful model connectivity test."""
     mock_response = AsyncMock()
-    mock_response.content = "Test response"
+    mock_response.reply = "Test response"
 
-    with patch("src.agent_workbench.api.routes.direct_chat.ChatService") as mock_service:
-        mock_service.return_value.chat_completion = AsyncMock(return_value=mock_response)
-
-        request = ModelTestRequest(
-            provider="openrouter",
-            model_name="qwen/qwq-32b-preview"
+    with patch(
+        "src.agent_workbench.api.routes.direct_chat.ChatService"
+    ) as mock_service:
+        mock_service.return_value.chat_completion = AsyncMock(
+            return_value=mock_response
         )
 
-        response = await test_model_connectivity(request)
+        request = ModelTestRequest(
+            provider="openrouter", model_name="qwen/qwq-32b-preview"
+        )
+
+        response = await model_connectivity_endpoint(request)
 
         assert isinstance(response, ModelTestResponse)
         assert response.status == "success"
@@ -88,18 +98,22 @@ async def test_model_connectivity_success():
 async def test_model_connectivity_with_api_key():
     """Test model connectivity with custom API key."""
     mock_response = AsyncMock()
-    mock_response.content = "Test response"
+    mock_response.reply = "Test response"
 
-    with patch("src.agent_workbench.api.routes.direct_chat.ChatService") as mock_service:
-        mock_service.return_value.chat_completion = AsyncMock(return_value=mock_response)
+    with patch(
+        "src.agent_workbench.api.routes.direct_chat.ChatService"
+    ) as mock_service:
+        mock_service.return_value.chat_completion = AsyncMock(
+            return_value=mock_response
+        )
 
         request = ModelTestRequest(
             provider="openrouter",
             model_name="qwen/qwq-32b-preview",
-            api_key="test-api-key"
+            api_key="test-api-key",
         )
 
-        response = await test_model_connectivity(request)
+        response = await model_connectivity_endpoint(request)
 
         assert response.status == "success"
         assert response.api_key_source == "request_override"
@@ -108,22 +122,23 @@ async def test_model_connectivity_with_api_key():
 @pytest.mark.asyncio
 async def test_model_connectivity_failure():
     """Test model connectivity test failure."""
-    with patch("src.agent_workbench.api.routes.direct_chat.ChatService") as mock_service:
+    with patch(
+        "src.agent_workbench.api.routes.direct_chat.ChatService"
+    ) as mock_service:
         mock_service.return_value.chat_completion = AsyncMock(
             side_effect=Exception("API connection failed")
         )
 
         request = ModelTestRequest(
-            provider="openrouter",
-            model_name="qwen/qwq-32b-preview"
+            provider="openrouter", model_name="qwen/qwq-32b-preview"
         )
 
-        response = await test_model_connectivity(request)
+        response = await model_connectivity_endpoint(request)
 
         assert response.status == "failed"
         assert response.error == "API connection failed"
         assert response.provider == "openrouter"
-        assert response.model == "qwq-32b-preview"
+        assert response.model == "qwen/qwq-32b-preview"
 
 
 def test_direct_chat_request_validation():
@@ -132,7 +147,7 @@ def test_direct_chat_request_validation():
     request = DirectChatRequest(message="Test message")
     assert request.message == "Test message"
     assert request.provider == "openrouter"  # default
-    assert request.model_name == "qwen/qwq-32b-preview"  # default
+    assert request.model_name == "anthropic/claude-3.5-sonnet"  # default
 
     # Custom parameters
     request = DirectChatRequest(
@@ -140,7 +155,7 @@ def test_direct_chat_request_validation():
         provider="anthropic",
         model_name="claude-3-sonnet",
         temperature=0.5,
-        max_tokens=1000
+        max_tokens=1000,
     )
     assert request.provider == "anthropic"
     assert request.model_name == "claude-3-sonnet"
@@ -150,10 +165,7 @@ def test_direct_chat_request_validation():
 
 def test_model_test_request_validation():
     """Test model test request validation."""
-    request = ModelTestRequest(
-        provider="openrouter",
-        model_name="qwen/qwq-32b-preview"
-    )
+    request = ModelTestRequest(provider="openrouter", model_name="qwen/qwq-32b-preview")
     assert request.provider == "openrouter"
     assert request.model_name == "qwen/qwq-32b-preview"
     assert request.test_message == "Test connection"  # default

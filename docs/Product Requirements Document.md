@@ -294,6 +294,37 @@ class WorkbenchLangGraphService:
 - **Workbench Interface**: Technical controls, workflow monitoring, advanced parameters
 - **SEO Coach Interface**: Simplified Dutch business interface, automated workflows
 
+**UI Building Testing Strategy (PROD-001A)**:
+Following the FastAPI ↔ Gradio ↔ Database triangle testing approach:
+
+```
+    FastAPI App
+       /  \
+      /    \
+   Gradio  Database
+     \    /
+      \  /
+    Tests
+```
+
+**Triangle Validation Framework**:
+- **FastAPI Health**: `/health` endpoint responds successfully
+- **Gradio Queue Fix**: UI mounting with `queue() + run_startup_events()` prevents unresponsiveness
+- **Database Tables**: SQLAlchemy models (ConversationModel, MessageModel) exist and accessible
+
+**UI Building Transparency Analysis**:
+- **Complexity Score**: 10 components (above manageable threshold of 5)
+- **Flow Mapping**: main.py → ModeFactory → mode-specific create_*_app()
+- **Mode Factory**: Two-mode system (workbench/seo_coach) with clear boundaries
+- **AST Analysis**: `python3 scripts/ui_building_analyzer.py` for debugging complex UI building issues
+
+**Test Implementation**:
+Essential tests added to `tests/ui/test_gradio_integration.py`:
+1. `test_gradio_queue_fix_validation()` - Validates queue fix prevents UI unresponsiveness
+2. `test_database_tables_exist()` - Prevents "burned hands" by validating DB schema
+
+This testing strategy provides transparency into UI building complexity that may cause confusion during development, while ensuring the core FastAPI-Gradio-Database integration works reliably.
+
 #### DEPLOY-001: Mode-Based Deployment (Week 7-8)
 **Architecture Scope**:
 - Docker deployment with APP_MODE environment control
@@ -310,15 +341,48 @@ docker run -e APP_MODE=workbench agent-workbench
 docker run -e APP_MODE=seo_coach agent-workbench
 ```
 
-### Phase 2: Advanced Workflows (Weeks 9-16)
+### Phase 2: Advanced Workflows & UI Enhancement (Weeks 9-16)
 
-#### MCP-001: Tool Integration Workflows (Week 9-12)
+#### UI-002: Advanced Gradio UI Building (Week 9-10)
+**Enhanced UI Components**:
+- Advanced chat interfaces with streaming support
+- Real-time workflow monitoring dashboards
+- Interactive parameter tuning controls
+- State inspection and debugging panels
+
+**UI Building Strategy**:
+Building on PROD-001A triangle testing foundation:
+- **Mode Factory Expansion**: Support for custom mode registration and extension
+- **Component Library**: Reusable Gradio components for both workbench and seo_coach modes
+- **UI State Management**: Bidirectional sync between Gradio state and LangGraph workflows
+- **Error Handling UI**: User-friendly error displays with recovery options
+
+**Testing Approach**:
+- Leverage existing triangle validation framework
+- Extend `test_gradio_queue_fix_validation()` for advanced components
+- AST analysis for component complexity monitoring
+- UI integration tests for mode-specific interfaces
+
+#### MCP-001: Tool Integration Workflows (Week 10-12)
 - LangGraph nodes for MCP tool execution
 - Firecrawl integration for SEO analysis workflows
 - Tool result processing and context injection
 - Multi-step workflow orchestration with tool calling
 
-#### AGENT-001: Advanced Agent Patterns (Week 13-16)
+#### UI-003: Interactive Workflow Visualization (Week 13-14)
+**Visual Workflow Components**:
+- Real-time workflow step visualization in Gradio
+- Interactive workflow debugging interfaces
+- State transition monitoring dashboards
+- Performance metrics visualization
+
+**Advanced UI Features**:
+- Workflow step-by-step execution controls
+- State inspection with JSON viewers
+- Interactive parameter adjustment during execution
+- Visual workflow branching displays
+
+#### AGENT-001: Advanced Agent Patterns (Week 15-16)
 - Hierarchical agent workflows following GAIA patterns
 - Multi-agent coordination through LangGraph
 - Complex decision trees and workflow branching

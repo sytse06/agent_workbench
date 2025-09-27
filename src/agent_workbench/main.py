@@ -3,19 +3,37 @@ import os
 import time
 from typing import Optional
 
-from fastapi import FastAPI, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+
+from .api.database import get_session
+from .api.routes import (
+    agent_configs,
+    chat,
+    consolidated_chat,
+    conversations,
+    direct_chat,
+    health,
+    messages,
+    models,
+)
+from .models.schemas import ModelConfig
+from .services.context_service import ContextService
+from .services.langgraph_bridge import LangGraphStateBridge
+from .services.langgraph_service import WorkbenchLangGraphService
+from .services.llm_service import ChatService
+from .services.state_manager import StateManager
 
 
 def load_environment():
     """Load environment using standard APP_ENV pattern."""
     # 1. Load base .env (backwards compatibility)
     load_dotenv(".env", override=False)
-    
+
     # 2. Get environment
     app_env = os.getenv("APP_ENV", "development")
-    
+
     # 3. Load environment-specific config
     env_file = f"config/{app_env}.env"
     if os.path.exists(env_file):
@@ -23,21 +41,13 @@ def load_environment():
         print(f"✅ Loaded {app_env} environment from {env_file}")
     else:
         print(f"⚠️  No config file found for {app_env}, using base .env")
-    
+
     return app_env
+
 
 # Load environment at startup
 current_env = load_environment()
 print(f"🚀 Starting Agent Workbench in {current_env} mode")
-
-from .api.database import get_session
-from .api.routes import agent_configs, chat, consolidated_chat, conversations, direct_chat, health, messages, models
-from .models.schemas import ModelConfig
-from .services.context_service import ContextService
-from .services.langgraph_bridge import LangGraphStateBridge
-from .services.langgraph_service import WorkbenchLangGraphService
-from .services.llm_service import ChatService
-from .services.state_manager import StateManager
 
 # Mode factory imports will be done within functions to avoid circular imports
 
@@ -74,10 +84,10 @@ if os.getenv("LOG_LEVEL", "").upper() == "DEBUG":
             if body:
                 try:
                     # Try to decode as text (don't parse JSON to avoid errors)
-                    body_text = body.decode('utf-8')
+                    body_text = body.decode("utf-8")
                     # Only log first 500 chars to avoid spam
                     logger.debug(f"📤 Body (first 500 chars): {body_text[:500]}")
-                except:
+                except (UnicodeDecodeError, Exception):
                     logger.debug(f"📤 Body: {len(body)} bytes (binary)")
 
         # Process request
@@ -94,6 +104,7 @@ if os.getenv("LOG_LEVEL", "").upper() == "DEBUG":
             response.headers["X-Debug-Request-Method"] = request.method
 
         return response
+
 
 # Include API routes
 app.include_router(health.router)
@@ -123,6 +134,7 @@ async def get_langgraph_service() -> WorkbenchLangGraphService:
 
         # Create default model config using configuration service
         from .services.model_config_service import model_config_service
+
         default_config_dict = model_config_service.get_default_model_config()
         default_config = ModelConfig(**default_config_dict)
 
@@ -145,6 +157,7 @@ async def get_langgraph_service() -> WorkbenchLangGraphService:
     # This should not happen in normal operation but ensures function always returns
     context_service = ContextService()
     import os
+
     default_config = ModelConfig(
         provider="anthropic",
         model_name=os.getenv("DEFAULT_PRIMARY_MODEL", "claude-3-5-sonnet-20241022"),
@@ -171,47 +184,51 @@ async def health_check():
 async def mount_complex_interface_with_queue_fix():
     """Mount complex layered UI with the same queue fix that worked for simple UI."""
     import logging
-    
+
     logger = logging.getLogger(__name__)
-    
+
     try:
         # Import complex mode factory
-        from .ui.mode_factory import InterfaceCreationError, InvalidModeError, ModeFactory
-        
+        from .ui.mode_factory import (
+            InterfaceCreationError,
+            InvalidModeError,
+            ModeFactory,
+        )
+
         # Create mode factory
         factory = ModeFactory()
-        
+
         # Get current mode
         current_mode = factory._determine_mode_safe(None)
-        
+
         # Create complex interface
         gradio_interface = factory.create_interface(current_mode)
-        
+
         # CRITICAL FIX: Apply the same queue fix that worked for simple UI
         # This should resolve the original responsiveness issues
         gradio_interface.queue()
         gradio_interface.run_startup_events()
-        
+
         # Mount interface
         app.mount("/", gradio_interface.app, name="gradio")
-        
+
         logger.info(f"✅ Successfully mounted {current_mode} interface with queue fix")
-        
+
     except InvalidModeError as e:
         # Configuration error - should not start
         error_msg = f"Invalid mode configuration: {e}"
         logger.error(error_msg)
         raise RuntimeError(error_msg)
-        
+
     except InterfaceCreationError as e:
         # Interface creation failed - fallback to API-only mode
         error_msg = f"Interface creation failed: {e}"
         logger.error(error_msg)
         logger.warning("Starting in API-only mode")
-        
+
         # Add error endpoint for monitoring
         error_message = str(e)
-        
+
         @app.get("/api/interface-error")
         async def get_interface_error():
             return {
@@ -219,13 +236,13 @@ async def mount_complex_interface_with_queue_fix():
                 "message": error_message,
                 "mode": "api_only",
             }
-            
+
     except Exception as e:
         # Unexpected error - fallback to API-only mode
         error_msg = f"Unexpected error mounting interface: {e}"
         logger.error(error_msg, exc_info=True)
         logger.warning("Starting in API-only mode")
-        
+
         @app.get("/api/interface-error")
         async def get_interface_error():
             return {

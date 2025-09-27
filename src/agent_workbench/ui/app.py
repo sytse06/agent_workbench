@@ -4,21 +4,21 @@ import uuid
 
 import gradio as gr
 
-from .components.simple_client import SimpleLangGraphClient
 from ..services.model_config_service import model_config_service
 
 
 def create_workbench_app() -> gr.Blocks:
     """Create enhanced workbench interface with consolidated service integration"""
 
-    client = SimpleLangGraphClient()
-
     # Get dynamic configuration from environment
-    provider_choices, default_provider = model_config_service.get_provider_choices_for_ui()
+    provider_choices, default_provider = (
+        model_config_service.get_provider_choices_for_ui()
+    )
     model_choices, default_model = model_config_service.get_model_choices_for_ui()
 
     # Get active mode for title
     import os
+
     active_mode = os.getenv("APP_MODE", "workbench")
     title = f"Agent Workbench - {active_mode.title()} Mode"
 
@@ -43,14 +43,16 @@ def create_workbench_app() -> gr.Blocks:
                 )
 
                 temperature = gr.Slider(
-                    0.0, 2.0,
+                    0.0,
+                    2.0,
                     model_config_service.default_temperature,
-                    label="Temperature"
+                    label="Temperature",
                 )
                 max_tokens = gr.Slider(
-                    100, 4000,
+                    100,
+                    4000,
                     model_config_service.default_max_tokens,
-                    label="Max Tokens"
+                    label="Max Tokens",
                 )
 
                 # NEW: Workflow monitoring
@@ -84,44 +86,54 @@ def create_workbench_app() -> gr.Blocks:
 
             try:
                 print(f"🎯 DEBUG: Processing message, model_val='{model_val}'")
-                
+
                 # Parse model selection to get provider and model name
-                selected_provider, selected_model = model_config_service.parse_model_selection(model_val)
-                print(f"🎯 DEBUG: Parsed provider='{selected_provider}', model='{selected_model}'")
+                selected_provider, selected_model = (
+                    model_config_service.parse_model_selection(model_val)
+                )
+                print(
+                    f"🎯 DEBUG: Parsed provider='{selected_provider}', "
+                    f"model='{selected_model}'"
+                )
 
                 # Use requests instead of httpx for simplicity
-                import requests
-                print(f"🎯 DEBUG: Making direct API call...")
-                
+                import requests  # type: ignore
+
+                print("🎯 DEBUG: Making direct API call...")
+
                 # Prepare request payload
                 payload = {
                     "message": msg,
                     "provider": selected_provider,
                     "model_name": selected_model,
                     "temperature": temp_val,
-                    "max_tokens": max_tokens_val
+                    "max_tokens": max_tokens_val,
                 }
                 print(f"🎯 DEBUG: Request payload: {payload}")
-                
+
                 # Make synchronous API call
                 response = requests.post(
                     "http://localhost:8000/api/v1/chat/direct",
                     json=payload,
-                    timeout=30  # 30 second timeout
+                    timeout=30,  # 30 second timeout
                 )
-                
+
                 print(f"🎯 DEBUG: Response status: {response.status_code}")
-                
+
                 if response.status_code == 200:
                     result = response.json()
-                    print(f"🎯 DEBUG: Response received: {result.get('content', '')[:50]}...")
-                    
+                    content_preview = result.get("content", "")[:50]
+                    print(f"🎯 DEBUG: Response received: {content_preview}...")
+
                     # Simple history format for Gradio
                     history = [
-                        {"role": "user", "content": msg}, 
-                        {"role": "assistant", "content": result.get('content', 'No response')}
+                        {"role": "user", "content": msg},
+                        {
+                            "role": "assistant",
+                            "content": result.get("content", "No response"),
+                        },
                     ]
-                    
+
                     # Show success status
                     success_html = f"""
                     <div class='success'>
@@ -131,24 +143,31 @@ def create_workbench_app() -> gr.Blocks:
                         <strong>Latency:</strong> {result.get('latency_ms', 0):.0f}ms
                     </div>
                     """
-                    
+
                     return "", history, success_html
                 else:
                     error_msg = f"API Error {response.status_code}: {response.text}"
                     print(f"🎯 DEBUG: Error: {error_msg}")
-                    history = [{"role": "user", "content": msg}, {"role": "assistant", "content": error_msg}]
+                    history = [
+                        {"role": "user", "content": msg},
+                        {"role": "assistant", "content": error_msg},
+                    ]
                     error_html = f"<div class='error'>❌ API Error: {error_msg}</div>"
                     return "", history, error_html
 
             except Exception as e:
                 print(f"🎯 DEBUG: Exception caught: {str(e)}")
                 import traceback
+
                 print(f"🎯 DEBUG: Traceback: {traceback.format_exc()}")
 
                 error_msg = f"Connection Error: {str(e)}"
                 error_html = f"<div class='error'>❌ Connection failed: {str(e)}</div>"
-                history = [{"role": "user", "content": msg}, {"role": "assistant", "content": error_msg}]
-                print(f"🎯 DEBUG: Returning error response")
+                history = [
+                    {"role": "user", "content": msg},
+                    {"role": "assistant", "content": error_msg},
+                ]
+                print("🎯 DEBUG: Returning error response")
                 return "", history, error_html
 
         # Wire up events to use FastAPI consolidated service

@@ -1,13 +1,14 @@
 """Model configuration service for dynamic provider-model management."""
 
 import os
-from typing import Dict, List, Tuple
 from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple
 
 
 @dataclass
 class ModelOption:
     """Represents a model option with provider and display info."""
+
     provider: str
     model_name: str
     display_name: str
@@ -24,13 +25,21 @@ class ModelConfigService:
         """Refresh configuration from environment variables."""
         # Primary provider-model pairs
         self.default_provider = os.getenv("DEFAULT_PROVIDER", "openrouter")
-        self.default_primary = os.getenv("DEFAULT_PRIMARY_MODEL", "anthropic/claude-3.5-sonnet")
-        self.default_secondary = os.getenv("DEFAULT_SECONDARY_MODEL", "openai/gpt-4o-mini")
+        self.default_primary = os.getenv(
+            "DEFAULT_PRIMARY_MODEL", "anthropic/claude-3.5-sonnet"
+        )
+        self.default_secondary = os.getenv(
+            "DEFAULT_SECONDARY_MODEL", "openai/gpt-4o-mini"
+        )
 
         # Secondary provider-model pairs
         self.secondary_provider = os.getenv("SECONDARY_PROVIDER", "anthropic")
-        self.secondary_primary = os.getenv("SECONDARY_PRIMARY_MODEL", "claude-3-5-sonnet-20241022")
-        self.secondary_secondary = os.getenv("SECONDARY_SECONDARY_MODEL", "claude-3-haiku-20240307")
+        self.secondary_primary = os.getenv(
+            "SECONDARY_PRIMARY_MODEL", "claude-3-5-sonnet-20241022"
+        )
+        self.secondary_secondary = os.getenv(
+            "SECONDARY_SECONDARY_MODEL", "claude-3-haiku-20240307"
+        )
 
         # Model parameters
         self.default_temperature = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
@@ -46,26 +55,30 @@ class ModelConfigService:
             ModelOption(
                 provider=self.default_provider,
                 model_name=self.default_primary,
-                display_name=f"{self.default_provider}: {self._get_display_name(self.default_primary)}",
-                description="✅ VERIFIED - Primary model (recommended, ~5.7s)"
+                display_name=f"{self.default_provider}: "
+                f"{self._get_display_name(self.default_primary)}",
+                description="✅ VERIFIED - Primary model (recommended, ~5.7s)",
             ),
             ModelOption(
                 provider=self.default_provider,
                 model_name=self.default_secondary,
-                display_name=f"{self.default_provider}: {self._get_display_name(self.default_secondary)}",
-                description="✅ VERIFIED - Secondary model (fastest, ~1.0s)"
+                display_name=f"{self.default_provider}: "
+                f"{self._get_display_name(self.default_secondary)}",
+                description="✅ VERIFIED - Secondary model (fastest, ~1.0s)",
             ),
             ModelOption(
                 provider=self.secondary_provider,
                 model_name=self.secondary_primary,
-                display_name=f"{self.secondary_provider}: {self._get_display_name(self.secondary_primary)}",
-                description="✅ VERIFIED - Direct API primary (~2.7s)"
+                display_name=f"{self.secondary_provider}: "
+                f"{self._get_display_name(self.secondary_primary)}",
+                description="✅ VERIFIED - Direct API primary (~2.7s)",
             ),
             ModelOption(
                 provider=self.secondary_provider,
                 model_name=self.secondary_secondary,
-                display_name=f"{self.secondary_provider}: {self._get_display_name(self.secondary_secondary)}",
-                description="✅ VERIFIED - Direct API fastest (~0.7s)"
+                display_name=f"{self.secondary_provider}: "
+                f"{self._get_display_name(self.secondary_secondary)}",
+                description="✅ VERIFIED - Direct API fastest (~0.7s)",
             ),
         ]
 
@@ -92,7 +105,7 @@ class ModelConfigService:
         # Fallback to default
         return self.default_provider, self.default_primary
 
-    def get_default_model_config(self) -> Dict[str, any]:
+    def get_default_model_config(self) -> Dict[str, Any]:
         """Get default model configuration."""
         return {
             "provider": self.default_provider,

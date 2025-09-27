@@ -9,6 +9,7 @@ from .main import app
 # Load environment variables from .env file, overriding existing ones
 load_dotenv(override=True)
 
+
 def setup_debug_logging():
     """Setup debug logging based on environment variables."""
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -19,7 +20,7 @@ def setup_debug_logging():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[
             logging.StreamHandler(),
-        ]
+        ],
     )
 
     # Configure specific loggers for debug mode
@@ -42,6 +43,7 @@ def setup_debug_logging():
             print("📝 SQL Query Logging: ON")
         if os.getenv("CORS_DEBUG"):
             print("🌐 CORS Debug: ON")
+
 
 if __name__ == "__main__":
     setup_debug_logging()

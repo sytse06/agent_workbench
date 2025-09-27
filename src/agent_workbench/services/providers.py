@@ -23,11 +23,11 @@ class ProviderConfig:
 class ModelRegistry:
     """Registry for managing LLM providers and their configurations."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._providers: Dict[str, ProviderConfig] = {}
         self._initialize_default_providers()
 
-    def _initialize_default_providers(self):
+    def _initialize_default_providers(self) -> None:
         """Initialize default provider configurations."""
         # Note: Actual LangChain imports will be done lazily to avoid
         # import errors if optional dependencies are not installed
@@ -121,12 +121,13 @@ class OpenRouterProvider(ProviderFactory):
         """Create OpenRouter chat model."""
         try:
             import os
+
             from langchain_openai import ChatOpenAI
 
             # Get API key from environment or model config
             api_key = (
                 model_config.extra_params.get("api_key")
-                if hasattr(model_config, 'extra_params') and model_config.extra_params
+                if hasattr(model_config, "extra_params") and model_config.extra_params
                 else os.getenv("OPENROUTER_API_KEY")
             )
 
@@ -172,12 +173,13 @@ class OpenAIProvider(ProviderFactory):
         """Create OpenAI chat model."""
         try:
             import os
+
             from langchain_openai import ChatOpenAI
 
             # Get API key from environment
             api_key = (
                 model_config.extra_params.get("api_key")
-                if hasattr(model_config, 'extra_params') and model_config.extra_params
+                if hasattr(model_config, "extra_params") and model_config.extra_params
                 else os.getenv("OPENAI_API_KEY")
             )
 
@@ -201,12 +203,13 @@ class AnthropicProvider(ProviderFactory):
         """Create Anthropic chat model."""
         try:
             import os
+
             from langchain_anthropic import ChatAnthropic
 
             # Get API key from environment
             api_key = (
                 model_config.extra_params.get("api_key")
-                if hasattr(model_config, 'extra_params') and model_config.extra_params
+                if hasattr(model_config, "extra_params") and model_config.extra_params
                 else os.getenv("ANTHROPIC_API_KEY")
             )
 

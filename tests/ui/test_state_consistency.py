@@ -19,14 +19,22 @@ async def test_no_state_drift():
     ):
 
         # Setup mock responses
-        mock_post.return_value.json.return_value = {
-            "reply": "Test response",
+        from unittest.mock import Mock
+        mock_post_response = Mock()
+        mock_post_response.json.return_value = {
+            "assistant_response": "Test response",
             "conversation_id": "test-consistency",
+            "workflow_mode": "workbench",
+            "execution_successful": True,
+            "metadata": {},
         }
-        mock_post.return_value.raise_for_status = AsyncMock()
+        mock_post_response.raise_for_status.return_value = None
+        mock_post_response.status_code = 200
+        mock_post_response.headers = {}
+        mock_post.return_value = mock_post_response
 
         # Setup mock response for GET requests (chat history)
-        mock_get_response = AsyncMock()
+        mock_get_response = Mock()
         mock_get_response.json.return_value = {
             "messages": [
                 {
@@ -41,7 +49,9 @@ async def test_no_state_drift():
                 },
             ]
         }
-        mock_get_response.raise_for_status = AsyncMock()
+        mock_get_response.raise_for_status.return_value = None
+        mock_get_response.status_code = 200
+        mock_get_response.headers = {}
         mock_get.return_value = mock_get_response
 
         # Send message
@@ -50,7 +60,7 @@ async def test_no_state_drift():
             conversation_id="test-consistency",
             model_config={
                 "provider": "openrouter",
-                "model": "claude-3-5-sonnet-20241022",
+                "model_name": "claude-3-5-sonnet-20241022",
             },
         )
 
@@ -77,7 +87,7 @@ async def test_error_recovery():
                 conversation_id="test-id",
                 model_config={
                     "provider": "openrouter",
-                    "model": "claude-3-5-sonnet-20241022",
+                    "model_name": "claude-3-5-sonnet-20241022",
                 },
             )
 

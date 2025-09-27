@@ -14,22 +14,31 @@ async def test_client_send_message():
 
     # Mock the HTTP client
     with patch.object(client.client, "post") as mock_post:
-        mock_post.return_value.json.return_value = {
-            "reply": "Test response",
+        from unittest.mock import Mock
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "assistant_response": "Test response",
             "conversation_id": "test-id",
+            "workflow_mode": "workbench",
+            "execution_successful": True,
+            "metadata": {},
         }
-        mock_post.return_value.raise_for_status = AsyncMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_post.return_value = mock_response
 
         result = await client.send_message(
             message="Hello",
             conversation_id="test-id",
             model_config={
                 "provider": "openrouter",
-                "model": "claude-3-5-sonnet-20241022",
+                "model_name": "claude-3-5-sonnet-20241022",
             },
         )
 
-        assert result["reply"] == "Test response"
+        assert result["assistant_response"] == "Test response"
+        assert result["reply"] == "Test response"  # Legacy compatibility
         assert result["conversation_id"] == "test-id"
         mock_post.assert_called_once()
 
@@ -41,13 +50,18 @@ async def test_client_get_chat_history():
 
     # Mock the HTTP client
     with patch.object(client.client, "get") as mock_get:
-        mock_get.return_value.json.return_value = {
+        from unittest.mock import Mock
+        mock_response = Mock()
+        mock_response.json.return_value = {
             "messages": [
                 {"content": "Hello", "role": "user"},
                 {"content": "Hi there!", "role": "assistant"},
             ]
         }
-        mock_get.return_value.raise_for_status = AsyncMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_get.return_value = mock_response
 
         history = await client.get_chat_history("test-id")
 
@@ -72,7 +86,7 @@ async def test_client_error_handling():
                 conversation_id="test-id",
                 model_config={
                     "provider": "openrouter",
-                    "model": "claude-3-5-sonnet-20241022",
+                    "model_name": "claude-3-5-sonnet-20241022",
                 },
             )
 

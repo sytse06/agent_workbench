@@ -7,7 +7,13 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from .schemas import ModelConfig
+    pass
+else:
+    # Import at runtime to avoid circular imports
+    try:
+        from .schemas import ModelConfig
+    except ImportError:
+        ModelConfig = None
 
 
 class StandardMessage(BaseModel):
@@ -26,35 +32,8 @@ class ConversationState(BaseModel):
 
     conversation_id: UUID
     messages: List[StandardMessage]
-    llm_config: "ModelConfig"  # Forward reference - renamed to avoid Pydantic conflict
+    llm_config: Any  # Use Any to avoid forward reference issues
     context_data: Dict[str, Any]
     active_contexts: List[str]
     metadata: Dict[str, Any]
     updated_at: datetime
-
-    if TYPE_CHECKING:
-        # This helps with type checking while avoiding circular imports
-        def __init__(
-            self,
-            conversation_id: UUID,
-            messages: List[StandardMessage],
-            llm_config: "ModelConfig",
-            context_data: Dict[str, Any],
-            active_contexts: List[str],
-            metadata: Dict[str, Any],
-            updated_at: datetime,
-        ) -> None: ...
-
-
-# Rebuild the model after ModelConfig is imported to resolve forward references
-def _rebuild_models():
-    """Rebuild models to resolve forward references."""
-    try:
-        from .schemas import ModelConfig  # Import ModelConfig
-        ConversationState.model_rebuild()  # Rebuild the model
-    except ImportError:
-        pass  # ModelConfig not available yet
-
-
-# Call rebuild when module is imported
-_rebuild_models()

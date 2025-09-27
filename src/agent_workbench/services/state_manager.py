@@ -1,7 +1,7 @@
 """State manager for conversation state persistence and lifecycle."""
 
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -383,7 +383,7 @@ class StateManager:
             msg_dict["timestamp"] = msg_dict["timestamp"].isoformat()
         return msg_dict
 
-    def _serialize_metadata(self, metadata: Dict) -> Dict:
+    def _serialize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
         Serialize metadata with proper datetime handling.
 
@@ -393,7 +393,7 @@ class StateManager:
         Returns:
             Serialized metadata dict
         """
-        serialized = {}
+        serialized: Dict[str, Any] = {}
         for key, value in metadata.items():
             if isinstance(value, datetime):
                 serialized[key] = value.isoformat()

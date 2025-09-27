@@ -16,7 +16,9 @@ class SimpleDBScanner:
     def _get_default_db_path(self) -> str:
         """Get database path from environment or default."""
         env = os.getenv('APP_ENV', 'development')
-        return f"./data/agent_workbench_{env}.db"
+        # Use shorter naming convention to match application config
+        env_short = 'dev' if env == 'development' else env
+        return f"./data/agent_workbench_{env_short}.db"
 
     def connect(self):
         """Connect to the database."""

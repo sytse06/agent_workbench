@@ -47,21 +47,29 @@ async def test_model_configuration_changes():
 
     # Mock the HTTP client
     with patch.object(client.client, "post") as mock_post:
-        mock_post.return_value.json.return_value = {
-            "reply": "Test response",
+        from unittest.mock import Mock
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "assistant_response": "Test response",
             "conversation_id": "test-config-id",
+            "workflow_mode": "workbench",
+            "execution_successful": True,
+            "metadata": {},
         }
-        mock_post.return_value.raise_for_status = AsyncMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_post.return_value = mock_response
 
         # Test different model configurations
         configs = [
             {
                 "provider": "openrouter",
-                "model": "claude-3-5-sonnet-20241022",
+                "model_name": "claude-3-5-sonnet-20241022",
                 "temperature": 0.7,
             },
-            {"provider": "ollama", "model": "llama3.1", "temperature": 0.5},
-            {"provider": "openai", "model": "gpt-4", "temperature": 0.9},
+            {"provider": "ollama", "model_name": "llama3.1", "temperature": 0.5},
+            {"provider": "openai", "model_name": "gpt-4", "temperature": 0.9},
         ]
 
         for config in configs:
@@ -69,7 +77,8 @@ async def test_model_configuration_changes():
                 message="Hello", conversation_id="test-config-id", model_config=config
             )
 
-            assert result["reply"] == "Test response"
+            assert result["assistant_response"] == "Test response"
+            assert result["reply"] == "Test response"  # Legacy compatibility
             assert result["conversation_id"] == "test-config-id"
 
 

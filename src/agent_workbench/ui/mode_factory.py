@@ -39,7 +39,7 @@ class ModeFactory:
     """Enhanced mode factory with comprehensive error handling and extension
     support"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize mode factory with core modes and extension registry"""
         self.mode_registry: Dict[str, Callable[[], gr.Blocks]] = {
             "workbench": create_workbench_app,
