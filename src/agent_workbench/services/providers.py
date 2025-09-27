@@ -1,5 +1,6 @@
 """Provider registry and configuration for LLM services."""
 
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Type
@@ -10,14 +11,19 @@ from pydantic import BaseModel
 
 @dataclass
 class ProviderConfig:
-    """Configuration for LLM providers."""
+    """Enhanced configuration for LLM providers with factory function."""
 
     provider_name: str
-    chat_model_class: Type[BaseChatModel]
+    factory_func: Any  # Callable[[BaseModel], BaseChatModel]
     default_model: str
     api_key_env_var: Optional[str] = None
     base_url: Optional[str] = None
     requires_api_key: bool = True
+    required_packages: Optional[List[str]] = None
+
+    def __post_init__(self):
+        if self.required_packages is None:
+            self.required_packages = []
 
 
 class ModelRegistry:
@@ -29,9 +35,67 @@ class ModelRegistry:
 
     def _initialize_default_providers(self) -> None:
         """Initialize default provider configurations."""
-        # Note: Actual LangChain imports will be done lazily to avoid
-        # import errors if optional dependencies are not installed
-        pass
+        # Register default providers with their factory functions
+
+        self.register_provider(
+            ProviderConfig(
+                provider_name="openrouter",
+                factory_func=self._create_openrouter_model,
+                default_model="mistralai/mistral-7b-instruct",
+                api_key_env_var="OPENROUTER_API_KEY",
+                base_url="https://openrouter.ai/api/v1",
+                requires_api_key=True,
+                required_packages=["langchain-openai"],
+            )
+        )
+
+        self.register_provider(
+            ProviderConfig(
+                provider_name="ollama",
+                factory_func=self._create_ollama_model,
+                default_model="llama3.1",
+                api_key_env_var=None,
+                base_url="http://localhost:11434",
+                requires_api_key=False,
+                required_packages=["langchain-ollama"],
+            )
+        )
+
+        self.register_provider(
+            ProviderConfig(
+                provider_name="openai",
+                factory_func=self._create_openai_model,
+                default_model="gpt-3.5-turbo",
+                api_key_env_var="OPENAI_API_KEY",
+                base_url=None,
+                requires_api_key=True,
+                required_packages=["langchain-openai"],
+            )
+        )
+
+        self.register_provider(
+            ProviderConfig(
+                provider_name="anthropic",
+                factory_func=self._create_anthropic_model,
+                default_model="claude-3-haiku-20240307",
+                api_key_env_var="ANTHROPIC_API_KEY",
+                base_url=None,
+                requires_api_key=True,
+                required_packages=["langchain-anthropic"],
+            )
+        )
+
+        self.register_provider(
+            ProviderConfig(
+                provider_name="mistral",
+                factory_func=self._create_mistral_model,
+                default_model="mistral-small",
+                api_key_env_var="MISTRAL_API_KEY",
+                base_url=None,
+                requires_api_key=True,
+                required_packages=["langchain-mistralai"],
+            )
+        )
 
     def register_provider(self, config: ProviderConfig) -> None:
         """
@@ -78,8 +142,7 @@ class ModelRegistry:
         return []
 
     def validate_model_config(self, provider: str, model_name: str) -> bool:
-        """
-        Validate if a model configuration is supported.
+        """Validate if a model configuration is supported.
 
         Args:
             provider: Provider name
@@ -88,9 +151,113 @@ class ModelRegistry:
         Returns:
             True if valid, False otherwise
         """
-        # Basic validation - in practice this would check against provider APIs
         provider_config = self.get_provider(provider)
         return provider_config is not None
+
+    def create_model(self, model_config: BaseModel) -> BaseChatModel:
+        """Create a chat model instance using the appropriate provider factory.
+
+        Args:
+            model_config: Model configuration
+
+        Returns:
+            Chat model instance
+
+        Raises:
+            ValueError: If provider not found or model creation fails
+        """
+        provider_config = self.get_provider(model_config.provider)
+        if not provider_config:
+            available = ", ".join(self.get_available_providers())
+            raise ValueError(
+                f"Unsupported provider '{model_config.provider}'. "
+                f"Available: {available}"
+            )
+
+        try:
+            return provider_config.factory_func(model_config)
+        except ImportError as e:
+            packages = ", ".join(provider_config.required_packages or [])
+            raise ImportError(
+                f"Provider '{model_config.provider}' requires packages: {packages}. "
+                f"Install with: pip install "
+                f"{' '.join(provider_config.required_packages or [])}"
+            ) from e
+
+    # Factory functions for each provider (replaces separate factory classes)
+    def _create_openrouter_model(self, model_config: BaseModel) -> BaseChatModel:
+        """Create OpenRouter chat model."""
+        from langchain_openai import ChatOpenAI
+
+        api_key = (
+            model_config.extra_params.get("api_key")
+            if hasattr(model_config, "extra_params") and model_config.extra_params
+            else os.getenv("OPENROUTER_API_KEY")
+        )
+
+        return ChatOpenAI(
+            model=model_config.model_name,
+            temperature=model_config.temperature,
+            max_tokens=model_config.max_tokens,
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+        )
+
+    def _create_ollama_model(self, model_config: BaseModel) -> BaseChatModel:
+        """Create Ollama chat model."""
+        from langchain_ollama import ChatOllama
+
+        return ChatOllama(
+            model=model_config.model_name,
+            temperature=model_config.temperature,
+            num_predict=model_config.max_tokens,
+            **getattr(model_config, "extra_params", {}),
+        )
+
+    def _create_openai_model(self, model_config: BaseModel) -> BaseChatModel:
+        """Create OpenAI chat model."""
+        from langchain_openai import ChatOpenAI
+
+        api_key = (
+            model_config.extra_params.get("api_key")
+            if hasattr(model_config, "extra_params") and model_config.extra_params
+            else os.getenv("OPENAI_API_KEY")
+        )
+
+        return ChatOpenAI(
+            model=model_config.model_name,
+            temperature=model_config.temperature,
+            max_tokens=model_config.max_tokens,
+            api_key=api_key,
+        )
+
+    def _create_anthropic_model(self, model_config: BaseModel) -> BaseChatModel:
+        """Create Anthropic chat model."""
+        from langchain_anthropic import ChatAnthropic
+
+        api_key = (
+            model_config.extra_params.get("api_key")
+            if hasattr(model_config, "extra_params") and model_config.extra_params
+            else os.getenv("ANTHROPIC_API_KEY")
+        )
+
+        return ChatAnthropic(
+            model=model_config.model_name,
+            temperature=model_config.temperature,
+            max_tokens=model_config.max_tokens,
+            api_key=api_key,
+        )
+
+    def _create_mistral_model(self, model_config: BaseModel) -> BaseChatModel:
+        """Create Mistral chat model."""
+        from langchain_mistralai import ChatMistralAI
+
+        return ChatMistralAI(
+            model=model_config.model_name,
+            temperature=model_config.temperature,
+            max_tokens=model_config.max_tokens,
+            **getattr(model_config, "extra_params", {}),
+        )
 
 
 # Global provider registry instance

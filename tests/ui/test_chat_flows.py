@@ -1,6 +1,6 @@
 # End-to-end chat flow tests
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -26,6 +26,7 @@ async def test_end_to_end_chat_flow():
 
         # Setup mock responses
         from unittest.mock import Mock
+
         mock_response = Mock()
         mock_response.json.return_value = {
             "reply": "Hello! How can I assist you today?",
@@ -79,6 +80,7 @@ async def test_empty_message_handling():
     # Mock the HTTP client
     with patch.object(client.client, "post") as mock_post:
         from unittest.mock import Mock
+
         mock_response = Mock()
         mock_response.json.return_value = {
             "reply": "",

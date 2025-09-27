@@ -27,7 +27,10 @@ class SimpleLangGraphClient:
             "workflow_mode": "workbench",  # NEW: workbench mode
             "llm_config": {  # FIXED: Use llm_config to match backend expectation
                 "provider": model_config["provider"],
-                "model_name": model_config.get("model_name", model_config.get("model", "anthropic/claude-3.5-sonnet")),
+                "model_name": model_config.get(
+                    "model_name",
+                    model_config.get("model", "anthropic/claude-3.5-sonnet"),
+                ),
                 "temperature": model_config.get("temperature", 0.7),
                 "max_tokens": model_config.get("max_tokens", 2000),
                 "streaming": False,  # Ensure streaming is set correctly

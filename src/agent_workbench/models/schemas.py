@@ -39,117 +39,169 @@ class ModelConfig(BaseModel):
 # === Database Model Schemas ===
 
 
-class ConversationBase(BaseModel):
-    """Base schema for conversation."""
+class ConversationSchema(BaseModel):
+    """Unified conversation schema for all CRUD operations."""
 
-    user_id: Optional[UUID] = None
-    title: Optional[str] = Field(None, max_length=255)
+    # Optional fields for different operations
+    id: Optional[UUID] = Field(None, description="Conversation ID (auto-generated)")
+    user_id: Optional[UUID] = Field(
+        None, description="User ID who owns the conversation"
+    )
+    title: Optional[str] = Field(None, max_length=255, description="Conversation title")
+    llm_config: Optional[ModelConfig] = Field(
+        None, description="LLM configuration for conversation"
+    )
 
-
-class ConversationCreate(ConversationBase):
-    """Schema for creating a conversation."""
-
-    pass
-
-
-class ConversationUpdate(ConversationBase):
-    """Schema for updating a conversation."""
-
-    pass
-
-
-class ConversationInDB(ConversationBase):
-    """Schema for conversation in database."""
-
-    id: UUID
-    created_at: datetime
-    updated_at: datetime
+    # Database timestamps (only present in DB/response operations)
+    created_at: Optional[datetime] = Field(None, description="Creation timestamp")
+    updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
 
     class Config:
         from_attributes = True
 
+    @classmethod
+    def for_create(cls, **kwargs) -> "ConversationSchema":
+        """Create schema for conversation creation (excludes id, timestamps)."""
+        excluded_fields = {"id", "created_at", "updated_at"}
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in excluded_fields}
+        return cls(**filtered_kwargs)
 
-class ConversationResponse(ConversationInDB):
-    """Schema for conversation API response."""
+    @classmethod
+    def for_update(cls, **kwargs) -> "ConversationSchema":
+        """Create schema for conversation updates (excludes id, created_at)."""
+        excluded_fields = {"id", "created_at"}
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in excluded_fields}
+        # For updates, all fields are optional
+        return cls(**{k: v for k, v in filtered_kwargs.items() if v is not None})
 
-    llm_config: Optional[ModelConfig] = None
+    def to_db_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for database operations."""
+        return self.model_dump(exclude_none=True, exclude={"id", "llm_config"})
 
-
-class MessageBase(BaseModel):
-    """Base schema for message."""
-
-    conversation_id: UUID
-    role: str = Field(..., pattern=r"^(user|assistant|tool|system)$")
-    content: str
-    metadata_: Optional[Dict[str, Any]] = Field(None, alias="metadata")
-
-
-class MessageCreate(MessageBase):
-    """Schema for creating a message."""
-
-    pass
-
-
-class MessageUpdate(BaseModel):
-    """Schema for updating a message."""
-
-    content: Optional[str] = None
-    metadata_: Optional[Dict[str, Any]] = Field(None, alias="metadata")
+    def to_response_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for API responses."""
+        return self.model_dump(exclude_none=True)
 
 
-class MessageInDB(MessageBase):
-    """Schema for message in database."""
-
-    id: UUID
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
+# Backwards compatibility aliases - these will be removed in next phase
+ConversationBase = ConversationSchema
+ConversationCreate = ConversationSchema
+ConversationUpdate = ConversationSchema
+ConversationInDB = ConversationSchema
+ConversationResponse = ConversationSchema
 
 
-class MessageResponse(MessageInDB):
-    """Schema for message API response."""
+class MessageSchema(BaseModel):
+    """Unified message schema for all CRUD operations."""
 
-    pass
+    # Optional fields for different operations
+    id: Optional[UUID] = Field(None, description="Message ID (auto-generated)")
+    conversation_id: Optional[UUID] = Field(None, description="Parent conversation ID")
+    role: Optional[str] = Field(
+        None, pattern=r"^(user|assistant|tool|system)$", description="Message role"
+    )
+    content: Optional[str] = Field(None, description="Message content")
+    metadata_: Optional[Dict[str, Any]] = Field(
+        None, alias="metadata", description="Message metadata"
+    )
 
-
-class AgentConfigBase(BaseModel):
-    """Base schema for agent configuration."""
-
-    name: str = Field(..., max_length=255)
-    description: Optional[str] = None
-    config: Dict[str, Any]
-
-
-class AgentConfigCreate(AgentConfigBase):
-    """Schema for creating an agent configuration."""
-
-    pass
-
-
-class AgentConfigUpdate(BaseModel):
-    """Schema for updating an agent configuration."""
-
-    name: Optional[str] = Field(None, max_length=255)
-    description: Optional[str] = None
-    config: Optional[Dict[str, Any]] = None
-
-
-class AgentConfigInDB(AgentConfigBase):
-    """Schema for agent configuration in database."""
-
-    id: UUID
-    created_at: datetime
-    updated_at: datetime
+    # Database timestamps
+    created_at: Optional[datetime] = Field(None, description="Creation timestamp")
 
     class Config:
         from_attributes = True
 
+    @classmethod
+    def for_create(
+        cls,
+        conversation_id: UUID,
+        role: str,
+        content: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> "MessageSchema":
+        """Create schema for message creation with required fields."""
+        return cls(
+            conversation_id=conversation_id,
+            role=role,
+            content=content,
+            metadata_=metadata,
+        )
 
-class AgentConfigResponse(AgentConfigInDB):
-    """Schema for agent configuration API response."""
+    @classmethod
+    def for_update(cls, **kwargs) -> "MessageSchema":
+        """Create schema for message updates (content and metadata only)."""
+        allowed_fields = {"content", "metadata_"}
+        filtered_kwargs = {
+            k: v for k, v in kwargs.items() if k in allowed_fields and v is not None
+        }
+        return cls(**filtered_kwargs)
 
-    pass
+    def to_db_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for database operations."""
+        return self.model_dump(exclude_none=True, exclude={"id", "created_at"})
+
+    def to_response_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for API responses."""
+        return self.model_dump(exclude_none=True)
+
+
+# Backwards compatibility aliases - these will be removed in next phase
+MessageBase = MessageSchema
+MessageCreate = MessageSchema
+MessageUpdate = MessageSchema
+MessageInDB = MessageSchema
+MessageResponse = MessageSchema
+
+
+class AgentConfigSchema(BaseModel):
+    """Unified agent configuration schema for all CRUD operations."""
+
+    # Optional fields for different operations
+    id: Optional[UUID] = Field(None, description="Agent config ID (auto-generated)")
+    name: Optional[str] = Field(None, max_length=255, description="Configuration name")
+    description: Optional[str] = Field(None, description="Configuration description")
+    config: Optional[Dict[str, Any]] = Field(None, description="Configuration data")
+
+    # Database timestamps
+    created_at: Optional[datetime] = Field(None, description="Creation timestamp")
+    updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def for_create(
+        cls, name: str, config: Dict[str, Any], description: Optional[str] = None
+    ) -> "AgentConfigSchema":
+        """Create schema for agent config creation with required fields."""
+        return cls(name=name, description=description, config=config)
+
+    @classmethod
+    def for_update(cls, **kwargs) -> "AgentConfigSchema":
+        """Create schema for agent config updates (all fields optional)."""
+        allowed_fields = {"name", "description", "config"}
+        filtered_kwargs = {
+            k: v for k, v in kwargs.items() if k in allowed_fields and v is not None
+        }
+        return cls(**filtered_kwargs)
+
+    def to_db_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for database operations."""
+        return self.model_dump(
+            exclude_none=True, exclude={"id", "created_at", "updated_at"}
+        )
+
+    def to_response_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for API responses."""
+        return self.model_dump(exclude_none=True)
+
+
+# Backwards compatibility aliases - these will be removed in next phase
+AgentConfigBase = AgentConfigSchema
+AgentConfigCreate = AgentConfigSchema
+AgentConfigUpdate = AgentConfigSchema
+AgentConfigInDB = AgentConfigSchema
+AgentConfigResponse = AgentConfigSchema
 
 
 # === API Request/Response Schemas ===

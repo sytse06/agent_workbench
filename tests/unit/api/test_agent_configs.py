@@ -107,7 +107,7 @@ def test_create_agent_config_conflict(client, mocker):
     )
 
     assert response.status_code == 409
-    assert "already exists" in response.json()["detail"]["detail"]
+    assert "already exists" in response.json()["detail"]["message"]
 
 
 def test_get_agent_config_success(client, mocker):
@@ -159,7 +159,7 @@ def test_get_agent_config_not_found(client, mocker):
     response = client.get(f"/api/v1/agent-configs/{config_id}")
 
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"]["detail"]
+    assert "not found" in response.json()["detail"]["message"]
 
 
 def test_list_agent_configs_success(client, mocker):
@@ -293,7 +293,7 @@ def test_update_agent_config_not_found(client, mocker):
     )
 
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"]["detail"]
+    assert "not found" in response.json()["detail"]["message"]
 
 
 def test_update_agent_config_conflict(client, mocker):
@@ -327,7 +327,7 @@ def test_update_agent_config_conflict(client, mocker):
     )
 
     assert response.status_code == 409
-    assert "already exists" in response.json()["detail"]["detail"]
+    assert "already exists" in response.json()["detail"]["message"]
 
 
 def test_delete_agent_config_success(client, mocker):
@@ -366,4 +366,4 @@ def test_delete_agent_config_not_found(client, mocker):
     response = client.delete(f"/api/v1/agent-configs/{config_id}")
 
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"]["detail"]
+    assert "not found" in response.json()["detail"]["message"]

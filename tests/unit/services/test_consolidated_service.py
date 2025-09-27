@@ -5,7 +5,6 @@ from uuid import uuid4
 
 import pytest
 
-from src.agent_workbench.core.exceptions import ConversationError
 from src.agent_workbench.models.consolidated_state import (
     ConsolidatedWorkflowRequest,
     ConsolidatedWorkflowResponse,
@@ -188,8 +187,10 @@ class TestConsolidatedWorkbenchService:
         response = await service.execute_workflow(sample_request)
         assert response.execution_successful is False
         # The actual error is about UUID validation, not workflow failure
-        assert ("Failed to create conversation" in response.assistant_response
-                or "Workflow failed" in response.assistant_response)
+        assert (
+            "Failed to create conversation" in response.assistant_response
+            or "Workflow failed" in response.assistant_response
+        )
 
     async def test_stream_workflow(
         self, service, mock_db_session, sample_request, sample_workbench_state

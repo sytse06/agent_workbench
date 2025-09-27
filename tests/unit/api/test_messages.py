@@ -105,7 +105,7 @@ def test_create_message_conversation_not_found(client, mocker):
     )
 
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"]["detail"]
+    assert "not found" in response.json()["detail"]["message"]
 
 
 def test_get_message_success(client, mocker):
@@ -158,7 +158,7 @@ def test_get_message_not_found(client, mocker):
     response = client.get(f"/api/v1/messages/{message_id}")
 
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"]["detail"]
+    assert "not found" in response.json()["detail"]["message"]
 
 
 def test_list_messages_success(client, mocker):
@@ -235,7 +235,7 @@ def test_list_messages_conversation_not_found(client, mocker):
     response = client.get(f"/api/v1/messages/?conversation_id={conversation_id}")
 
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"]["detail"]
+    assert "not found" in response.json()["detail"]["message"]
 
 
 def test_update_message_success(client, mocker):
@@ -304,7 +304,7 @@ def test_update_message_not_found(client, mocker):
     )
 
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"]["detail"]
+    assert "not found" in response.json()["detail"]["message"]
 
 
 def test_delete_message_success(client, mocker):
@@ -343,4 +343,4 @@ def test_delete_message_not_found(client, mocker):
     response = client.delete(f"/api/v1/messages/{message_id}")
 
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"]["detail"]
+    assert "not found" in response.json()["detail"]["message"]

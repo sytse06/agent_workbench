@@ -25,6 +25,7 @@ async def test_message_handling():
     # Mock the HTTP client
     with patch.object(client.client, "post") as mock_post:
         from unittest.mock import Mock
+
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.headers = {}

@@ -1,6 +1,6 @@
 # Error scenario tests
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -57,9 +57,11 @@ async def test_http_error_handling():
             )
 
         # Verify that an exception was raised (connection error due to mock setup)
-        assert ("500" in str(exc_info.value)
-                or "Server Error" in str(exc_info.value)
-                or "Connection error" in str(exc_info.value))
+        assert (
+            "500" in str(exc_info.value)
+            or "Server Error" in str(exc_info.value)
+            or "Connection error" in str(exc_info.value)
+        )
 
 
 @pytest.mark.asyncio
@@ -70,6 +72,7 @@ async def test_invalid_response_format():
     # Mock the HTTP client with invalid JSON response
     with patch.object(client.client, "post") as mock_post:
         from unittest.mock import Mock
+
         mock_response = Mock()
         mock_response.json.side_effect = Exception("Invalid JSON")
         mock_response.raise_for_status.return_value = None

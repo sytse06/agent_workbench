@@ -1,6 +1,6 @@
 """Tests for UI-001 Consolidated Service Integration"""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -15,6 +15,7 @@ async def test_simple_langgraph_client_consolidated_send():
 
     # Mock the HTTP client with proper async support
     from unittest.mock import Mock
+
     mock_response = Mock()
     mock_response.json.return_value = {
         "assistant_response": "Test response",
@@ -74,6 +75,7 @@ async def test_simple_langgraph_client_get_history():
 
     # Mock the HTTP client with proper async support
     from unittest.mock import Mock
+
     mock_response = Mock()
     mock_response.json.return_value = {
         "conversation_history": [
@@ -149,7 +151,11 @@ async def test_error_handling_in_enhanced_ui():
         mock_post.side_effect = Exception("Network error")
 
         with pytest.raises(Exception) as exc_info:
-            await client.send_message("Hello", "test-id", {"provider": "openrouter", "model_name": "claude-3-5-sonnet"})
+            await client.send_message(
+                "Hello",
+                "test-id",
+                {"provider": "openrouter", "model_name": "claude-3-5-sonnet"},
+            )
 
         assert "Network error" in str(exc_info.value)
 
@@ -161,6 +167,7 @@ async def test_model_config_enhancement():
 
     # Mock the HTTP client with proper async support
     from unittest.mock import Mock
+
     mock_response = Mock()
     mock_response.json.return_value = {
         "assistant_response": "Test response",

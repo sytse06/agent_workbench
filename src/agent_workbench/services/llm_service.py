@@ -11,7 +11,7 @@ from ..core.exceptions import LLMProviderError, ModelConfigurationError, Streami
 from ..core.retry import retry_llm_call
 from ..models.state_requests import ChatResponse
 from .chat_models import ModelConfig
-from .providers import PROVIDER_FACTORIES, ProviderFactory
+from .providers import provider_registry
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class ChatService:
 
     def _create_chat_model(self) -> BaseChatModel:
         """
-        Create chat model instance from configuration.
+        Create chat model instance using streamlined provider registry.
 
         Returns:
             Chat model instance
@@ -56,27 +56,24 @@ class ChatService:
             LLMProviderError: If provider is not supported
             ModelConfigurationError: If model configuration is invalid
         """
-        provider_name = self.model_config.provider.lower()
-
-        if provider_name not in PROVIDER_FACTORIES:
-            error_msg = (
-                f"Unsupported provider: {provider_name}. "
-                f"Supported providers: {list(PROVIDER_FACTORIES.keys())}"
-            )
-            raise LLMProviderError(error_msg, provider=provider_name)
-
         try:
-            factory_class = PROVIDER_FACTORIES[provider_name]
-            factory: ProviderFactory = factory_class()
-            return factory.create_model(self.model_config)
+            # Use streamlined provider registry for model creation
+            return provider_registry.create_model(self.model_config)
+        except ValueError as e:
+            # Provider not found
+            raise LLMProviderError(str(e), provider=self.model_config.provider) from e
         except ImportError as e:
+            # Missing dependencies
             raise LLMProviderError(
-                f"Missing dependencies for provider '{provider_name}': {str(e)}",
-                provider=provider_name,
+                f"Missing dependencies for provider "
+                f"'{self.model_config.provider}': {str(e)}",
+                provider=self.model_config.provider,
             ) from e
         except Exception as e:
+            # Model configuration or creation error
             raise ModelConfigurationError(
-                f"Failed to create model for provider '{provider_name}': {str(e)}",
+                f"Failed to create model for provider "
+                f"'{self.model_config.provider}': {str(e)}",
                 model_config=self.model_config.model_dump(),
             ) from e
 

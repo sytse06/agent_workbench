@@ -33,24 +33,16 @@ class TestChatService:
     def test_chat_model_property(self):
         """Test chat_model property."""
         with patch(
-            "agent_workbench.services.llm_service.PROVIDER_FACTORIES",
-            {"ollama": MagicMock()},
-        ) as mock_factories:
-            mock_factory_class = mock_factories["ollama"]
-            mock_factory_instance = MagicMock()
+            "agent_workbench.services.llm_service.provider_registry"
+        ) as mock_registry:
             mock_model = MagicMock()
-
-            mock_factory_class.return_value = mock_factory_instance
-            mock_factory_instance.create_model.return_value = mock_model
+            mock_registry.create_model.return_value = mock_model
 
             service = ChatService(self.model_config)
             chat_model = service.chat_model
 
             assert chat_model == mock_model
-            mock_factory_class.assert_called_once()
-            mock_factory_instance.create_model.assert_called_once_with(
-                self.model_config
-            )
+            mock_registry.create_model.assert_called_once_with(self.model_config)
 
     @pytest.mark.asyncio
     async def test_chat_completion_with_conversation(self):

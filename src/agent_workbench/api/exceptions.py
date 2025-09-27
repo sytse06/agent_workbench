@@ -1,101 +1,128 @@
-"""Custom API exceptions for Agent Workbench."""
+"""Streamlined API exceptions for Agent Workbench.
+
+This module consolidates API-specific exceptions and integrates with
+the core exception hierarchy for consistent error handling.
+"""
 
 from typing import Optional
 
 from fastapi import HTTPException, status
 
+from ..core.exceptions import (
+    AgentWorkbenchError,
+    ErrorCategory,
+)
 
-class DatabaseError(HTTPException):
-    """Base exception for database-related errors."""
+
+class APIException(HTTPException):
+    """Enhanced base API exception that integrates with core error framework."""
 
     def __init__(
         self,
-        detail: str = "Database operation failed",
-        error_code: Optional[str] = None,
+        message: str,
+        status_code: int,
+        error_category: ErrorCategory = ErrorCategory.INTERNAL,
+        context: Optional[dict] = None,
     ):
-        super().__init__(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"detail": detail, "error_code": error_code or "DATABASE_ERROR"},
+        self.error_category = error_category
+        self.context = context or {}
+
+        detail = {
+            "message": message,
+            "category": error_category.value,
+            "error_code": error_category.value,
+            "context": self.context,
+        }
+        super().__init__(status_code=status_code, detail=detail)
+
+    @classmethod
+    def from_core_exception(
+        cls, exc: AgentWorkbenchError, status_code: int = 500
+    ) -> "APIException":
+        """Create API exception from core exception."""
+        return cls(
+            message=exc.message,
+            status_code=status_code,
+            error_category=exc.category,
+            context=exc.context,
         )
 
 
-class NotFoundError(HTTPException):
-    """Exception for when a resource is not found."""
+class DatabaseError(APIException):
+    """Exception for database-related errors."""
+
+    def __init__(self, detail: str = "Database operation failed", **kwargs):
+        super().__init__(
+            detail,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            ErrorCategory.INTERNAL,
+            **kwargs,
+        )
+
+
+class NotFoundError(APIException):
+    """Exception for resource not found errors."""
 
     def __init__(
-        self,
-        resource: str = "Resource",
-        resource_id: Optional[str] = None,
-        error_code: Optional[str] = None,
+        self, resource: str = "Resource", resource_id: Optional[str] = None, **kwargs
     ):
-        detail = f"{resource} not found"
+        message = f"{resource} not found"
         if resource_id:
-            detail = f"{resource} with id '{resource_id}' not found"
+            message = f"{resource} with id '{resource_id}' not found"
+
+        context = {"resource_type": resource}
+        if resource_id:
+            context["resource_id"] = resource_id
+        context.update(kwargs.get("context", {}))
 
         super().__init__(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"detail": detail, "error_code": error_code or "NOT_FOUND"},
+            message,
+            status.HTTP_404_NOT_FOUND,
+            ErrorCategory.RESOURCE_NOT_FOUND,
+            context,
         )
 
 
-class ValidationError(HTTPException):
+class ValidationError(APIException):
     """Exception for validation errors."""
 
     def __init__(
-        self, detail: str = "Validation failed", error_code: Optional[str] = None
+        self, detail: str = "Validation failed", field: Optional[str] = None, **kwargs
     ):
+        context = {"field": field} if field else {}
+        context.update(kwargs.get("context", {}))
         super().__init__(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"detail": detail, "error_code": error_code or "VALIDATION_ERROR"},
+            detail, status.HTTP_400_BAD_REQUEST, ErrorCategory.VALIDATION, context
         )
 
 
-class ConflictError(HTTPException):
-    """Exception for conflicts (e.g., duplicate resources)."""
+class ConflictError(APIException):
+    """Exception for resource conflicts."""
 
-    def __init__(
-        self, detail: str = "Resource conflict", error_code: Optional[str] = None
-    ):
+    def __init__(self, detail: str = "Resource conflict", **kwargs):
         super().__init__(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"detail": detail, "error_code": error_code or "CONFLICT"},
+            detail, status.HTTP_409_CONFLICT, ErrorCategory.VALIDATION, **kwargs
         )
 
 
-# Specific exceptions for our domain
-class ConversationNotFoundError(NotFoundError):
-    """Exception for when a conversation is not found."""
-
-    def __init__(self, conversation_id: Optional[str] = None):
-        super().__init__(
-            resource="Conversation",
-            resource_id=conversation_id,
-            error_code="CONVERSATION_NOT_FOUND",
-        )
+# Domain-specific exception factories - use NotFoundError with parameters instead
 
 
-class MessageNotFoundError(NotFoundError):
-    """Exception for when a message is not found."""
-
-    def __init__(self, message_id: Optional[str] = None):
-        super().__init__(
-            resource="Message", resource_id=message_id, error_code="MESSAGE_NOT_FOUND"
-        )
+def ConversationNotFoundError(conversation_id: Optional[str] = None):
+    """Factory for conversation not found errors."""
+    return NotFoundError(resource="Conversation", resource_id=conversation_id)
 
 
-class AgentConfigNotFoundError(NotFoundError):
-    """Exception for when an agent configuration is not found."""
-
-    def __init__(self, config_id: Optional[str] = None):
-        super().__init__(
-            resource="Agent configuration",
-            resource_id=config_id,
-            error_code="AGENT_CONFIG_NOT_FOUND",
-        )
+def MessageNotFoundError(message_id: Optional[str] = None):
+    """Factory for message not found errors."""
+    return NotFoundError(resource="Message", resource_id=message_id)
 
 
-class AgentConfigConflictError(ConflictError):
-    """Exception for when an agent configuration conflicts."""
+def AgentConfigNotFoundError(config_id: Optional[str] = None):
+    """Factory for agent config not found errors."""
+    return NotFoundError(resource="Agent configuration", resource_id=config_id)
 
-    def __init__(self, detail: str = "Agent configuration already exists"):
-        super().__init__(detail=detail, error_code="AGENT_CONFIG_CONFLICT")
+
+def AgentConfigConflictError(detail: str = "Agent configuration already exists"):
+    """Factory for agent config conflict errors."""
+    return ConflictError(detail=detail)

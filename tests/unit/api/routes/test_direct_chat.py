@@ -10,6 +10,8 @@ from src.agent_workbench.api.routes.direct_chat import (
     ModelTestRequest,
     ModelTestResponse,
     direct_chat,
+)
+from src.agent_workbench.api.routes.direct_chat import (
     test_model_connectivity as model_connectivity_endpoint,
 )
 

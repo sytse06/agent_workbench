@@ -20,11 +20,13 @@ class TestProviderConfig:
 
     def test_provider_config_creation(self):
         """Test ProviderConfig creation."""
-        from langchain_core.language_models import BaseChatModel
+
+        def dummy_factory(model_config):
+            return None
 
         config = ProviderConfig(
             provider_name="test_provider",
-            chat_model_class=BaseChatModel,
+            factory_func=dummy_factory,
             default_model="test-model",
             api_key_env_var="TEST_API_KEY",
             base_url="https://api.test.com",
@@ -32,7 +34,7 @@ class TestProviderConfig:
         )
 
         assert config.provider_name == "test_provider"
-        assert config.chat_model_class == BaseChatModel
+        assert config.factory_func == dummy_factory
         assert config.default_model == "test-model"
         assert config.api_key_env_var == "TEST_API_KEY"
         assert config.base_url == "https://api.test.com"
@@ -52,11 +54,13 @@ class TestModelRegistry:
     def test_register_provider(self):
         """Test registering a provider."""
         registry = ModelRegistry()
-        from langchain_core.language_models import BaseChatModel
+
+        def dummy_factory(model_config):
+            return None
 
         config = ProviderConfig(
             provider_name="test_provider",
-            chat_model_class=BaseChatModel,
+            factory_func=dummy_factory,
             default_model="test-model",
         )
 
@@ -66,11 +70,13 @@ class TestModelRegistry:
     def test_get_provider(self):
         """Test getting a provider configuration."""
         registry = ModelRegistry()
-        from langchain_core.language_models import BaseChatModel
+
+        def dummy_factory(model_config):
+            return None
 
         config = ProviderConfig(
             provider_name="test_provider",
-            chat_model_class=BaseChatModel,
+            factory_func=dummy_factory,
             default_model="test-model",
         )
 
@@ -99,12 +105,14 @@ class TestModelRegistry:
     def test_validate_model_config(self):
         """Test model configuration validation."""
         registry = ModelRegistry()
-        from langchain_core.language_models import BaseChatModel
+
+        def dummy_factory(model_config):
+            return None
 
         # Register a provider first
         config = ProviderConfig(
             provider_name="test_provider",
-            chat_model_class=BaseChatModel,
+            factory_func=dummy_factory,
             default_model="test-model",
         )
         registry.register_provider(config)

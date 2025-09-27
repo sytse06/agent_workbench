@@ -1,6 +1,6 @@
 # Tests for state consistency in UI
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -20,6 +20,7 @@ async def test_no_state_drift():
 
         # Setup mock responses
         from unittest.mock import Mock
+
         mock_post_response = Mock()
         mock_post_response.json.return_value = {
             "assistant_response": "Test response",

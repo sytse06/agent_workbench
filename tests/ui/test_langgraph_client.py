@@ -1,6 +1,6 @@
 # Tests for LangGraph client integration
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -15,6 +15,7 @@ async def test_client_send_message():
     # Mock the HTTP client
     with patch.object(client.client, "post") as mock_post:
         from unittest.mock import Mock
+
         mock_response = Mock()
         mock_response.json.return_value = {
             "assistant_response": "Test response",
@@ -51,6 +52,7 @@ async def test_client_get_chat_history():
     # Mock the HTTP client
     with patch.object(client.client, "get") as mock_get:
         from unittest.mock import Mock
+
         mock_response = Mock()
         mock_response.json.return_value = {
             "messages": [
