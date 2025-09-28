@@ -1,0 +1,17 @@
+deploy-hf-spaces.yml
+  name: Deploy to HuggingFace Spaces
+  on:
+    push:
+      branches: [main]
+
+  jobs:
+    deploy-workbench:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - name: Deploy to HF Spaces
+          env:
+            HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          run: |
+            # Deploy workbench mode
+            huggingface-cli upload sytse06/agent-workbench-technical ./deploy/hf-spaces/workbench/ --repo-type=space

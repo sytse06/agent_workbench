@@ -193,6 +193,15 @@ deploy:
 	@echo -e "$(BLUE)🗄️ Running database migrations...$(NC)"
 	@uv run alembic upgrade head
 	@echo -e "$(GREEN)✅ Deployed to $(ENV)$(NC)"
+	@echo ""
+	@if [ "$(ENV)" = "prod" ]; then \
+		echo -e "$(CYAN)🚀 To start production app locally:$(NC)"; \
+		echo "  1. make prod      # Configure production environment"; \
+		echo "  2. make start-app # Start the application"; \
+		echo ""; \
+		echo -e "$(CYAN)🐳 Or use Docker production:$(NC)"; \
+		echo "  make docker-prod  # Run in production container"; \
+	fi
 
 # New: Application starter
 start-app:
@@ -760,6 +769,11 @@ docker-prod:
 	@echo -e "$(CYAN)📦 Building production image...$(NC)"
 	@docker build -t $(DOCKER_IMAGE_NAME):prod .
 	@echo -e "$(CYAN)🚀 Starting production container...$(NC)"
+	@echo -e "$(CYAN)🌐 Production URLs will be available at:$(NC)"
+	@echo "  📱 App: http://localhost:$(DOCKER_PORT)/"
+	@echo "  📚 API Docs: http://localhost:$(DOCKER_PORT)/docs"
+	@echo "  🔍 Health Check: http://localhost:$(DOCKER_PORT)/api/v1/health"
+	@echo ""
 	@docker run --rm -it \
 		--name agent-workbench-prod \
 		-p $(DOCKER_PORT):$(DOCKER_PORT) \

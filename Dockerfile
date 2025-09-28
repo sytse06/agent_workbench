@@ -30,6 +30,7 @@ COPY --from=builder /app/.venv ./.venv
 COPY src/ ./src/
 COPY alembic.ini .
 COPY alembic/ ./alembic/
+COPY config/ ./config/
 
 # Create data directory for SQLite
 RUN mkdir -p data
