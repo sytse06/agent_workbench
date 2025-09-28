@@ -704,6 +704,7 @@ docker-dev:
 		--name agent-workbench-dev \
 		-p $(DOCKER_PORT):$(DOCKER_PORT) \
 		-p $(GRADIO_PORT):$(GRADIO_PORT) \
+		-v $(PWD)/data:/app/data \
 		--env-file config/development.env \
 		-e APP_ENV=development \
 		$(DOCKER_IMAGE_NAME):dev
@@ -733,6 +734,7 @@ docker-staging:
 		--name agent-workbench-staging \
 		-p $(DOCKER_PORT):$(DOCKER_PORT) \
 		-p $(GRADIO_PORT):$(GRADIO_PORT) \
+		-v $(PWD)/data:/app/data \
 		--env-file config/staging.env \
 		-e APP_ENV=staging \
 		$(DOCKER_IMAGE_NAME):staging
@@ -762,6 +764,7 @@ docker-prod:
 		--name agent-workbench-prod \
 		-p $(DOCKER_PORT):$(DOCKER_PORT) \
 		-p $(GRADIO_PORT):$(GRADIO_PORT) \
+		-v $(PWD)/data:/app/data \
 		--env-file config/production.env \
 		-e APP_ENV=production \
 		$(DOCKER_IMAGE_NAME):prod
@@ -816,6 +819,7 @@ docker-fresh:
 		--name agent-workbench-fresh \
 		-p $(DOCKER_PORT):$(DOCKER_PORT) \
 		-p $(GRADIO_PORT):$(GRADIO_PORT) \
+		-v $(PWD)/data:/app/data \
 		--env-file config/development.env \
 		-e APP_ENV=development \
 		$(DOCKER_IMAGE_NAME):fresh

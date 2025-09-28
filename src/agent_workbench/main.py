@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api.database import get_session
+from .api.database import get_session, init_database
 from .api.routes import (
     agent_configs,
     chat,
@@ -70,6 +70,14 @@ async def lifespan(app: FastAPI):
 
     # Initialize database session generator
     app.get_session = get_session
+
+    # Initialize database tables
+    try:
+        await init_database()
+        print("✅ Database initialized successfully")
+    except Exception as e:
+        print(f"⚠️ Database initialization failed: {e}")
+        print("🔧 Continuing without database persistence...")
 
     # Initialize services that will be used by Gradio interface
     # These will be accessed directly by Gradio handlers
