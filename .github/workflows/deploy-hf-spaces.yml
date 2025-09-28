@@ -1,17 +1,114 @@
-deploy-hf-spaces.yml
-  name: Deploy to HuggingFace Spaces
-  on:
-    push:
-      branches: [main]
+name: Deploy to HuggingFace Spaces
 
-  jobs:
-    deploy-workbench:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-        - name: Deploy to HF Spaces
-          env:
-            HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          run: |
-            # Deploy workbench mode
-            huggingface-cli upload sytse06/agent-workbench-technical ./deploy/hf-spaces/workbench/ --repo-type=space
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  deploy-workbench:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install huggingface_hub
+
+      - name: Deploy Workbench Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Create temporary deployment directory
+          mkdir -p hf-deploy-workbench
+
+          # Copy Space files
+          cp -r deploy/hf-spaces/workbench/* hf-deploy-workbench/
+
+          # Copy source code
+          cp -r src/ hf-deploy-workbench/src/
+          cp pyproject.toml hf-deploy-workbench/
+          cp -r alembic/ hf-deploy-workbench/alembic/
+          cp alembic.ini hf-deploy-workbench/
+          cp -r config/ hf-deploy-workbench/config/
+
+          # Create requirements.txt for HF Spaces
+          cd hf-deploy-workbench
+          echo "fastapi>=0.104.1" > requirements.txt
+          echo "gradio>=4.44.0" >> requirements.txt
+          echo "uvicorn>=0.24.0" >> requirements.txt
+          echo "sqlalchemy>=2.0.23" >> requirements.txt
+          echo "aiosqlite>=0.19.0" >> requirements.txt
+          echo "alembic>=1.12.1" >> requirements.txt
+          echo "pydantic>=2.5.0" >> requirements.txt
+          echo "python-dotenv>=1.0.0" >> requirements.txt
+          echo "anthropic>=0.7.7" >> requirements.txt
+          echo "openai>=1.3.7" >> requirements.txt
+          echo "google-generativeai>=0.3.0" >> requirements.txt
+          echo "httpx>=0.25.2" >> requirements.txt
+
+          # Deploy to HF Space
+          huggingface-cli upload sytse06/agent-workbench-technical . --repo-type=space
+
+  deploy-seo-coach:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: deploy-workbench
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install huggingface_hub
+
+      - name: Deploy SEO Coach Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Create temporary deployment directory
+          mkdir -p hf-deploy-seo
+
+          # Copy Space files
+          cp -r deploy/hf-spaces/seo-coach/* hf-deploy-seo/
+
+          # Copy source code
+          cp -r src/ hf-deploy-seo/src/
+          cp pyproject.toml hf-deploy-seo/
+          cp -r alembic/ hf-deploy-seo/alembic/
+          cp alembic.ini hf-deploy-seo/
+          cp -r config/ hf-deploy-seo/config/
+
+          # Create requirements.txt
+          cd hf-deploy-seo
+          echo "fastapi>=0.104.1" > requirements.txt
+          echo "gradio>=4.44.0" >> requirements.txt
+          echo "uvicorn>=0.24.0" >> requirements.txt
+          echo "sqlalchemy>=2.0.23" >> requirements.txt
+          echo "aiosqlite>=0.19.0" >> requirements.txt
+          echo "pydantic>=2.5.0" >> requirements.txt
+          echo "python-dotenv>=1.0.0" >> requirements.txt
+          echo "anthropic>=0.7.7" >> requirements.txt
+          echo "openai>=1.3.7" >> requirements.txt
+          echo "firecrawl-py>=0.0.8" >> requirements.txt
+          echo "httpx>=0.25.2" >> requirements.txt
+
+          # Deploy to HF Space
+          huggingface-cli upload sytse06/agent-workbench-seo-coach . --repo-type=space
