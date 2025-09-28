@@ -868,7 +868,12 @@ docker-cleanup:
 # Database analysis using simple tools
 db-analyze:
 	@echo -e "$(BLUE)🗄️ Database Analysis$(NC)"
-	@uv run python scripts/scan/simple_db_scanner.py tables
+	@if [ -f ".env" ]; then \
+		set -a && source .env && set +a && uv run python scripts/scan/simple_db_scanner.py tables; \
+	else \
+		echo -e "$(YELLOW)⚠️  No .env file found, using defaults$(NC)"; \
+		uv run python scripts/scan/simple_db_scanner.py tables; \
+	fi
 	@echo ""
 	@echo -e "$(CYAN)💡 For detailed analysis, use:$(NC)"
 	@echo "  make db-structure TABLE=table_name  # Show table structure"

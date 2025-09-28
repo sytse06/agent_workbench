@@ -160,13 +160,18 @@ class TestConversationRoutes:
         # In practice, this would return the conversation data
         assert response.status_code in [200, 404]
 
-    def test_delete_conversation(self):
+    @patch("agent_workbench.api.routes.conversations.ConversationService")
+    def test_delete_conversation(self, mock_conversation_service):
         """Test DELETE /api/v1/conversations/{conversation_id} endpoint."""
         conversation_id = "12345678-1234-5678-1234-567812345678"
+
+        # Setup mock
+        mock_service_instance = AsyncMock()
+        mock_service_instance.delete_conversation.return_value = True
+        mock_conversation_service.return_value = mock_service_instance
 
         # Make request
         response = client.delete(f"/api/v1/conversations/{conversation_id}")
 
-        # For now, this will return 404 since we don't have real implementation
-        # In practice, this would delete the conversation
-        assert response.status_code in [204, 404]
+        # Should return 204 No Content for successful deletion
+        assert response.status_code == 204

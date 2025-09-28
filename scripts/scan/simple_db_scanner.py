@@ -15,8 +15,16 @@ class SimpleDBScanner:
 
     def _get_default_db_path(self) -> str:
         """Get database path from environment or default."""
+        # First try to get DATABASE_URL from environment
+        database_url = os.getenv('DATABASE_URL')
+        if database_url and database_url.startswith('sqlite'):
+            # Extract path from sqlite URL
+            # Format: sqlite+aiosqlite:///./data/agent_workbench_dev.db
+            if ':///' in database_url:
+                return database_url.split(':///')[-1]
+        
+        # Fallback to APP_ENV-based naming
         env = os.getenv('APP_ENV', 'development')
-        # Use shorter naming convention to match application config
         env_short = 'dev' if env == 'development' else env
         return f"./data/agent_workbench_{env_short}.db"
 

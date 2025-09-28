@@ -50,7 +50,10 @@ class TestConversationService:
         """Test create_conversation with model config."""
         conversation_id = UUID("12345678-1234-5678-1234-567812345678")
         model_config = ModelConfig(
-            provider="ollama", model_name="llama3", temperature=0.7, max_tokens=1000
+            provider="ollama",
+            model_name="llama3",
+            temperature=0.7,
+            max_tokens=1000,
         )
 
         with patch(
@@ -88,10 +91,30 @@ class TestConversationService:
         """Test delete_conversation method."""
         conversation_id = UUID("12345678-1234-5678-1234-567812345678")
 
-        # Should return True for now (placeholder)
-        result = await self.service.delete_conversation(conversation_id)
+        # Mock database session
+        from unittest.mock import AsyncMock
 
-        assert result is True
+        mock_session = AsyncMock()
+
+        # Create service with mock session
+        service_with_session = ConversationService(db_session=mock_session)
+
+        # Mock ConversationModel.get_by_id to return None (conversation not found)
+        patch_path = (
+            "agent_workbench.services.conversation_service."
+            "ConversationModel.get_by_id"
+        )
+        with patch(patch_path, return_value=None):
+            result = await service_with_session.delete_conversation(conversation_id)
+            assert result is False
+
+        # Mock ConversationModel.get_by_id to return a conversation
+        mock_conversation = AsyncMock()
+        mock_conversation.delete = AsyncMock()
+        with patch(patch_path, return_value=mock_conversation):
+            result = await service_with_session.delete_conversation(conversation_id)
+            assert result is True
+            mock_conversation.delete.assert_called_once_with(mock_session)
 
     @pytest.mark.asyncio
     async def test_get_conversation(self):

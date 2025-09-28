@@ -1,8 +1,13 @@
 import logging
 import os
 import time
+import uuid
+from contextlib import asynccontextmanager
 from typing import Optional
+from uuid import UUID
 
+import gradio as gr
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,11 +23,13 @@ from .api.routes import (
     messages,
     models,
 )
+from .models.database import ConversationModel, MessageModel
 from .models.schemas import ModelConfig
 from .services.context_service import ContextService
 from .services.langgraph_bridge import LangGraphStateBridge
 from .services.langgraph_service import WorkbenchLangGraphService
 from .services.llm_service import ChatService
+from .services.model_config_service import model_config_service
 from .services.state_manager import StateManager
 
 
@@ -49,10 +56,65 @@ def load_environment():
 current_env = load_environment()
 print(f"🚀 Starting Agent Workbench in {current_env} mode")
 
-# Mode factory imports will be done within functions to avoid circular imports
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize shared resources and services for FastAPI-mounted Gradio."""
+    print("🔧 Initializing FastAPI lifespan services...")
+
+    # Initialize shared HTTP client for external APIs
+    app.requests_client = httpx.AsyncClient(timeout=30.0)
+
+    # Initialize database session generator
+    app.get_session = get_session
+
+    # Initialize services that will be used by Gradio interface
+    # These will be accessed directly by Gradio handlers
+    print("✅ FastAPI lifespan services initialized")
+
+    # Mount FastAPI-Gradio interface during startup
+    try:
+        print("🎯 Mounting FastAPI-Gradio interface...")
+        gradio_interface = create_fastapi_mounted_gradio_interface()
+
+        # Apply queue fix for responsiveness
+        gradio_interface.queue()
+        gradio_interface.run_startup_events()
+
+        # Mount interface
+        app.mount("/", gradio_interface.app, name="gradio")
+        print("✅ FastAPI-mounted Gradio interface with database persistence")
+
+    except Exception as e:
+        # Fallback to API-only mode
+        error_msg = f"Failed to mount FastAPI-Gradio interface: {e}"
+        print(f"❌ {error_msg}")
+        import traceback
+
+        print(f"🎯 Traceback: {traceback.format_exc()}")
+        print("⚠️ Starting in API-only mode")
+
+        @app.get("/api/interface-error")
+        async def get_interface_error():
+            return {
+                "error": "Interface not available",
+                "message": error_msg,
+                "mode": "api_only",
+            }
+
+    yield
+
+    # Cleanup
+    print("🔧 Cleaning up FastAPI lifespan services...")
+    await app.requests_client.aclose()
+    print("✅ FastAPI lifespan cleanup complete")
+
 
 app = FastAPI(
-    title="Agent Workbench", description="Agent Workbench API", version="0.1.0"
+    title="Agent Workbench",
+    description="Agent Workbench API with FastAPI-mounted Gradio",
+    version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Add CORS middleware
@@ -179,77 +241,511 @@ async def health_check():
     return {"status": "healthy"}
 
 
-# Complex UI mounting with queue fix - Testing the same solution on layered architecture
-@app.on_event("startup")
-async def mount_complex_interface_with_queue_fix():
-    """Mount complex layered UI with the same queue fix that worked for simple UI."""
-    import logging
+def create_fastapi_mounted_gradio_interface():
+    """Create FastAPI-mounted Gradio interface with dual-mode support.
 
-    logger = logging.getLogger(__name__)
+    Provides direct service access for enhanced functionality.
+    """
+    from .ui.mode_factory import InterfaceCreationError, InvalidModeError, ModeFactory
 
     try:
-        # Import complex mode factory
-        from .ui.mode_factory import (
-            InterfaceCreationError,
-            InvalidModeError,
-            ModeFactory,
-        )
-
-        # Create mode factory
+        # Use ModeFactory to create the appropriate interface based on APP_MODE
         factory = ModeFactory()
-
-        # Get current mode
         current_mode = factory._determine_mode_safe(None)
 
-        # Create complex interface
-        gradio_interface = factory.create_interface(current_mode)
+        print(f"🎯 Creating FastAPI-mounted Gradio interface for mode: {current_mode}")
 
-        # CRITICAL FIX: Apply the same queue fix that worked for simple UI
-        # This should resolve the original responsiveness issues
-        gradio_interface.queue()
-        gradio_interface.run_startup_events()
+        # Create the base interface using the existing mode factory
+        base_interface = factory.create_interface(current_mode)
 
-        # Mount interface
-        app.mount("/", gradio_interface.app, name="gradio")
+        # Enhance the interface with database persistence by wrapping handlers
+        enhanced_interface = _enhance_interface_with_database_persistence(
+            base_interface, current_mode
+        )
 
-        logger.info(f"✅ Successfully mounted {current_mode} interface with queue fix")
+        return enhanced_interface
 
-    except InvalidModeError as e:
-        # Configuration error - should not start
-        error_msg = f"Invalid mode configuration: {e}"
-        logger.error(error_msg)
-        raise RuntimeError(error_msg)
+    except (InvalidModeError, InterfaceCreationError) as e:
+        print(f"🎯 Mode factory error: {e}")
+        # Fallback to simple workbench interface
+        return _create_fallback_workbench_interface()
+    except Exception as e:
+        print(f"🎯 Unexpected error creating interface: {e}")
+        import traceback
 
-    except InterfaceCreationError as e:
-        # Interface creation failed - fallback to API-only mode
-        error_msg = f"Interface creation failed: {e}"
-        logger.error(error_msg)
-        logger.warning("Starting in API-only mode")
+        print(f"🎯 Traceback: {traceback.format_exc()}")
+        # Fallback to simple workbench interface
+        return _create_fallback_workbench_interface()
 
-        # Add error endpoint for monitoring
-        error_message = str(e)
 
-        @app.get("/api/interface-error")
-        async def get_interface_error():
-            return {
-                "error": "Interface not available",
-                "message": error_message,
-                "mode": "api_only",
+def _enhance_interface_with_database_persistence(interface: gr.Blocks, mode: str):
+    """Enhance existing interface with database persistence capabilities."""
+
+    # For now, we'll create a new interface that combines the mode-specific UI
+    # with database persistence. In a future iteration, we could modify the
+    # existing interface handlers directly.
+
+    if mode == "seo_coach":
+        return _create_enhanced_seo_coach_interface()
+    else:
+        return _create_enhanced_workbench_interface()
+
+
+def _create_enhanced_workbench_interface():
+    """Create enhanced workbench interface with database persistence."""
+
+    # Get dynamic configuration from environment
+    provider_choices, default_provider = (
+        model_config_service.get_provider_choices_for_ui()
+    )
+    model_choices, default_model = model_config_service.get_model_choices_for_ui()
+
+    title = "Agent Workbench - FastAPI-Mounted with Database Persistence"
+
+    with gr.Blocks(title=title) as interface:
+        gr.Markdown(f"# 🛠️ {title}")
+        gr.Markdown("**Database Persistence Enabled** - All conversations saved!")
+
+        conversation_id = gr.State(str(uuid.uuid4()))
+
+        with gr.Row():
+            with gr.Column(scale=1):
+                # Dynamic model configuration from .env
+                provider = gr.Dropdown(
+                    choices=provider_choices,
+                    value=default_provider,
+                    label="Provider",
+                )
+
+                model = gr.Dropdown(
+                    choices=model_choices,
+                    value=default_model,
+                    label="Model Configuration",
+                )
+
+                temperature = gr.Slider(
+                    0.0,
+                    2.0,
+                    model_config_service.default_temperature,
+                    label="Temperature",
+                )
+                max_tokens = gr.Slider(
+                    100,
+                    4000,
+                    model_config_service.default_max_tokens,
+                    label="Max Tokens",
+                )
+
+                # Database status
+                gr.Markdown("### 💾 Database Status")
+                db_status = gr.HTML(value="<div class='info'>Ready</div>")
+
+            with gr.Column(scale=2):
+                chatbot = gr.Chatbot(
+                    height=400,
+                    label="Enhanced Chat with Database Persistence",
+                    type="messages",
+                )
+
+                with gr.Row():
+                    message = gr.Textbox(
+                        placeholder="Enter message (saved to database)...",
+                        label="Message",
+                        scale=4,
+                        lines=2,
+                    )
+                    send = gr.Button("Send", variant="primary", scale=1)
+
+        async def handle_workbench_message_with_persistence(
+            msg, conv_id, provider_val, model_val, temp_val, max_tokens_val
+        ):
+            """Direct service call with database persistence for workbench mode."""
+            return await _handle_message_with_database_persistence(
+                msg,
+                conv_id,
+                provider_val,
+                model_val,
+                temp_val,
+                max_tokens_val,
+                "workbench",
+            )
+
+        # Wire up events
+        send.click(
+            fn=handle_workbench_message_with_persistence,
+            inputs=[message, conversation_id, provider, model, temperature, max_tokens],
+            outputs=[message, chatbot, db_status],
+        )
+
+        message.submit(
+            fn=handle_workbench_message_with_persistence,
+            inputs=[message, conversation_id, provider, model, temperature, max_tokens],
+            outputs=[message, chatbot, db_status],
+        )
+
+    return interface
+
+
+def _create_enhanced_seo_coach_interface():
+    """Create enhanced SEO coach interface with database persistence."""
+
+    title = "AI SEO Coach - FastAPI-Mounted with Database Persistence"
+
+    with gr.Blocks(
+        title=title,
+        theme=gr.themes.Soft(),
+        css="""
+        .business-panel {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .coaching-panel { min-height: 500px; }
+        .success {
+            color: #155724;
+            background: #d4edda;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .error {
+            color: #721c24;
+            background: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .info {
+            color: #0c5460;
+            background: #d1ecf1;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        """,
+    ) as interface:
+
+        # Header
+        gr.Markdown(f"# 🚀 {title}")
+        gr.Markdown("*Verbeter je website ranking met persoonlijke AI coaching*")
+        gr.Markdown("**Database Persistence Enabled** - All conversations saved!")
+
+        # State management
+        conversation_id = gr.State(str(uuid.uuid4()))
+        business_profile = gr.State({})
+
+        with gr.Row():
+            # Left Panel: Business Profile
+            with gr.Column(scale=1, elem_classes=["business-panel"]):
+                gr.Markdown("### 🏢 Jouw Bedrijf")
+
+                business_name = gr.Textbox(
+                    label="Bedrijfsnaam", placeholder="Bijv. Bakkerij De Korenwolf"
+                )
+                business_type = gr.Dropdown(
+                    choices=[
+                        "Restaurant",
+                        "Webshop",
+                        "Dienstverlening",
+                        "Productie",
+                        "Anders",
+                    ],
+                    label="Type Bedrijf",
+                )
+                website_url = gr.Textbox(
+                    label="Website URL", placeholder="https://jouwbedrijf.nl"
+                )
+                location = gr.Textbox(
+                    label="Locatie", placeholder="Amsterdam, Nederland"
+                )
+
+                analyze_btn = gr.Button(
+                    "🔍 Analyseer Mijn Website", variant="primary", size="lg"
+                )
+
+                # Database status
+                gr.Markdown("### 💾 Database Status")
+                db_status = gr.HTML(value="<div class='info'>Ready</div>")
+
+            # Right Panel: Coaching Chat
+            with gr.Column(scale=2, elem_classes=["coaching-panel"]):
+                gr.Markdown("### 💬 Je Persoonlijke SEO Coach")
+
+                chatbot = gr.Chatbot(
+                    height=450,
+                    label="",
+                    placeholder="Welkom! Ik ben je SEO coach. "
+                    "Vul je bedrijfsgegevens in om te beginnen.",
+                    type="messages",
+                )
+
+                with gr.Row():
+                    message_input = gr.Textbox(
+                        placeholder="Stel je SEO vraag...",
+                        label="Bericht",
+                        lines=2,
+                        scale=4,
+                    )
+                    send_button = gr.Button("Verstuur", variant="primary", scale=1)
+
+        async def handle_seo_analysis_with_persistence(
+            url, biz_name, biz_type, location, conv_id
+        ):
+            """Handle SEO analysis with database persistence."""
+            if not all([url, biz_name, biz_type, location]):
+                return [], {}, "<div class='error'>❌ Vul alle velden in</div>"
+
+            # Create business profile
+            profile = {
+                "business_name": biz_name,
+                "business_type": biz_type,
+                "website_url": url,
+                "location": location,
             }
+
+            analysis_message = (
+                f"Analyseer mijn {biz_type.lower()} website {url} "
+                f"voor SEO verbeteringen"
+            )
+
+            # Use the enhanced message handler with SEO coach mode
+            _, history, status = await _handle_message_with_database_persistence(
+                analysis_message,
+                conv_id,
+                "anthropic",
+                "claude-3-5-sonnet-20241022",
+                0.7,
+                2000,
+                "seo_coach",
+                profile,
+            )
+
+            success_html = f"""
+            <div class='success'>
+                ✅ Website geanalyseerd en opgeslagen<br>
+                <strong>Bedrijf:</strong> {biz_name}<br>
+                <strong>Website:</strong> <a href='{url}' target='_blank'>{url}</a>
+            </div>
+            """
+
+            return history, profile, success_html
+
+        async def handle_seo_message_with_persistence(msg, conv_id, profile):
+            """Handle SEO coaching message with database persistence."""
+            if not msg.strip():
+                return "", []
+
+            if not profile:
+                return "", [
+                    {
+                        "role": "assistant",
+                        "content": "Vul eerst je bedrijfsgegevens in om te beginnen.",
+                    }
+                ]
+
+            # Use the enhanced message handler with SEO coach mode
+            _, history, _ = await _handle_message_with_database_persistence(
+                msg,
+                conv_id,
+                "anthropic",
+                "claude-3-5-sonnet-20241022",
+                0.7,
+                2000,
+                "seo_coach",
+                profile,
+            )
+
+            return "", history
+
+        # Wire up events
+        analyze_btn.click(
+            fn=handle_seo_analysis_with_persistence,
+            inputs=[
+                website_url,
+                business_name,
+                business_type,
+                location,
+                conversation_id,
+            ],
+            outputs=[chatbot, business_profile, db_status],
+        )
+
+        send_button.click(
+            fn=handle_seo_message_with_persistence,
+            inputs=[message_input, conversation_id, business_profile],
+            outputs=[message_input, chatbot],
+        )
+
+        message_input.submit(
+            fn=handle_seo_message_with_persistence,
+            inputs=[message_input, conversation_id, business_profile],
+            outputs=[message_input, chatbot],
+        )
+
+    return interface
+
+
+def _create_fallback_workbench_interface():
+    """Create simple fallback workbench interface."""
+    with gr.Blocks(title="Agent Workbench - Fallback Mode") as interface:
+        gr.Markdown("# 🛠️ Agent Workbench - Fallback Mode")
+        gr.Markdown("**Database Persistence Enabled** - Simplified interface")
+
+        conversation_id = gr.State(str(uuid.uuid4()))
+
+        chatbot = gr.Chatbot(height=400, type="messages")
+        message = gr.Textbox(placeholder="Enter your message...", label="Message")
+        send = gr.Button("Send", variant="primary")
+
+        async def simple_handler(msg, conv_id):
+            if not msg.strip():
+                return "", []
+
+            # Simple database persistence
+            _, history, _ = await _handle_message_with_database_persistence(
+                msg,
+                conv_id,
+                "anthropic",
+                "claude-3-5-sonnet-20241022",
+                0.7,
+                2000,
+                "workbench",
+            )
+            return "", history
+
+        send.click(
+            fn=simple_handler,
+            inputs=[message, conversation_id],
+            outputs=[message, chatbot],
+        )
+        message.submit(
+            fn=simple_handler,
+            inputs=[message, conversation_id],
+            outputs=[message, chatbot],
+        )
+
+    return interface
+
+
+async def _handle_message_with_database_persistence(
+    msg,
+    conv_id,
+    provider_val,
+    model_val,
+    temp_val,
+    max_tokens_val,
+    mode="workbench",
+    business_profile=None,
+):
+    """Enhanced message handler with database persistence for both modes."""
+    print(f"🎯 FastAPI-Gradio: handle_message called with msg='{msg}', mode='{mode}'")
+
+    if not msg.strip():
+        return "", [], "<div class='info'>Ready</div>"
+
+    try:
+        # Direct access to database session - no HTTP calls
+        async for db_session in app.get_session():
+            # Get or create conversation in database
+            conversation = await ConversationModel.get_by_id(db_session, UUID(conv_id))
+            if not conversation:
+                conversation = await ConversationModel.create(
+                    db_session,
+                    id=UUID(conv_id),
+                    title=f"{mode.title()} Chat {msg[:30]}...",
+                )
+
+            # Add user message to database
+            await MessageModel.create(
+                db_session,
+                conversation_id=conversation.id,
+                role="user",
+                content=msg,
+            )
+
+            # Create model config
+            model_config = ModelConfig(
+                provider=provider_val,
+                model_name=model_val,
+                temperature=temp_val,
+                max_tokens=max_tokens_val,
+            )
+
+            # Direct LLM service call - no HTTP
+            llm_service = ChatService(model_config)
+
+            # Enhance message for SEO coach mode
+            if mode == "seo_coach" and business_profile:
+                enhanced_msg = f"""
+                Context: Je bent een Nederlandse SEO expert voor websites.
+                Bedrijf: {business_profile.get('business_name', 'Onbekend')}
+                Type: {business_profile.get('business_type', 'Onbekend')}
+                Website: {business_profile.get('website_url', 'Onbekend')}
+                Locatie: {business_profile.get('location', 'Onbekend')}
+
+                Vraag: {msg}
+
+                Geef praktische, Nederlandse SEO adviezen specifiek voor dit bedrijf.
+                """
+                response = await llm_service.chat_completion(
+                    message=enhanced_msg, conversation_id=conv_id
+                )
+            else:
+                response = await llm_service.chat_completion(
+                    message=msg, conversation_id=conv_id
+                )
+
+            # Save assistant response to database
+            await MessageModel.create(
+                db_session,
+                conversation_id=conversation.id,
+                role="assistant",
+                content=response.reply,
+            )
+
+            # Get conversation history from database
+            messages = await MessageModel.get_by_conversation(
+                db_session, conversation.id
+            )
+
+            # Convert to Gradio format
+            history = []
+            for message_obj in messages:
+                history.append(
+                    {"role": message_obj.role, "content": message_obj.content}
+                )
+
+            # Success status with database confirmation
+            success_html = f"""
+            <div class='success'>
+                ✅ Message saved to database<br>
+                <strong>Mode:</strong> {mode}<br>
+                <strong>Conversation ID:</strong> {conv_id}<br>
+                <strong>Messages in DB:</strong> {len(messages)}<br>
+                <strong>Provider:</strong> {provider_val}<br>
+                <strong>Model:</strong> {model_val}
+            </div>
+            """
+
+            return "", history, success_html
 
     except Exception as e:
-        # Unexpected error - fallback to API-only mode
-        error_msg = f"Unexpected error mounting interface: {e}"
-        logger.error(error_msg, exc_info=True)
-        logger.warning("Starting in API-only mode")
+        print(f"🎯 FastAPI-Gradio: Exception: {str(e)}")
+        import traceback
 
-        @app.get("/api/interface-error")
-        async def get_interface_error():
-            return {
-                "error": "Interface not available",
-                "message": "Unexpected error during interface mounting",
-                "mode": "api_only",
-            }
+        print(f"🎯 FastAPI-Gradio: Traceback: {traceback.format_exc()}")
+
+        error_html = f"""
+        <div class='error'>
+            ❌ Database Error: {str(e)}<br>
+            <small>Check logs for details</small>
+        </div>
+        """
+        history = [
+            {"role": "user", "content": msg},
+            {"role": "assistant", "content": f"Error: {str(e)}"},
+        ]
+        return "", history, error_html
+
+
+# Note: Gradio interface mounting is now handled in the lifespan function above
 
 
 @app.get("/api/mode")
