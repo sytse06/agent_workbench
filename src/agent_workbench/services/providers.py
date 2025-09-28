@@ -97,6 +97,18 @@ class ModelRegistry:
             )
         )
 
+        self.register_provider(
+            ProviderConfig(
+                provider_name="google",
+                factory_func=self._create_google_model,
+                default_model="gemini-2.5-flash",
+                api_key_env_var="GEMINI_API_KEY",
+                base_url=None,
+                requires_api_key=True,
+                required_packages=["langchain-google-genai"],
+            )
+        )
+
     def register_provider(self, config: ProviderConfig) -> None:
         """
         Register a new provider configuration.
@@ -257,6 +269,23 @@ class ModelRegistry:
             temperature=model_config.temperature,
             max_tokens=model_config.max_tokens,
             **getattr(model_config, "extra_params", {}),
+        )
+
+    def _create_google_model(self, model_config: BaseModel) -> BaseChatModel:
+        """Create Google chat model."""
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        api_key = (
+            model_config.extra_params.get("api_key")
+            if hasattr(model_config, "extra_params") and model_config.extra_params
+            else os.getenv("GEMINI_API_KEY")
+        )
+
+        return ChatGoogleGenerativeAI(
+            model=model_config.model_name,
+            temperature=model_config.temperature,
+            max_output_tokens=model_config.max_tokens,
+            google_api_key=api_key,
         )
 
 
@@ -421,4 +450,5 @@ PROVIDER_FACTORIES: Dict[str, Type[ProviderFactory]] = {
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "mistral": MistralProvider,
+    "google": "GoogleProvider",  # Will be added if needed
 }

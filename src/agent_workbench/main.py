@@ -56,6 +56,9 @@ def load_environment():
 current_env = load_environment()
 print(f"🚀 Starting Agent Workbench in {current_env} mode")
 
+# Refresh model config service to pick up environment changes
+model_config_service.refresh_config()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -295,9 +298,6 @@ def _create_enhanced_workbench_interface():
     """Create enhanced workbench interface with database persistence."""
 
     # Get dynamic configuration from environment
-    provider_choices, default_provider = (
-        model_config_service.get_provider_choices_for_ui()
-    )
     model_choices, default_model = model_config_service.get_model_choices_for_ui()
 
     title = "Agent Workbench - FastAPI-Mounted with Database Persistence"
@@ -310,17 +310,12 @@ def _create_enhanced_workbench_interface():
 
         with gr.Row():
             with gr.Column(scale=1):
-                # Dynamic model configuration from .env
-                provider = gr.Dropdown(
-                    choices=provider_choices,
-                    value=default_provider,
-                    label="Provider",
-                )
-
-                model = gr.Dropdown(
+                # Single dropdown for provider/model combinations
+                model_selection = gr.Dropdown(
                     choices=model_choices,
                     value=default_model,
                     label="Model Configuration",
+                    info="Select provider and model combination",
                 )
 
                 temperature = gr.Slider(
@@ -357,9 +352,12 @@ def _create_enhanced_workbench_interface():
                     send = gr.Button("Send", variant="primary", scale=1)
 
         async def handle_workbench_message_with_persistence(
-            msg, conv_id, provider_val, model_val, temp_val, max_tokens_val
+            msg, conv_id, model_selection_val, temp_val, max_tokens_val
         ):
             """Direct service call with database persistence for workbench mode."""
+            # Parse provider and model from selection
+            provider_val, model_val = model_config_service.parse_model_selection(model_selection_val)
+
             return await _handle_message_with_database_persistence(
                 msg,
                 conv_id,
@@ -373,13 +371,13 @@ def _create_enhanced_workbench_interface():
         # Wire up events
         send.click(
             fn=handle_workbench_message_with_persistence,
-            inputs=[message, conversation_id, provider, model, temperature, max_tokens],
+            inputs=[message, conversation_id, model_selection, temperature, max_tokens],
             outputs=[message, chatbot, db_status],
         )
 
         message.submit(
             fn=handle_workbench_message_with_persistence,
-            inputs=[message, conversation_id, provider, model, temperature, max_tokens],
+            inputs=[message, conversation_id, model_selection, temperature, max_tokens],
             outputs=[message, chatbot, db_status],
         )
 

@@ -45,6 +45,7 @@ help:
 	@echo "  make start-app                    - Start application"
 	@echo "  make start-app-debug              - Start with debug logging"
 	@echo "  make start-app-verbose            - Start with maximum debug info"
+	@echo "  ENV=staging make start-app        - Start with specific environment"
 	@echo ""
 	@echo "📊 Git & Deployment:"
 	@echo "  make git-status   - Show git overview"
@@ -202,7 +203,7 @@ start-app:
 	fi
 	@env_type=$$(grep "APP_ENV=" .env | cut -d'=' -f2); \
 	echo -e "$(CYAN)Environment: $$env_type$(NC)"
-	@uv run python -m agent_workbench
+	@APP_ENV=$(or $(ENV),development) uv run python -m agent_workbench
 
 # Debug mode application starter
 start-app-debug:
@@ -219,7 +220,7 @@ start-app-debug:
 	@echo "  🛠️  FastAPI debug mode"
 	@echo "  📝 SQL query logging"
 	@echo ""
-	@FASTAPI_DEBUG=1 LOG_LEVEL=DEBUG uv run python -m agent_workbench
+	@APP_ENV=$(or $(ENV),development) FASTAPI_DEBUG=1 LOG_LEVEL=DEBUG uv run python -m agent_workbench
 
 # Verbose debug mode with API endpoint testing
 start-app-verbose:
@@ -244,7 +245,7 @@ start-app-verbose:
 	@echo "  🔍 Direct Chat: http://localhost:8000/api/v1/chat/direct"
 	@echo "  🧪 Health Check: http://localhost:8000/api/v1/health"
 	@echo ""
-	@FASTAPI_DEBUG=1 LOG_LEVEL=DEBUG SQLALCHEMY_ECHO=1 CORS_DEBUG=1 uv run python -m agent_workbench
+	@APP_ENV=$(or $(ENV),development) FASTAPI_DEBUG=1 LOG_LEVEL=DEBUG SQLALCHEMY_ECHO=1 CORS_DEBUG=1 uv run python -m agent_workbench
 
 # New: Test debug setup without starting full app
 test-debug-setup:

@@ -26,19 +26,19 @@ class ModelConfigService:
         # Primary provider-model pairs
         self.default_provider = os.getenv("DEFAULT_PROVIDER", "openrouter")
         self.default_primary = os.getenv(
-            "DEFAULT_PRIMARY_MODEL", "anthropic/claude-3.5-sonnet"
+            "DEFAULT_PRIMARY_MODEL", "openai/gpt-5-mini"
         )
         self.default_secondary = os.getenv(
-            "DEFAULT_SECONDARY_MODEL", "openai/gpt-4o-mini"
+            "DEFAULT_SECONDARY_MODEL", "qwen/qwen3-30b-a3b"
         )
 
         # Secondary provider-model pairs
-        self.secondary_provider = os.getenv("SECONDARY_PROVIDER", "anthropic")
+        self.secondary_provider = os.getenv("SECONDARY_PROVIDER", "google")
         self.secondary_primary = os.getenv(
-            "SECONDARY_PRIMARY_MODEL", "claude-3-5-sonnet-20241022"
+            "SECONDARY_PRIMARY_MODEL", "gemini-2.5-flash"
         )
         self.secondary_secondary = os.getenv(
-            "SECONDARY_SECONDARY_MODEL", "claude-3-haiku-20240307"
+            "SECONDARY_SECONDARY_MODEL", "gemini-2.0-flash-lite"
         )
 
         # Model parameters
@@ -50,35 +50,31 @@ class ModelConfigService:
         return [self.default_provider, self.secondary_provider]
 
     def get_model_options(self) -> List[ModelOption]:
-        """Get ONLY verified working provider-model combinations."""
+        """Get configured provider-model combinations from environment."""
         return [
             ModelOption(
                 provider=self.default_provider,
                 model_name=self.default_primary,
-                display_name=f"{self.default_provider}: "
-                f"{self._get_display_name(self.default_primary)}",
-                description="✅ VERIFIED - Primary model (recommended, ~5.7s)",
+                display_name=f"{self.default_provider}: {self._get_display_name(self.default_primary)}",
+                description=f"{self.default_provider.title()}: {self._get_display_name(self.default_primary)}",
             ),
             ModelOption(
                 provider=self.default_provider,
                 model_name=self.default_secondary,
-                display_name=f"{self.default_provider}: "
-                f"{self._get_display_name(self.default_secondary)}",
-                description="✅ VERIFIED - Secondary model (fastest, ~1.0s)",
+                display_name=f"{self.default_provider}: {self._get_display_name(self.default_secondary)}",
+                description=f"{self.default_provider.title()}: {self._get_display_name(self.default_secondary)}",
             ),
             ModelOption(
                 provider=self.secondary_provider,
                 model_name=self.secondary_primary,
-                display_name=f"{self.secondary_provider}: "
-                f"{self._get_display_name(self.secondary_primary)}",
-                description="✅ VERIFIED - Direct API primary (~2.7s)",
+                display_name=f"{self.secondary_provider}: {self._get_display_name(self.secondary_primary)}",
+                description=f"{self.secondary_provider.title()}: {self._get_display_name(self.secondary_primary)}",
             ),
             ModelOption(
                 provider=self.secondary_provider,
                 model_name=self.secondary_secondary,
-                display_name=f"{self.secondary_provider}: "
-                f"{self._get_display_name(self.secondary_secondary)}",
-                description="✅ VERIFIED - Direct API fastest (~0.7s)",
+                display_name=f"{self.secondary_provider}: {self._get_display_name(self.secondary_secondary)}",
+                description=f"{self.secondary_provider.title()}: {self._get_display_name(self.secondary_secondary)}",
             ),
         ]
 

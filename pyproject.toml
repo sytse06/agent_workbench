@@ -5,7 +5,7 @@ description = "Agent Workbench - PRD-driven development"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.104.0",
-    "uvicorn[standard]>=0.24.0", 
+    "uvicorn[standard]>=0.24.0",
     "gradio>=5.0.0",
     "pydantic>=2.5.0",
     "sqlalchemy[asyncio]>=2.0.0",
@@ -29,6 +29,7 @@ dependencies = [
     "langchain-core>=0.3.0",
     "email-validator>=2.1.0",
     "structlog>=23.2.0",
+    "langchain-google-genai>=2.1.12",
 ]
 
 [project.optional-dependencies]
