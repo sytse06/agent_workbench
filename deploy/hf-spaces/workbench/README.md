@@ -15,10 +15,6 @@ models: []
 datasets: []
 tags: ["ai", "llm", "chat", "productivity", "development", "research"]
 disable_embedding: false
-custom_headers:
-  Content-Security-Policy: "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; connect-src 'self' https: wss: ws:;"
-  X-Frame-Options: "SAMEORIGIN"
-  X-Content-Type-Options: "nosniff"
 ---
 
 # Agent Workbench - Technical

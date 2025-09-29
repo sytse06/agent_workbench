@@ -112,43 +112,43 @@ def create_seo_coach_app() -> gr.Blocks:
                         get_dutch_message("content_ideas_title"), size="sm"
                     )
 
-    # Event handlers with direct httpx integration
-    analyze_btn.click(
-        fn=_handle_website_analysis,
-        inputs=[website_url, business_name, business_type, location, conversation_id],
-        outputs=[chatbot, business_profile, analysis_status],
-    )
+        # Event handlers with direct httpx integration
+        analyze_btn.click(
+            fn=_handle_website_analysis,
+            inputs=[website_url, business_name, business_type, location, conversation_id],
+            outputs=[chatbot, business_profile, analysis_status],
+        )
 
-    send_button.click(
-        fn=_handle_coaching_message,
-        inputs=[message_input, conversation_id, business_profile],
-        outputs=[message_input, chatbot],
-    )
+        send_button.click(
+            fn=_handle_coaching_message,
+            inputs=[message_input, conversation_id, business_profile],
+            outputs=[message_input, chatbot],
+        )
 
-    message_input.submit(
-        fn=_handle_coaching_message,
-        inputs=[message_input, conversation_id, business_profile],
-        outputs=[message_input, chatbot],
-    )
+        message_input.submit(
+            fn=_handle_coaching_message,
+            inputs=[message_input, conversation_id, business_profile],
+            outputs=[message_input, chatbot],
+        )
 
-    # Quick actions
-    quick_audit.click(
-        fn=lambda conv_id, profile: _handle_quick_action("audit", conv_id, profile),
-        inputs=[conversation_id, business_profile],
-        outputs=[chatbot],
-    )
+        # Quick actions
+        quick_audit.click(
+            fn=lambda conv_id, profile: _handle_quick_action("audit", conv_id, profile),
+            inputs=[conversation_id, business_profile],
+            outputs=[chatbot],
+        )
 
-    keyword_help.click(
-        fn=lambda conv_id, profile: _handle_quick_action("keywords", conv_id, profile),
-        inputs=[conversation_id, business_profile],
-        outputs=[chatbot],
-    )
+        keyword_help.click(
+            fn=lambda conv_id, profile: _handle_quick_action("keywords", conv_id, profile),
+            inputs=[conversation_id, business_profile],
+            outputs=[chatbot],
+        )
 
-    content_ideas.click(
-        fn=lambda conv_id, profile: _handle_quick_action("content", conv_id, profile),
-        inputs=[conversation_id, business_profile],
-        outputs=[chatbot],
-    )
+        content_ideas.click(
+            fn=lambda conv_id, profile: _handle_quick_action("content", conv_id, profile),
+            inputs=[conversation_id, business_profile],
+            outputs=[chatbot],
+        )
 
     return interface
 

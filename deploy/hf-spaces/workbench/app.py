@@ -24,6 +24,11 @@ os.environ.setdefault('APP_DESCRIPTION', 'AI development and research tool')
 os.environ.setdefault('PWA_NAME', 'Agent Workbench')
 os.environ.setdefault('PWA_SHORT_NAME', 'AgentWB-Tech')
 os.environ.setdefault('PWA_THEME_COLOR', '#3b82f6')
+
+# HuggingFace Spaces - Use Hub DB for persistence
+os.environ.setdefault('USE_HUB_DB', 'true')
+os.environ.setdefault('HUB_DB_REPO', 'sytse06/agent-workbench-db')
+# Fallback DATABASE_URL for compatibility
 os.environ.setdefault('DATABASE_URL', 'sqlite+aiosqlite:///./data/workbench.db')
 
 # HF Spaces specific configuration

@@ -20,13 +20,18 @@ else:
 os.environ.setdefault('APP_MODE', 'seo_coach')
 os.environ.setdefault('ENABLE_PWA', 'true')
 os.environ.setdefault('APP_TITLE', 'SEO Coach - Nederland')
-os.environ.setdefault('APP_DESCRIPTION', 
+os.environ.setdefault('APP_DESCRIPTION',
                      'AI-powered SEO coaching voor Nederlandse bedrijven')
 os.environ.setdefault('PWA_NAME', 'SEO Coach')
 os.environ.setdefault('PWA_SHORT_NAME', 'SEO-Coach')
 os.environ.setdefault('PWA_THEME_COLOR', '#10b981')
 os.environ.setdefault('DEFAULT_LANGUAGE', 'nl')
-os.environ.setdefault('DATABASE_URL', 
+
+# HuggingFace Spaces - Use Hub DB for persistence
+os.environ.setdefault('USE_HUB_DB', 'true')
+os.environ.setdefault('HUB_DB_REPO', 'sytse06/agent-seo-coach-db')
+# Fallback DATABASE_URL for compatibility
+os.environ.setdefault('DATABASE_URL',
                      'sqlite+aiosqlite:///./data/seo_coach.db')
 
 # HF Spaces specific configuration

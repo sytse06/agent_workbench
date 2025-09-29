@@ -8,11 +8,17 @@ from uuid import UUID
 
 import gradio as gr
 import httpx
-from dotenv import load_dotenv
 from fastapi import FastAPI, Request
+
+# Import dotenv conditionally - not needed for HuggingFace Spaces
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api.database import get_session, init_database
+from .api.adaptive_database import get_adaptive_database, init_adaptive_database, is_hub_db_environment
 from .api.routes import (
     agent_configs,
     chat,
@@ -35,6 +41,11 @@ from .services.state_manager import StateManager
 
 def load_environment():
     """Load environment using standard APP_ENV pattern."""
+    # Check if we're in HuggingFace Spaces (dotenv not needed)
+    if not DOTENV_AVAILABLE or os.getenv("SPACE_ID"):
+        print("🚀 Running in HuggingFace Spaces - using environment variables directly")
+        return os.getenv("APP_ENV", "production")
+
     # 1. Load base .env (backwards compatibility)
     load_dotenv(".env", override=False)
 
@@ -68,16 +79,25 @@ async def lifespan(app: FastAPI):
     # Initialize shared HTTP client for external APIs
     app.requests_client = httpx.AsyncClient(timeout=30.0)
 
-    # Initialize database session generator
-    app.get_session = get_session
-
-    # Initialize database tables
+    # Initialize adaptive database (automatically chooses SQLite or Hub DB)
     try:
-        await init_database()
+        mode = os.getenv("APP_MODE", "workbench")
+        db = await init_adaptive_database(mode=mode)
+        app.adaptive_db = db
+
+        # Provide session compatibility for existing code
+        if hasattr(db, 'get_session'):
+            app.get_session = db.get_session
+        else:
+            # For Hub DB, provide a dummy session
+            app.get_session = lambda: None
+
         print("✅ Database initialized successfully")
     except Exception as e:
         print(f"⚠️ Database initialization failed: {e}")
         print("🔧 Continuing without database persistence...")
+        app.adaptive_db = None
+        app.get_session = lambda: None
 
     # Initialize services that will be used by Gradio interface
     # These will be accessed directly by Gradio handlers
