@@ -24,7 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install huggingface_hub
+          pip install huggingface_hub toml
 
       - name: Deploy Workbench Space
         env:
@@ -43,22 +43,31 @@ jobs:
           cp alembic.ini hf-deploy-workbench/
           cp -r config/ hf-deploy-workbench/config/
 
-          # Create requirements.txt for HF Spaces
+          # Generate requirements.txt from pyproject.toml
           cd hf-deploy-workbench
-          echo "fastapi>=0.104.1" > requirements.txt
-          echo "gradio>=4.44.0" >> requirements.txt
-          echo "uvicorn>=0.24.0" >> requirements.txt
-          echo "sqlalchemy>=2.0.23" >> requirements.txt
-          echo "aiosqlite>=0.19.0" >> requirements.txt
-          echo "alembic>=1.12.1" >> requirements.txt
-          echo "pydantic>=2.5.0" >> requirements.txt
-          echo "python-dotenv>=1.0.0" >> requirements.txt
-          echo "anthropic>=0.7.7" >> requirements.txt
-          echo "openai>=1.3.7" >> requirements.txt
-          echo "google-generativeai>=0.3.0" >> requirements.txt
-          echo "httpx>=0.25.2" >> requirements.txt
 
-          # Deploy to HF Space
+          # Extract dependencies from pyproject.toml using Python
+          python3 -c "
+import toml
+import sys
+
+# Read pyproject.toml
+with open('pyproject.toml', 'r') as f:
+    data = toml.load(f)
+
+# Write requirements.txt
+with open('requirements.txt', 'w') as f:
+    f.write('# Generated from pyproject.toml for HuggingFace Spaces\n')
+
+    # Main dependencies
+    for dep in data['project']['dependencies']:
+        f.write(dep + '\n')
+
+print('✅ Generated requirements.txt from pyproject.toml')
+"
+
+          # Create Space if it doesn't exist, then deploy
+          huggingface-cli repo create sytse06/agent-workbench-technical --type=space --exist-ok || true
           huggingface-cli upload sytse06/agent-workbench-technical . --repo-type=space
 
   deploy-seo-coach:
@@ -77,7 +86,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install huggingface_hub
+          pip install huggingface_hub toml
 
       - name: Deploy SEO Coach Space
         env:
@@ -96,19 +105,32 @@ jobs:
           cp alembic.ini hf-deploy-seo/
           cp -r config/ hf-deploy-seo/config/
 
-          # Create requirements.txt
+          # Generate requirements.txt from pyproject.toml
           cd hf-deploy-seo
-          echo "fastapi>=0.104.1" > requirements.txt
-          echo "gradio>=4.44.0" >> requirements.txt
-          echo "uvicorn>=0.24.0" >> requirements.txt
-          echo "sqlalchemy>=2.0.23" >> requirements.txt
-          echo "aiosqlite>=0.19.0" >> requirements.txt
-          echo "pydantic>=2.5.0" >> requirements.txt
-          echo "python-dotenv>=1.0.0" >> requirements.txt
-          echo "anthropic>=0.7.7" >> requirements.txt
-          echo "openai>=1.3.7" >> requirements.txt
-          echo "firecrawl-py>=0.0.8" >> requirements.txt
-          echo "httpx>=0.25.2" >> requirements.txt
 
-          # Deploy to HF Space
+          # Extract dependencies from pyproject.toml using Python
+          python3 -c "
+import toml
+import sys
+
+# Read pyproject.toml
+with open('pyproject.toml', 'r') as f:
+    data = toml.load(f)
+
+# Write requirements.txt
+with open('requirements.txt', 'w') as f:
+    f.write('# Generated from pyproject.toml for HuggingFace Spaces\n')
+
+    # Main dependencies
+    for dep in data['project']['dependencies']:
+        f.write(dep + '\n')
+
+    # Add SEO-specific dependencies
+    f.write('firecrawl-py>=0.0.8\n')
+
+print('✅ Generated requirements.txt from pyproject.toml')
+"
+
+          # Create Space if it doesn't exist, then deploy
+          huggingface-cli repo create sytse06/agent-workbench-seo-coach --type=space --exist-ok || true
           huggingface-cli upload sytse06/agent-workbench-seo-coach . --repo-type=space
