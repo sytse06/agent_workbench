@@ -67,8 +67,9 @@ print('✅ Generated requirements.txt from pyproject.toml')
 "
 
           # Create Space if it doesn't exist, then deploy
-          huggingface-cli repo create sytse06/agent-workbench-technical --type=space --exist-ok || true
-          huggingface-cli upload sytse06/agent-workbench-technical . --repo-type=space
+          export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
+          hf repo create sytse06/agent-workbench-technical --repo-type=space --space_sdk=gradio --exist-ok || true
+          hf upload sytse06/agent-workbench-technical . --repo-type=space
 
   deploy-seo-coach:
     runs-on: ubuntu-latest
@@ -132,5 +133,6 @@ print('✅ Generated requirements.txt from pyproject.toml')
 "
 
           # Create Space if it doesn't exist, then deploy
-          huggingface-cli repo create sytse06/agent-workbench-seo-coach --type=space --exist-ok || true
-          huggingface-cli upload sytse06/agent-workbench-seo-coach . --repo-type=space
+          export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
+          hf repo create sytse06/agent-workbench-seo-coach --repo-type=space --space_sdk=gradio --exist-ok || true
+          hf upload sytse06/agent-workbench-seo-coach . --repo-type=space

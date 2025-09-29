@@ -48,19 +48,26 @@ fi
 
 # Test token
 echo "🔍 Testing token authentication..."
-huggingface-cli whoami --token "$HF_TOKEN"
+
+# Set the token as environment variable for huggingface-cli
+export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
+
+# Test authentication (use newer command)
+hf auth whoami
 
 if [ $? -eq 0 ]; then
     echo "✅ Token authentication successful"
 else
     echo "❌ Token authentication failed"
+    echo "💡 Make sure your HF_TOKEN is valid and has the right permissions"
     exit 1
 fi
 
 echo "🚀 Creating test space..."
 
-# Try to create a test space
-huggingface-cli repo create sytse06/test-agent-workbench --type=space --exist-ok --token "$HF_TOKEN"
+# Try to create a test space (HUGGING_FACE_HUB_TOKEN is already exported)
+# Use newer command and specify SDK type for Space
+hf repo create sytse06/test-agent-workbench --repo-type=space --space_sdk=gradio --exist-ok
 
 if [ $? -eq 0 ]; then
     echo "✅ Test space creation successful"
