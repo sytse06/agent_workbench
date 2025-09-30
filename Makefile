@@ -211,8 +211,11 @@ start-app:
 		exit 1; \
 	fi
 	@env_type=$$(grep "APP_ENV=" .env | cut -d'=' -f2); \
-	echo -e "$(CYAN)Environment: $$env_type$(NC)"
-	@APP_ENV=$(or $(ENV),development) uv run python -m agent_workbench
+	echo -e "$(CYAN)Environment: $$env_type$(NC)"; \
+	if [ -n "$(APP_MODE)" ]; then \
+		echo -e "$(PURPLE)App Mode: $(APP_MODE)$(NC)"; \
+	fi
+	@APP_ENV=$(or $(ENV),development) APP_MODE=$(APP_MODE) uv run python -m agent_workbench
 
 # Debug mode application starter
 start-app-debug:
@@ -222,14 +225,17 @@ start-app-debug:
 		exit 1; \
 	fi
 	@env_type=$$(grep "APP_ENV=" .env | cut -d'=' -f2); \
-	echo -e "$(CYAN)Environment: $$env_type$(NC)"
+	echo -e "$(CYAN)Environment: $$env_type$(NC)"; \
+	if [ -n "$(APP_MODE)" ]; then \
+		echo -e "$(PURPLE)App Mode: $(APP_MODE)$(NC)"; \
+	fi
 	@echo -e "$(YELLOW)🔍 Debug Features Enabled:$(NC)"
 	@echo "  📊 Detailed logging"
 	@echo "  🔍 Request/response tracing"
 	@echo "  🛠️  FastAPI debug mode"
 	@echo "  📝 SQL query logging"
 	@echo ""
-	@APP_ENV=$(or $(ENV),development) FASTAPI_DEBUG=1 LOG_LEVEL=DEBUG uv run python -m agent_workbench
+	@APP_ENV=$(or $(ENV),development) APP_MODE=$(APP_MODE) FASTAPI_DEBUG=1 LOG_LEVEL=DEBUG uv run python -m agent_workbench
 
 # Verbose debug mode with API endpoint testing
 start-app-verbose:
@@ -239,7 +245,10 @@ start-app-verbose:
 		exit 1; \
 	fi
 	@env_type=$$(grep "APP_ENV=" .env | cut -d'=' -f2); \
-	echo -e "$(CYAN)Environment: $$env_type$(NC)"
+	echo -e "$(CYAN)Environment: $$env_type$(NC)"; \
+	if [ -n "$(APP_MODE)" ]; then \
+		echo -e "$(PURPLE)App Mode: $(APP_MODE)$(NC)"; \
+	fi
 	@echo -e "$(YELLOW)🔍 Verbose Debug Features:$(NC)"
 	@echo "  📊 Maximum logging detail"
 	@echo "  🔍 HTTP request/response dumps"
@@ -254,7 +263,7 @@ start-app-verbose:
 	@echo "  🔍 Direct Chat: http://localhost:8000/api/v1/chat/direct"
 	@echo "  🧪 Health Check: http://localhost:8000/api/v1/health"
 	@echo ""
-	@APP_ENV=$(or $(ENV),development) FASTAPI_DEBUG=1 LOG_LEVEL=DEBUG SQLALCHEMY_ECHO=1 CORS_DEBUG=1 uv run python -m agent_workbench
+	@APP_ENV=$(or $(ENV),development) APP_MODE=$(APP_MODE) FASTAPI_DEBUG=1 LOG_LEVEL=DEBUG SQLALCHEMY_ECHO=1 CORS_DEBUG=1 uv run python -m agent_workbench
 
 # New: Test debug setup without starting full app
 test-debug-setup:
