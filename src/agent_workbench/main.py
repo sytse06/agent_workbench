@@ -887,7 +887,6 @@ def create_hf_spaces_app(mode: Optional[str] = None):
 
         # Configure for HF Spaces deployment
         interface.queue(
-            concurrency_count=5 if current_mode == "seo_coach" else 3,
             max_size=30 if current_mode == "seo_coach" else 20,
             api_open=False,  # Disable API access for security
         )
