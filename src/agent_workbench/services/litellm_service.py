@@ -1,4 +1,4 @@
-"""LiteLLM service for HuggingFace Spaces deployment with proper API key management."""
+"""LiteLLM service for HuggingFace Spaces deployment with OpenRouter integration."""
 
 import logging
 import os
@@ -16,36 +16,33 @@ logger = logging.getLogger(__name__)
 
 
 class LiteLLMService:
-    """Service for LiteLLM-based chat completions optimized for HF Spaces."""
+    """Service for LiteLLM-based chat completions via OpenRouter for production HF Spaces."""
 
-    def __init__(self, model: str = "gpt-3.5-turbo"):
+    def __init__(self, model: str = "openai/gpt-3.5-turbo"):
         """
-        Initialize LiteLLM service.
+        Initialize LiteLLM service with OpenRouter.
 
         Args:
-            model: Model name (e.g., "gpt-3.5-turbo", "claude-3-sonnet", etc.)
+            model: Model name in OpenRouter format (e.g., "openai/gpt-3.5-turbo", "anthropic/claude-3-haiku")
         """
         if not LITELLM_AVAILABLE:
             raise ImportError("LiteLLM is not installed. Run: pip install litellm")
 
         self.model = model
-        self._setup_api_keys()
+        self._setup_openrouter()
 
-    def _setup_api_keys(self) -> None:
-        """Setup API keys from environment variables."""
-        # Set common API keys that might be available in HF Spaces
-        api_keys = {
-            'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY'),
-            'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY'),
-            'HUGGINGFACE_API_KEY': os.getenv('HUGGINGFACE_API_KEY', os.getenv('HF_TOKEN')),
-            'MISTRAL_API_KEY': os.getenv('MISTRAL_API_KEY'),
-            'GROQ_API_KEY': os.getenv('GROQ_API_KEY'),
-        }
+    def _setup_openrouter(self) -> None:
+        """Setup OpenRouter API configuration."""
+        openrouter_key = os.getenv('OPENROUTER_API_KEY')
 
-        for key, value in api_keys.items():
-            if value:
-                os.environ[key] = value
-                logger.info(f"✅ {key} configured for LiteLLM")
+        if openrouter_key:
+            # Configure LiteLLM for OpenRouter
+            os.environ['OPENROUTER_API_KEY'] = openrouter_key
+            # Set OpenRouter as base URL for all calls
+            litellm.api_base = "https://openrouter.ai/api/v1"
+            logger.info("✅ OpenRouter API configured for LiteLLM")
+        else:
+            logger.warning("⚠️ OPENROUTER_API_KEY not found in environment variables")
 
     async def chat_completion(
         self,
@@ -65,10 +62,12 @@ class LiteLLMService:
             Chat completion response
         """
         try:
+            # Use OpenRouter format for model names
             response = await litellm.acompletion(
                 model=self.model,
                 messages=messages,
                 stream=stream,
+                api_base="https://openrouter.ai/api/v1",
                 **kwargs
             )
 
@@ -82,48 +81,41 @@ class LiteLLMService:
                 }
 
         except Exception as e:
-            logger.error(f"LiteLLM completion error: {e}")
+            logger.error(f"OpenRouter/LiteLLM completion error: {e}")
             raise LLMProviderError(f"Chat completion failed: {str(e)}")
 
     def get_available_models(self) -> List[str]:
-        """Get list of available models based on configured API keys."""
-        models = []
+        """Get list of popular OpenRouter models."""
+        # Popular OpenRouter models - all accessible with single API key
+        return [
+            # OpenAI models
+            "openai/gpt-3.5-turbo",
+            "openai/gpt-4",
+            "openai/gpt-4-turbo",
+            # Anthropic models
+            "anthropic/claude-3-haiku",
+            "anthropic/claude-3-sonnet",
+            "anthropic/claude-3-opus",
+            # Open source models
+            "meta-llama/llama-2-70b-chat",
+            "mistralai/mixtral-8x7b-instruct",
+            "google/gemma-7b-it",
+        ]
 
-        if os.getenv('OPENAI_API_KEY'):
-            models.extend(['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo'])
 
-        if os.getenv('ANTHROPIC_API_KEY'):
-            models.extend(['claude-3-sonnet', 'claude-3-haiku', 'claude-3-opus'])
-
-        if os.getenv('MISTRAL_API_KEY'):
-            models.extend(['mistral-tiny', 'mistral-small', 'mistral-medium'])
-
-        if os.getenv('GROQ_API_KEY'):
-            models.extend(['mixtral-8x7b-32768', 'llama2-70b-4096'])
-
-        return models or ['gpt-3.5-turbo']  # Default fallback
-
-
-# Factory function for easy integration
+# Factory function for OpenRouter integration
 def create_litellm_service(model: Optional[str] = None) -> LiteLLMService:
     """
-    Create LiteLLM service with automatic model detection.
+    Create LiteLLM service with OpenRouter integration.
 
     Args:
-        model: Specific model to use, or auto-detect from available API keys
+        model: Specific OpenRouter model to use (e.g., "openai/gpt-3.5-turbo")
 
     Returns:
         Configured LiteLLM service
     """
     if not model:
-        # Auto-detect best available model
-        if os.getenv('OPENAI_API_KEY'):
-            model = 'gpt-3.5-turbo'
-        elif os.getenv('ANTHROPIC_API_KEY'):
-            model = 'claude-3-haiku'
-        elif os.getenv('MISTRAL_API_KEY'):
-            model = 'mistral-tiny'
-        else:
-            model = 'gpt-3.5-turbo'  # Default
+        # Default to reliable, fast OpenAI model via OpenRouter
+        model = 'openai/gpt-3.5-turbo'
 
     return LiteLLMService(model=model)

@@ -39,11 +39,11 @@ os.environ.setdefault('GRADIO_SERVER_NAME', '0.0.0.0')
 os.environ.setdefault('GRADIO_SERVER_PORT', '7860')
 os.environ.setdefault('GRADIO_SHARE', 'false')
 
-# LiteLLM configuration for API integration
+# LiteLLM configuration for OpenRouter API integration
 os.environ.setdefault('USE_LITELLM', 'true')
-os.environ.setdefault('DEFAULT_MODEL', 'gpt-3.5-turbo')
-# Note: API keys should be set in HF Spaces environment variables:
-# OPENAI_API_KEY, ANTHROPIC_API_KEY, HF_TOKEN, etc.
+os.environ.setdefault('DEFAULT_MODEL', 'openai/gpt-3.5-turbo')
+# Note: Set OPENROUTER_API_KEY in HF Spaces environment variables
+# This gives access to 100+ models via single API key
 
 # Import and run the main application
 if __name__ == "__main__":
