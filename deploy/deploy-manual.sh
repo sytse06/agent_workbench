@@ -116,7 +116,8 @@ deploy_space() {
     project_root="$(pwd)"
     cd "$project_root"
 
-    uv run python -c "
+    # Use environment variables to pass values to Python
+    DEPLOY_DIR="$deploy_dir" SPACE_TYPE="$space_type" uv run python -c "
 import toml
 import sys
 import os
@@ -125,20 +126,21 @@ import os
 with open('pyproject.toml', 'r') as f:
     data = toml.load(f)
 
-# Write requirements.txt to deployment directory
-deploy_dir = '$deploy_dir'
+# Get variables from environment
+deploy_dir = os.environ['DEPLOY_DIR']
+space_type = os.environ['SPACE_TYPE']
 requirements_path = os.path.join(deploy_dir, 'requirements.txt')
 
 with open(requirements_path, 'w') as f:
-    f.write('# Generated from pyproject.toml for HuggingFace Spaces\\\\n')
+    f.write('# Generated from pyproject.toml for HuggingFace Spaces\n')
 
     # Main dependencies
     for dep in data['project']['dependencies']:
-        f.write(dep + '\\\\n')
+        f.write(dep + '\n')
 
     # Add space-specific dependencies
-    if '$space_type' == 'seo-coach':
-        f.write('firecrawl-py>=0.0.8\\\\n')
+    if space_type == 'seo-coach':
+        f.write('firecrawl-py>=0.0.8\n')
 
 print('✅ Generated requirements.txt')
 "
