@@ -51,21 +51,29 @@ class HubDatabase:
     def _get_table(self, table_name: str) -> pd.DataFrame:
         """Load a table from Hub DB as DataFrame."""
         try:
+            print(f"🔍 Loading table '{table_name}' from Hub DB: {self.repo_id}")
             dataset = load_dataset(
                 self.repo_id, split=table_name, use_auth_token=self.token
             )
-            return dataset.to_pandas()
-        except Exception:
+            df = dataset.to_pandas()
+            print(f"✅ Loaded {len(df)} rows from table '{table_name}'")
+            return df
+        except Exception as e:
+            print(f"⚠️ Table '{table_name}' not found or error loading: {e}")
             # Return empty DataFrame with standard columns if table doesn't exist
             return pd.DataFrame(columns=["id", "created_at", "updated_at"])
 
     def _save_table(self, table_name: str, df: pd.DataFrame):
         """Save DataFrame to Hub DB as a table."""
         try:
+            print(f"💾 Saving {len(df)} rows to table '{table_name}' in Hub DB")
             dataset = Dataset.from_pandas(df)
             dataset.push_to_hub(self.repo_id, split=table_name, token=self.token)
+            print(f"✅ Successfully saved table '{table_name}'")
         except Exception as e:
-            print(f"⚠️ Failed to save table {table_name}: {e}")
+            print(f"❌ Failed to save table {table_name}: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
 
     # Conversation operations (compatible with existing SQLAlchemy models)
 

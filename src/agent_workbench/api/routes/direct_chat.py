@@ -71,7 +71,17 @@ async def direct_chat(request: DirectChatRequest) -> DirectChatResponse:
 
     Essential for production model testing and fallback scenarios.
     """
+    logger.info("=" * 80)
+    logger.info("🚀 DIRECT CHAT REQUEST RECEIVED")
+    logger.info(f"📝 Message: {request.message[:100]}...")
+    logger.info(f"🔧 Provider: {request.provider}")
+    logger.info(f"🤖 Model: {request.model_name}")
+    logger.info(f"🌡️  Temperature: {request.temperature}")
+    logger.info(f"📊 Max tokens: {request.max_tokens}")
+    logger.info("=" * 80)
+
     try:
+        logger.info("🔧 Creating model configuration...")
         # Create model configuration
         model_config = ModelConfig(
             provider=request.provider,
@@ -80,22 +90,28 @@ async def direct_chat(request: DirectChatRequest) -> DirectChatResponse:
             max_tokens=request.max_tokens,
             streaming=request.streaming,
         )
+        logger.info(f"✅ Model config created: {model_config}")
 
+        logger.info("🔧 Initializing ChatService...")
         # Initialize LLM service
         llm_service = ChatService(model_config)
+        logger.info("✅ ChatService initialized")
 
         # Get response
         import time
 
         start_time = time.time()
+        logger.info("🤖 Calling chat_completion...")
 
         response = await llm_service.chat_completion(
             message=request.message, conversation_id=None  # No conversation persistence
         )
 
         latency_ms = (time.time() - start_time) * 1000
+        logger.info(f"✅ Response received in {latency_ms:.0f}ms")
+        logger.info(f"📝 Response preview: {response.reply[:100]}...")
 
-        return DirectChatResponse(
+        result = DirectChatResponse(
             content=response.reply,  # Fixed: use .reply instead of .content
             conversation_id=str(uuid4()),
             model_used=request.model_name,
@@ -103,9 +119,17 @@ async def direct_chat(request: DirectChatRequest) -> DirectChatResponse:
             latency_ms=latency_ms,
             status="success",
         )
+        logger.info("✅ DirectChatResponse created successfully")
+        logger.info("=" * 80)
+        return result
 
     except Exception as e:
-        logger.error(f"Direct chat failed: {str(e)}")
+        logger.error("=" * 80)
+        logger.error(f"❌ DIRECT CHAT FAILED: {str(e)}")
+        logger.error(f"❌ Exception type: {type(e).__name__}")
+        import traceback
+        logger.error(f"❌ Traceback:\n{traceback.format_exc()}")
+        logger.error("=" * 80)
         raise HTTPException(status_code=500, detail=f"Direct chat failed: {str(e)}")
 
 
