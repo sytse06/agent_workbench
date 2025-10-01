@@ -9,7 +9,7 @@ import json
 import os
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from datasets import Dataset, load_dataset
@@ -52,9 +52,7 @@ class HubDatabase:
         """Load a table from Hub DB as DataFrame."""
         try:
             dataset = load_dataset(
-                self.repo_id,
-                split=table_name,
-                use_auth_token=self.token
+                self.repo_id, split=table_name, use_auth_token=self.token
             )
             return dataset.to_pandas()
         except Exception:
@@ -65,11 +63,7 @@ class HubDatabase:
         """Save DataFrame to Hub DB as a table."""
         try:
             dataset = Dataset.from_pandas(df)
-            dataset.push_to_hub(
-                self.repo_id,
-                split=table_name,
-                token=self.token
-            )
+            dataset.push_to_hub(self.repo_id, split=table_name, token=self.token)
         except Exception as e:
             print(f"⚠️ Failed to save table {table_name}: {e}")
 
@@ -89,7 +83,7 @@ class HubDatabase:
             "updated_at": now,
             "title": conversation_data.get("title", ""),
             "mode": conversation_data.get("mode", "workbench"),
-            "data": json.dumps(conversation_data.get("data", {}))
+            "data": json.dumps(conversation_data.get("data", {})),
         }
 
         # Update existing or append new
@@ -116,10 +110,12 @@ class HubDatabase:
             "mode": row["mode"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
-            "data": json.loads(row["data"]) if row["data"] else {}
+            "data": json.loads(row["data"]) if row["data"] else {},
         }
 
-    def list_conversations(self, mode: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+    def list_conversations(
+        self, mode: Optional[str] = None, limit: int = 50
+    ) -> List[Dict[str, Any]]:
         """List conversations with optional filtering."""
         df = self._get_table("conversations")
 
@@ -131,14 +127,16 @@ class HubDatabase:
 
         conversations = []
         for _, row in df.iterrows():
-            conversations.append({
-                "id": row["id"],
-                "title": row["title"],
-                "mode": row["mode"],
-                "created_at": row["created_at"],
-                "updated_at": row["updated_at"],
-                "data": json.loads(row["data"]) if row["data"] else {}
-            })
+            conversations.append(
+                {
+                    "id": row["id"],
+                    "title": row["title"],
+                    "mode": row["mode"],
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                    "data": json.loads(row["data"]) if row["data"] else {},
+                }
+            )
 
         return conversations
 
@@ -159,7 +157,7 @@ class HubDatabase:
             "business_type": profile_data.get("business_type", ""),
             "website_url": profile_data.get("website_url", ""),
             "location": profile_data.get("location", ""),
-            "data": json.dumps(profile_data.get("data", {}))
+            "data": json.dumps(profile_data.get("data", {})),
         }
 
         # Update existing or append new
@@ -188,7 +186,7 @@ class HubDatabase:
             "location": row["location"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
-            "data": json.loads(row["data"]) if row["data"] else {}
+            "data": json.loads(row["data"]) if row["data"] else {},
         }
 
     # Generic key-value operations
@@ -202,7 +200,7 @@ class HubDatabase:
             "id": key,
             "created_at": now,
             "updated_at": now,
-            "value": json.dumps(value)
+            "value": json.dumps(value),
         }
 
         if key in df["id"].values:

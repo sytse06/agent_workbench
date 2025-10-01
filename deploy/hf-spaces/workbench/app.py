@@ -36,28 +36,26 @@ os.environ.setdefault('GRADIO_SERVER_NAME', '0.0.0.0')
 os.environ.setdefault('GRADIO_SERVER_PORT', '7860')
 os.environ.setdefault('GRADIO_SHARE', 'false')
 
-# LiteLLM configuration for OpenRouter API integration
-os.environ.setdefault('USE_LITELLM', 'true')
-os.environ.setdefault('DEFAULT_MODEL', 'openai/gpt-3.5-turbo')
-# Note: Set OPENROUTER_API_KEY in HF Spaces environment variables
-# This gives access to 100+ models via single API key
+# Model configuration - uses provider_registry system
+# Supports: anthropic, openai, openrouter, ollama
+# Note: Set appropriate API keys in HF Spaces environment variables
+# e.g., ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY
 
-# Import and run the main application
+# Import and run the main FastAPI application
 if __name__ == "__main__":
     # Create data directory
     data_dir = Path("./data")
     data_dir.mkdir(exist_ok=True)
-    
-    # Import main application with HF Spaces configuration
-    from agent_workbench.main import create_hf_spaces_app
-    
-    # Create and launch HF Spaces optimized app
-    app = create_hf_spaces_app(mode='workbench')
-    app.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        share=False,
-        debug=False,
-        show_error=True,
-        quiet=False
+
+    # Import full FastAPI+Gradio application
+    from agent_workbench.main import app
+    import uvicorn
+
+    # Run complete FastAPI application with mounted Gradio interface
+    # This provides both API routes (/api/v1/chat/direct) and UI
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=7860,  # HF Spaces uses port 7860
+        log_level="info"
     )

@@ -13,12 +13,14 @@ from fastapi import FastAPI, Request
 # Import dotenv conditionally - not needed for HuggingFace Spaces
 try:
     from dotenv import load_dotenv
+
     DOTENV_AVAILABLE = True
 except ImportError:
     DOTENV_AVAILABLE = False
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api.adaptive_database import get_adaptive_database, init_adaptive_database, is_hub_db_environment
+from .api.adaptive_database import init_adaptive_database
+from .api.database import get_session
 from .api.routes import (
     agent_configs,
     chat,
@@ -86,7 +88,7 @@ async def lifespan(app: FastAPI):
         app.adaptive_db = db
 
         # Provide session compatibility for existing code
-        if hasattr(db, 'get_session'):
+        if hasattr(db, "get_session"):
             app.get_session = db.get_session
         else:
             # For Hub DB, provide a dummy session
@@ -384,7 +386,9 @@ def _create_enhanced_workbench_interface():
         ):
             """Direct service call with database persistence for workbench mode."""
             # Parse provider and model from selection
-            provider_val, model_val = model_config_service.parse_model_selection(model_selection_val)
+            provider_val, model_val = model_config_service.parse_model_selection(
+                model_selection_val
+            )
 
             return await _handle_message_with_database_persistence(
                 msg,

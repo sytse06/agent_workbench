@@ -111,9 +111,15 @@ def create_workbench_app() -> gr.Blocks:
                 }
                 print(f"🎯 DEBUG: Request payload: {payload}")
 
+                # Detect API port based on environment
+                # HF Spaces runs FastAPI on port 7860, local dev on port 8000
+                api_port = os.getenv("GRADIO_SERVER_PORT", "8000")
+                api_url = f"http://localhost:{api_port}/api/v1/chat/direct"
+                print(f"🎯 DEBUG: API URL: {api_url}")
+
                 # Make synchronous API call
                 response = requests.post(
-                    "http://localhost:8000/api/v1/chat/direct",
+                    api_url,
                     json=payload,
                     timeout=30,  # 30 second timeout
                 )

@@ -8,9 +8,9 @@ This layer provides a unified interface that:
 """
 
 import os
-from typing import Optional, Union
+from typing import Optional
 
-from .hub_database import HubDatabase, create_hub_database
+from .hub_database import create_hub_database
 
 
 def detect_environment() -> str:
@@ -73,6 +73,7 @@ class AdaptiveDatabase:
         """Initialize SQLite backend (import only when needed)."""
         try:
             from .database import get_session, init_database
+
             self.get_session = get_session
             self.init_database = init_database
             self.backend_type = "sqlite"
@@ -133,7 +134,9 @@ class AdaptiveDatabase:
         # TODO: Implement using existing SQLAlchemy models
         raise NotImplementedError("SQLite conversation retrieval not yet implemented")
 
-    def _sqlite_list_conversations(self, mode: Optional[str] = None, limit: int = 50) -> list:
+    def _sqlite_list_conversations(
+        self, mode: Optional[str] = None, limit: int = 50
+    ) -> list:
         """List conversations using SQLAlchemy."""
         # TODO: Implement using existing SQLAlchemy models
         raise NotImplementedError("SQLite conversation listing not yet implemented")
@@ -146,7 +149,9 @@ class AdaptiveDatabase:
     def _sqlite_get_business_profile(self, profile_id: str) -> Optional[dict]:
         """Get business profile using SQLAlchemy."""
         # TODO: Implement using existing SQLAlchemy models
-        raise NotImplementedError("SQLite business profile retrieval not yet implemented")
+        raise NotImplementedError(
+            "SQLite business profile retrieval not yet implemented"
+        )
 
 
 # Global database instance

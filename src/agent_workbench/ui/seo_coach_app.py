@@ -4,6 +4,7 @@ Complete SEO coach Gradio application with Dutch business forms and direct httpx
 integration.
 """
 
+import os
 import uuid
 from typing import Any, Dict
 
@@ -115,7 +116,13 @@ def create_seo_coach_app() -> gr.Blocks:
         # Event handlers with direct httpx integration
         analyze_btn.click(
             fn=_handle_website_analysis,
-            inputs=[website_url, business_name, business_type, location, conversation_id],
+            inputs=[
+                website_url,
+                business_name,
+                business_type,
+                location,
+                conversation_id,
+            ],
             outputs=[chatbot, business_profile, analysis_status],
         )
 
@@ -139,13 +146,17 @@ def create_seo_coach_app() -> gr.Blocks:
         )
 
         keyword_help.click(
-            fn=lambda conv_id, profile: _handle_quick_action("keywords", conv_id, profile),
+            fn=lambda conv_id, profile: _handle_quick_action(
+                "keywords", conv_id, profile
+            ),
             inputs=[conversation_id, business_profile],
             outputs=[chatbot],
         )
 
         content_ideas.click(
-            fn=lambda conv_id, profile: _handle_quick_action("content", conv_id, profile),
+            fn=lambda conv_id, profile: _handle_quick_action(
+                "content", conv_id, profile
+            ),
             inputs=[conversation_id, business_profile],
             outputs=[chatbot],
         )
@@ -178,10 +189,14 @@ async def _handle_website_analysis(
         # Create business profile
         profile = create_business_profile_dict(biz_name, biz_type, url, location)
 
+        # Detect API port based on environment
+        api_port = os.getenv("GRADIO_SERVER_PORT", "8000")
+        api_base = f"http://localhost:{api_port}"
+
         # Direct httpx call to consolidated service
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                "http://localhost:8000/api/v1/chat/consolidated",
+                f"{api_base}/api/v1/chat/consolidated",
                 json={
                     "user_message": (
                         f"Analyseer mijn {biz_type.lower()} website {url} "
@@ -249,10 +264,14 @@ async def _handle_coaching_message(
         return "", [{"role": "assistant", "content": error_msg}]
 
     try:
+        # Detect API port based on environment
+        api_port = os.getenv("GRADIO_SERVER_PORT", "8000")
+        api_base = f"http://localhost:{api_port}"
+
         # Direct httpx call to consolidated service
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                "http://localhost:8000/api/v1/chat/consolidated",
+                f"{api_base}/api/v1/chat/consolidated",
                 json={
                     "user_message": msg,
                     "conversation_id": conv_id,
@@ -266,7 +285,7 @@ async def _handle_coaching_message(
         # Get updated chat history
         async with httpx.AsyncClient(timeout=30.0) as client:
             history_response = await client.get(
-                f"http://localhost:8000/api/v1/conversations/{conv_id}/state"
+                f"{api_base}/api/v1/conversations/{conv_id}/state"
             )
             history_response.raise_for_status()
             history_data = history_response.json()
@@ -279,9 +298,11 @@ async def _handle_coaching_message(
         # Add error to current history
         current_history = []
         try:
+            api_port = os.getenv("GRADIO_SERVER_PORT", "8000")
+            api_base = f"http://localhost:{api_port}"
             async with httpx.AsyncClient(timeout=30.0) as client:
                 history_response = await client.get(
-                    f"http://localhost:8000/api/v1/conversations/{conv_id}/state"
+                    f"{api_base}/api/v1/conversations/{conv_id}/state"
                 )
                 if history_response.status_code == 200:
                     history_data = history_response.json()

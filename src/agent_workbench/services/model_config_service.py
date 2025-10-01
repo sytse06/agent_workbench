@@ -25,9 +25,7 @@ class ModelConfigService:
         """Refresh configuration from environment variables."""
         # Primary provider-model pairs
         self.default_provider = os.getenv("DEFAULT_PROVIDER", "openrouter")
-        self.default_primary = os.getenv(
-            "DEFAULT_PRIMARY_MODEL", "openai/gpt-5-mini"
-        )
+        self.default_primary = os.getenv("DEFAULT_PRIMARY_MODEL", "openai/gpt-5-mini")
         self.default_secondary = os.getenv(
             "DEFAULT_SECONDARY_MODEL", "qwen/qwen3-30b-a3b"
         )
@@ -51,30 +49,52 @@ class ModelConfigService:
 
     def get_model_options(self) -> List[ModelOption]:
         """Get configured provider-model combinations from environment."""
+
+        # Helper to create display strings
+        def make_display(provider: str, model: str) -> str:
+            return f"{provider}: {self._get_display_name(model)}"
+
+        def make_description(provider: str, model: str) -> str:
+            return f"{provider.title()}: {self._get_display_name(model)}"
+
         return [
             ModelOption(
                 provider=self.default_provider,
                 model_name=self.default_primary,
-                display_name=f"{self.default_provider}: {self._get_display_name(self.default_primary)}",
-                description=f"{self.default_provider.title()}: {self._get_display_name(self.default_primary)}",
+                display_name=make_display(self.default_provider, self.default_primary),
+                description=make_description(
+                    self.default_provider, self.default_primary
+                ),
             ),
             ModelOption(
                 provider=self.default_provider,
                 model_name=self.default_secondary,
-                display_name=f"{self.default_provider}: {self._get_display_name(self.default_secondary)}",
-                description=f"{self.default_provider.title()}: {self._get_display_name(self.default_secondary)}",
+                display_name=make_display(
+                    self.default_provider, self.default_secondary
+                ),
+                description=make_description(
+                    self.default_provider, self.default_secondary
+                ),
             ),
             ModelOption(
                 provider=self.secondary_provider,
                 model_name=self.secondary_primary,
-                display_name=f"{self.secondary_provider}: {self._get_display_name(self.secondary_primary)}",
-                description=f"{self.secondary_provider.title()}: {self._get_display_name(self.secondary_primary)}",
+                display_name=make_display(
+                    self.secondary_provider, self.secondary_primary
+                ),
+                description=make_description(
+                    self.secondary_provider, self.secondary_primary
+                ),
             ),
             ModelOption(
                 provider=self.secondary_provider,
                 model_name=self.secondary_secondary,
-                display_name=f"{self.secondary_provider}: {self._get_display_name(self.secondary_secondary)}",
-                description=f"{self.secondary_provider.title()}: {self._get_display_name(self.secondary_secondary)}",
+                display_name=make_display(
+                    self.secondary_provider, self.secondary_secondary
+                ),
+                description=make_description(
+                    self.secondary_provider, self.secondary_secondary
+                ),
             ),
         ]
 
