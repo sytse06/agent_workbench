@@ -89,6 +89,19 @@ def create_workbench_app() -> gr.Blocks:
                     )
                     send = gr.Button("Send", variant="primary", scale=1)
 
+        # Test button to verify event system works
+        test_output = gr.Textbox(label="Test Output", visible=True)
+        test_btn = gr.Button("🧪 Test Event System", variant="secondary")
+
+        def test_handler():
+            """Simple test to verify Gradio events work at all."""
+            print("=" * 80)
+            print("🧪 TEST BUTTON CLICKED - EVENT SYSTEM WORKS!")
+            print("=" * 80)
+            return "✅ Event system is working! Button click detected."
+
+        test_btn.click(fn=test_handler, outputs=test_output)
+
         # Direct ChatService handler (avoids localhost HTTP calls)
         async def handle_message_async(
             msg, conv_id, provider_val, model_val, temp_val, max_tokens_val, debug_val
