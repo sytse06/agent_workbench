@@ -680,90 +680,62 @@ async def _handle_message_with_database_persistence(
         return "", [], "<div class='info'>Ready</div>"
 
     try:
-        # Direct access to database session - no HTTP calls
-        async for db_session in app.get_session():
-            # Get or create conversation in database
-            conversation = await ConversationModel.get_by_id(db_session, UUID(conv_id))
-            if not conversation:
-                conversation = await ConversationModel.create(
-                    db_session,
-                    id=UUID(conv_id),
-                    title=f"{mode.title()} Chat {msg[:30]}...",
-                )
+        # Create model config (skip DB persistence for Hub DB)
+        print("🎯 Creating model config...")
+        model_config = ModelConfig(
+            provider=provider_val,
+            model_name=model_val,
+            temperature=temp_val,
+            max_tokens=max_tokens_val,
+        )
+        print(f"✅ Model config created: {provider_val}/{model_val}")
 
-            # Add user message to database
-            await MessageModel.create(
-                db_session,
-                conversation_id=conversation.id,
-                role="user",
-                content=msg,
-            )
+        # Direct LLM service call - no HTTP
+        print("🎯 Initializing ChatService...")
+        llm_service = ChatService(model_config)
 
-            # Create model config
-            model_config = ModelConfig(
-                provider=provider_val,
-                model_name=model_val,
-                temperature=temp_val,
-                max_tokens=max_tokens_val,
-            )
+        # Enhance message for SEO coach mode
+        if mode == "seo_coach" and business_profile:
+            enhanced_msg = f"""
+            Context: Je bent een Nederlandse SEO expert voor websites.
+            Bedrijf: {business_profile.get('business_name', 'Onbekend')}
+            Type: {business_profile.get('business_type', 'Onbekend')}
+            Website: {business_profile.get('website_url', 'Onbekend')}
+            Locatie: {business_profile.get('location', 'Onbekend')}
 
-            # Direct LLM service call - no HTTP
-            llm_service = ChatService(model_config)
+            Vraag: {msg}
 
-            # Enhance message for SEO coach mode
-            if mode == "seo_coach" and business_profile:
-                enhanced_msg = f"""
-                Context: Je bent een Nederlandse SEO expert voor websites.
-                Bedrijf: {business_profile.get('business_name', 'Onbekend')}
-                Type: {business_profile.get('business_type', 'Onbekend')}
-                Website: {business_profile.get('website_url', 'Onbekend')}
-                Locatie: {business_profile.get('location', 'Onbekend')}
-
-                Vraag: {msg}
-
-                Geef praktische, Nederlandse SEO adviezen specifiek voor dit bedrijf.
-                """
-                response = await llm_service.chat_completion(
-                    message=enhanced_msg, conversation_id=conv_id
-                )
-            else:
-                response = await llm_service.chat_completion(
-                    message=msg, conversation_id=conv_id
-                )
-
-            # Save assistant response to database
-            await MessageModel.create(
-                db_session,
-                conversation_id=conversation.id,
-                role="assistant",
-                content=response.reply,
-            )
-
-            # Get conversation history from database
-            messages = await MessageModel.get_by_conversation(
-                db_session, conversation.id
-            )
-
-            # Convert to Gradio format
-            history = []
-            for message_obj in messages:
-                history.append(
-                    {"role": message_obj.role, "content": message_obj.content}
-                )
-
-            # Success status with database confirmation
-            success_html = f"""
-            <div class='success'>
-                ✅ Message saved to database<br>
-                <strong>Mode:</strong> {mode}<br>
-                <strong>Conversation ID:</strong> {conv_id}<br>
-                <strong>Messages in DB:</strong> {len(messages)}<br>
-                <strong>Provider:</strong> {provider_val}<br>
-                <strong>Model:</strong> {model_val}
-            </div>
+            Geef praktische, Nederlandse SEO adviezen specifiek voor dit bedrijf.
             """
+            print("🎯 Calling chat_completion (SEO coach mode)...")
+            response = await llm_service.chat_completion(
+                message=enhanced_msg, conversation_id=None
+            )
+        else:
+            print("🎯 Calling chat_completion (workbench mode)...")
+            response = await llm_service.chat_completion(
+                message=msg, conversation_id=None
+            )
 
-            return "", history, success_html
+        print(f"✅ Got response: {response.reply[:100]}...")
+
+        # Simple history (no database persistence for now)
+        history = [
+            {"role": "user", "content": msg},
+            {"role": "assistant", "content": response.reply},
+        ]
+
+        # Success status
+        success_html = f"""
+        <div class='success'>
+            ✅ Chat successful<br>
+            <strong>Mode:</strong> {mode}<br>
+            <strong>Provider:</strong> {provider_val}<br>
+            <strong>Model:</strong> {model_val}
+        </div>
+        """
+
+        return "", history, success_html
 
     except Exception as e:
         print(f"🎯 FastAPI-Gradio: Exception: {str(e)}")
