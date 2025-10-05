@@ -150,8 +150,7 @@ class ConversationSchema(BaseModel):
     created_at: Optional[datetime] = Field(None, description="Creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
     @classmethod
     def for_create(cls, **kwargs) -> "ConversationSchema":
@@ -202,8 +201,7 @@ class MessageSchema(BaseModel):
     # Database timestamps
     created_at: Optional[datetime] = Field(None, description="Creation timestamp")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     @classmethod
     def for_create(
@@ -260,8 +258,7 @@ class AgentConfigSchema(BaseModel):
     created_at: Optional[datetime] = Field(None, description="Creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
     @classmethod
     def for_create(
