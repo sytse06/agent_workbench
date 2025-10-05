@@ -1,4 +1,8 @@
-"""Direct LLM chat endpoints bypassing workflow complexity."""
+"""Simple LLM chat endpoints using minimal LangGraph workflow.
+
+Maintains PRD's "All through LangGraph" architecture while providing
+lightweight chat functionality for testing and debugging.
+"""
 
 import logging
 from typing import Optional
@@ -8,15 +12,15 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ...models.schemas import ModelConfig
-from ...services.llm_service import ChatService
+from ...services.simple_chat_workflow import SimpleChatWorkflow
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/chat", tags=["direct_chat"])
+router = APIRouter(prefix="/chat", tags=["simple_chat"])
 
 
-class DirectChatRequest(BaseModel):
-    """Direct chat request bypassing all workflows."""
+class SimpleChatRequest(BaseModel):
+    """Simple chat request using minimal LangGraph workflow."""
 
     message: str
     provider: str = "openrouter"
@@ -26,8 +30,8 @@ class DirectChatRequest(BaseModel):
     streaming: bool = False
 
 
-class DirectChatResponse(BaseModel):
-    """Direct chat response."""
+class SimpleChatResponse(BaseModel):
+    """Simple chat response from minimal workflow."""
 
     content: str
     conversation_id: str
@@ -35,6 +39,7 @@ class DirectChatResponse(BaseModel):
     provider_used: str
     latency_ms: Optional[float] = None
     status: str = "success"
+    workflow_steps: list[str] = ["process_input", "generate_response"]
 
 
 class ModelTestRequest(BaseModel):
@@ -58,21 +63,26 @@ class ModelTestResponse(BaseModel):
     api_key_source: str
 
 
-@router.post("/direct", response_model=DirectChatResponse)
-async def direct_chat(request: DirectChatRequest) -> DirectChatResponse:
+@router.post("/simple", response_model=SimpleChatResponse)
+async def simple_chat(request: SimpleChatRequest) -> SimpleChatResponse:
     """
-    Direct LLM chat bypassing all workflow complexity.
+    Simple LLM chat using minimal LangGraph workflow.
 
-    This endpoint provides immediate model response without:
-    - LangGraph workflows
-    - State management
-    - Conversation persistence
-    - Context handling
+    This endpoint provides a lightweight 2-node workflow:
+    1. process_input: Validate user message
+    2. generate_response: Get LLM response
 
-    Essential for production model testing and fallback scenarios.
+    Maintains PRD's "All through LangGraph" architecture while providing
+    the lightweight functionality needed for testing/debugging.
+
+    Essential for:
+    - Production model testing
+    - API debugging
+    - Provider validation
+    - Quick LLM checks without full workflow complexity
     """
     logger.info("=" * 80)
-    logger.info("🚀 DIRECT CHAT REQUEST RECEIVED")
+    logger.info("🚀 SIMPLE CHAT REQUEST RECEIVED")
     logger.info(f"📝 Message: {request.message[:100]}...")
     logger.info(f"🔧 Provider: {request.provider}")
     logger.info(f"🤖 Model: {request.model_name}")
@@ -92,46 +102,54 @@ async def direct_chat(request: DirectChatRequest) -> DirectChatResponse:
         )
         logger.info(f"✅ Model config created: {model_config}")
 
-        logger.info("🔧 Initializing ChatService...")
-        # Initialize LLM service
-        llm_service = ChatService(model_config)
-        logger.info("✅ ChatService initialized")
+        logger.info("🔧 Initializing SimpleChatWorkflow...")
+        # Initialize simple workflow (maintains LangGraph architecture)
+        workflow = SimpleChatWorkflow(model_config)
+        logger.info("✅ SimpleChatWorkflow initialized")
 
-        # Get response
+        # Execute minimal LangGraph workflow
         import time
 
         start_time = time.time()
-        logger.info("🤖 Calling chat_completion...")
+        logger.info("🤖 Executing workflow...")
 
-        response = await llm_service.chat_completion(
-            message=request.message, conversation_id=None  # No conversation persistence
-        )
+        final_state = await workflow.execute(request.message)
 
         latency_ms = (time.time() - start_time) * 1000
-        logger.info(f"✅ Response received in {latency_ms:.0f}ms")
-        logger.info(f"📝 Response preview: {response.reply[:100]}...")
+        logger.info(f"✅ Workflow completed in {latency_ms:.0f}ms")
 
-        result = DirectChatResponse(
-            content=response.reply,  # Fixed: use .reply instead of .content
+        # Check workflow success
+        if not final_state["execution_successful"]:
+            error_msg = final_state.get("error_message", "Unknown error")
+            logger.error(f"❌ Workflow failed: {error_msg}")
+            raise HTTPException(status_code=500, detail=f"Workflow failed: {error_msg}")
+
+        logger.info(f"📝 Response preview: {final_state['assistant_response'][:100]}...")
+
+        result = SimpleChatResponse(
+            content=final_state["assistant_response"],
             conversation_id=str(uuid4()),
             model_used=request.model_name,
             provider_used=request.provider,
             latency_ms=latency_ms,
             status="success",
+            workflow_steps=["process_input", "generate_response"],
         )
-        logger.info("✅ DirectChatResponse created successfully")
+        logger.info("✅ SimpleChatResponse created successfully")
         logger.info("=" * 80)
         return result
 
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
         logger.error("=" * 80)
-        logger.error(f"❌ DIRECT CHAT FAILED: {str(e)}")
+        logger.error(f"❌ SIMPLE CHAT FAILED: {str(e)}")
         logger.error(f"❌ Exception type: {type(e).__name__}")
         import traceback
 
         logger.error(f"❌ Traceback:\n{traceback.format_exc()}")
         logger.error("=" * 80)
-        raise HTTPException(status_code=500, detail=f"Direct chat failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Simple chat failed: {str(e)}")
 
 
 @router.post("/test-model", response_model=ModelTestResponse)
@@ -220,11 +238,12 @@ async def list_available_providers():
 
 
 @router.get("/health")
-async def direct_chat_health():
-    """Health check for direct chat functionality."""
+async def simple_chat_health():
+    """Health check for simple chat functionality."""
     return {
         "status": "healthy",
-        "service": "direct_chat",
-        "endpoints": ["/direct", "/test-model", "/providers", "/health"],
-        "description": "Direct LLM chat bypassing workflow complexity",
+        "service": "simple_chat",
+        "endpoints": ["/simple", "/test-model", "/providers", "/health"],
+        "description": "Simple LLM chat using minimal 2-node LangGraph workflow",
+        "architecture": "LangGraph-based (maintains PRD compliance)",
     }

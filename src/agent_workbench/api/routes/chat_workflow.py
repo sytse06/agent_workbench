@@ -1,4 +1,14 @@
-"""Enhanced chat endpoints using consolidated service for dual-mode operation."""
+"""Workflow chat endpoints using full LangGraph orchestration for dual-mode operation.
+
+This is the primary chat endpoint for Agent Workbench, providing:
+- Full LangGraph StateGraph workflow orchestration
+- Dual-mode operation (workbench/seo_coach)
+- Complete state management and persistence
+- Context injection and management
+- Business profile integration for SEO Coach mode
+
+Architecture: LangGraph-Centered (PRD compliant)
+"""
 
 import logging
 from typing import Optional
@@ -21,23 +31,26 @@ from ...services.consolidated_service import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/chat", tags=["Consolidated Chat"])
+router = APIRouter(prefix="/chat", tags=["Workflow Chat"])
 
 
-@router.post("/consolidated", response_model=ConsolidatedWorkflowResponse)
-async def consolidated_chat(
+@router.post("/workflow", response_model=ConsolidatedWorkflowResponse)
+async def workflow_chat(
     request: ConsolidatedWorkflowRequest,
     service: ConsolidatedWorkbenchService = Depends(get_consolidated_service),
 ):
     """
-    Execute consolidated workflow for both workbench and seo_coach modes.
+    Execute full LangGraph workflow for both workbench and seo_coach modes.
+
+    This is the PRIMARY chat endpoint providing complete workflow orchestration
+    with state management, context injection, and dual-mode support.
 
     Args:
-        request: Consolidated workflow request
+        request: Workflow request with user message and configuration
         service: Consolidated workbench service
 
     Returns:
-        Consolidated workflow response
+        Workflow response with assistant message and execution details
 
     Raises:
         HTTPException: If workflow execution fails
@@ -83,16 +96,16 @@ async def consolidated_chat(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/consolidated/stream")
-async def consolidated_chat_stream(
+@router.post("/workflow/stream")
+async def workflow_chat_stream(
     request: ConsolidatedWorkflowRequest,
     service: ConsolidatedWorkbenchService = Depends(get_consolidated_service),
 ):
     """
-    Stream consolidated workflow execution with real-time updates.
+    Stream full LangGraph workflow execution with real-time updates.
 
     Args:
-        request: Consolidated workflow request
+        request: Workflow request
         service: Consolidated workbench service
 
     Returns:

@@ -22,14 +22,13 @@ from .database import init_adaptive_database
 from .api.database import get_session
 from .api.routes import (
     agent_configs,
-    chat,
-    consolidated_chat,
+    chat_workflow,
     conversations,
-    direct_chat,
     files,
     health,
     messages,
     models,
+    simple_chat,
 )
 from .models.schemas import ModelConfig
 from .services.context_service import ContextService
@@ -214,11 +213,15 @@ if os.getenv("LOG_LEVEL", "").upper() == "DEBUG":
 
 # Include API routes
 app.include_router(health.router)
-# Register consolidated routes BEFORE legacy chat routes to avoid conflicts
-app.include_router(consolidated_chat.router, prefix="/api/v1")
-app.include_router(direct_chat.router, prefix="/api/v1")  # Direct LLM baseline
+
+# PRIMARY: Full LangGraph workflow (workbench + seo_coach modes)
+app.include_router(chat_workflow.router, prefix="/api/v1")
+
+# UTILITY: Minimal 2-node LangGraph workflow for testing/debugging
+app.include_router(simple_chat.router, prefix="/api/v1")
+
+# Other routes
 app.include_router(files.router, prefix="/api/v1")  # File upload/download
-app.include_router(chat.router)  # Legacy routes
 app.include_router(conversations.router)
 app.include_router(messages.router)
 app.include_router(models.router)
