@@ -137,20 +137,50 @@ class ConversationSchema(BaseModel):
     """Unified conversation schema for all CRUD operations."""
 
     # Optional fields for different operations
-    id: Optional[UUID] = Field(None, description="Conversation ID (auto-generated)")
-    user_id: Optional[UUID] = Field(
-        None, description="User ID who owns the conversation"
+    id: Optional[UUID] = Field(
+        None,
+        description="Conversation ID (auto-generated)",
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
     )
-    title: Optional[str] = Field(None, max_length=255, description="Conversation title")
+    user_id: Optional[UUID] = Field(
+        None,
+        description="User ID who owns the conversation",
+        examples=["123e4567-e89b-12d3-a456-426614174000"],
+    )
+    title: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Conversation title",
+        examples=["Debug Session", "Code Review", "Feature Implementation"],
+    )
     llm_config: Optional[ModelConfig] = Field(
-        None, description="LLM configuration for conversation"
+        None,
+        description="LLM configuration for conversation",
     )
 
     # Database timestamps (only present in DB/response operations)
-    created_at: Optional[datetime] = Field(None, description="Creation timestamp")
-    updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
+    created_at: Optional[datetime] = Field(
+        None,
+        description="Creation timestamp",
+        examples=["2025-01-05T12:00:00Z"],
+    )
+    updated_at: Optional[datetime] = Field(
+        None,
+        description="Last update timestamp",
+        examples=["2025-01-05T12:30:00Z"],
+    )
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "example": {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "title": "React Performance Debugging",
+                "created_at": "2025-01-05T12:00:00Z",
+                "updated_at": "2025-01-05T12:30:00Z",
+            }
+        },
+    )
 
     @classmethod
     def for_create(cls, **kwargs) -> "ConversationSchema":
@@ -188,20 +218,57 @@ class MessageSchema(BaseModel):
     """Unified message schema for all CRUD operations."""
 
     # Optional fields for different operations
-    id: Optional[UUID] = Field(None, description="Message ID (auto-generated)")
-    conversation_id: Optional[UUID] = Field(None, description="Parent conversation ID")
-    role: Optional[str] = Field(
-        None, pattern=r"^(user|assistant|tool|system)$", description="Message role"
+    id: Optional[UUID] = Field(
+        None,
+        description="Message ID (auto-generated)",
+        examples=["650e8400-e29b-41d4-a716-446655440001"],
     )
-    content: Optional[str] = Field(None, description="Message content")
+    conversation_id: Optional[UUID] = Field(
+        None,
+        description="Parent conversation ID",
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+    )
+    role: Optional[str] = Field(
+        None,
+        pattern=r"^(user|assistant|tool|system)$",
+        description="Message role",
+        examples=["user", "assistant", "system"],
+    )
+    content: Optional[str] = Field(
+        None,
+        description="Message content",
+        examples=[
+            "How do I implement a binary search tree?",
+            "Here's an implementation of a binary search tree...",
+        ],
+    )
     metadata_: Optional[Dict[str, Any]] = Field(
-        None, alias="metadata", description="Message metadata"
+        None,
+        alias="metadata",
+        description="Message metadata",
+        examples=[{"source": "api", "version": "1.0"}],
     )
 
     # Database timestamps
-    created_at: Optional[datetime] = Field(None, description="Creation timestamp")
+    created_at: Optional[datetime] = Field(
+        None,
+        description="Creation timestamp",
+        examples=["2025-01-05T12:01:00Z"],
+    )
 
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "id": "650e8400-e29b-41d4-a716-446655440001",
+                "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+                "role": "user",
+                "content": "How do I implement a binary search tree in Python?",
+                "created_at": "2025-01-05T12:01:00Z",
+            }
+        },
+    )
 
     @classmethod
     def for_create(
@@ -249,16 +316,53 @@ class AgentConfigSchema(BaseModel):
     """Unified agent configuration schema for all CRUD operations."""
 
     # Optional fields for different operations
-    id: Optional[UUID] = Field(None, description="Agent config ID (auto-generated)")
-    name: Optional[str] = Field(None, max_length=255, description="Configuration name")
-    description: Optional[str] = Field(None, description="Configuration description")
-    config: Optional[Dict[str, Any]] = Field(None, description="Configuration data")
+    id: Optional[UUID] = Field(
+        None,
+        description="Agent config ID (auto-generated)",
+        examples=["750e8400-e29b-41d4-a716-446655440002"],
+    )
+    name: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Configuration name",
+        examples=["Code Reviewer", "SEO Analyzer", "Debug Assistant"],
+    )
+    description: Optional[str] = Field(
+        None,
+        description="Configuration description",
+        examples=["Configuration for automated code review agent"],
+    )
+    config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Configuration data",
+        examples=[{"max_iterations": 5, "tools": ["git", "linter"]}],
+    )
 
     # Database timestamps
-    created_at: Optional[datetime] = Field(None, description="Creation timestamp")
-    updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
+    created_at: Optional[datetime] = Field(
+        None,
+        description="Creation timestamp",
+        examples=["2025-01-05T10:00:00Z"],
+    )
+    updated_at: Optional[datetime] = Field(
+        None,
+        description="Last update timestamp",
+        examples=["2025-01-05T11:00:00Z"],
+    )
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "example": {
+                "id": "750e8400-e29b-41d4-a716-446655440002",
+                "name": "Code Reviewer",
+                "description": "Automated code review agent configuration",
+                "config": {"max_iterations": 5, "tools": ["git", "linter", "test_runner"]},
+                "created_at": "2025-01-05T10:00:00Z",
+                "updated_at": "2025-01-05T11:00:00Z",
+            }
+        },
+    )
 
     @classmethod
     def for_create(

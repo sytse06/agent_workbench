@@ -113,11 +113,13 @@ class TestChatResponse:
         response = ChatResponse(
             message="Hello! How can I help you?",
             conversation_id=conv_id,
+            model_used="openai/gpt-3.5-turbo",
             llm_config=model_config,
         )
 
         assert response.message == "Hello! How can I help you?"
         assert response.conversation_id == conv_id
+        assert response.model_used == "openai/gpt-3.5-turbo"
         assert response.llm_config == model_config
 
 

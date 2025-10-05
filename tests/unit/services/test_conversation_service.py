@@ -5,7 +5,7 @@ from uuid import UUID
 
 import pytest
 
-from agent_workbench.models.schemas import ConversationResponse
+from agent_workbench.models.api_models import ConversationResponse
 from agent_workbench.models.schemas import ModelConfig
 from agent_workbench.services.conversation_service import ConversationService
 

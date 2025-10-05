@@ -135,19 +135,17 @@ class TestConversationRoutes:
         assert data["llm_config"]["provider"] == "ollama"
 
     def test_create_conversation_with_extra_fields(self):
-        """Test POST /api/v1/conversations endpoint ignores extra fields."""
-        # Test data with extra fields (should be ignored gracefully)
+        """Test POST /api/v1/conversations endpoint rejects extra fields."""
+        # Test data with extra fields (should be rejected due to extra="forbid")
         conversation_request = {"invalid_field": "invalid_value"}
 
         # Make request
         response = client.post("/api/v1/conversations", json=conversation_request)
 
-        # Should succeed and ignore extra fields
-        assert response.status_code == 201
+        # Should reject due to extra fields
+        assert response.status_code == 422
         data = response.json()
-        assert "id" in data
-        assert "title" in data
-        assert "created_at" in data
+        assert "detail" in data
 
     def test_get_conversation_by_id(self):
         """Test GET /api/v1/conversations/{conversation_id} endpoint."""
