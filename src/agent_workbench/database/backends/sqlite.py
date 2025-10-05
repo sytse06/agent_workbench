@@ -5,6 +5,7 @@ using SQLAlchemy ORM with async/await support.
 """
 
 import asyncio
+import concurrent.futures
 from typing import Any, Callable, Dict, List, Optional
 from uuid import UUID, uuid4
 
@@ -44,20 +45,27 @@ class SQLiteBackend:
                             (e.g., get_session from api.database)
         """
         self.session_factory = session_factory
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
     def _run_async(self, coro):
         """Helper to run async operations synchronously for Protocol compatibility.
 
         The Protocol interface is synchronous, but SQLAlchemy is async.
-        This helper runs async operations in the event loop.
+        This helper runs async operations in a separate thread to avoid
+        "event loop already running" errors in pytest-asyncio.
         """
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        def run_in_new_loop(coro_func):
+            """Run coroutine in a new event loop in separate thread."""
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                return new_loop.run_until_complete(coro_func)
+            finally:
+                new_loop.close()
 
-        return loop.run_until_complete(coro)
+        # Run in thread pool to avoid event loop conflicts
+        future = self._executor.submit(run_in_new_loop, coro)
+        return future.result()
 
     # ========================================================================
     # Conversation Operations

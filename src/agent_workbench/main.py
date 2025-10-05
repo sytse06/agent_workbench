@@ -18,7 +18,7 @@ except ImportError:
     DOTENV_AVAILABLE = False
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api.adaptive_database import init_adaptive_database
+from .database import init_adaptive_database
 from .api.database import get_session
 from .api.routes import (
     agent_configs,
