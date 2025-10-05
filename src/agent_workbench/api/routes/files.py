@@ -22,7 +22,7 @@ class FileMetadata(BaseModel):
     filename: str
     size: int
     content_type: str
-    uploaded_at: str
+    uploaded_at: datetime
     url: str
 
 
@@ -117,7 +117,7 @@ async def upload_file(file: UploadFile = File(...)) -> FileMetadata:
             filename=file.filename,
             size=file_size,
             content_type=file.content_type or "application/octet-stream",
-            uploaded_at=datetime.utcnow().isoformat(),
+            uploaded_at=datetime.utcnow(),
             url=f"/api/v1/files/download/{file_id}",
         )
 
