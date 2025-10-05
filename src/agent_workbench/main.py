@@ -113,6 +113,18 @@ async def lifespan(app: FastAPI):
         # Apply queue for responsiveness (must be before mounting)
         gradio_interface.queue()
 
+        # CRITICAL: Call startup_events() before mounting (GitHub issue #8839)
+        # This initializes the event handlers properly
+        print("🎯 Calling startup_events() to initialize event handlers...")
+        try:
+            if hasattr(gradio_interface, 'startup_events'):
+                gradio_interface.startup_events()
+                print("✅ startup_events() called successfully")
+            else:
+                print("⚠️ No startup_events() method found, skipping")
+        except Exception as e:
+            print(f"⚠️ startup_events() failed (may be deprecated): {e}")
+
         # Use Gradio's official FastAPI mounting method
         print("🎯 Using gr.mount_gradio_app() for proper event routing...")
         app = gr.mount_gradio_app(app, gradio_interface, path="/")
