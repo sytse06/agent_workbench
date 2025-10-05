@@ -366,6 +366,11 @@ def _create_enhanced_workbench_interface():
                 db_status = gr.HTML(value="<div class='info'>Ready</div>")
 
             with gr.Column(scale=2):
+                # Test button at the top
+                with gr.Row():
+                    test_btn = gr.Button("🧪 Test Event System", variant="secondary")
+                    test_output = gr.Textbox(label="Test Output", scale=3)
+
                 chatbot = gr.Chatbot(
                     height=400,
                     label="Enhanced Chat with Database Persistence",
@@ -380,6 +385,16 @@ def _create_enhanced_workbench_interface():
                         lines=2,
                     )
                     send = gr.Button("Send", variant="primary", scale=1)
+
+        # Test handler
+        def test_handler():
+            """Simple test to verify Gradio events work."""
+            print("=" * 80)
+            print("🧪 TEST BUTTON CLICKED - EVENT SYSTEM WORKS!")
+            print("=" * 80)
+            return "✅ Event system is working! Button click detected."
+
+        test_btn.click(fn=test_handler, outputs=test_output)
 
         async def handle_workbench_message_with_persistence(
             msg, conv_id, model_selection_val, temp_val, max_tokens_val
@@ -400,15 +415,23 @@ def _create_enhanced_workbench_interface():
                 "workbench",
             )
 
+        # Sync wrapper for async handler
+        def handle_message_sync(*args):
+            """Sync wrapper for Gradio that runs async handler."""
+            import asyncio
+
+            print("🚨 Wrapper called, running async handler...")
+            return asyncio.run(handle_workbench_message_with_persistence(*args))
+
         # Wire up events
         send.click(
-            fn=handle_workbench_message_with_persistence,
+            fn=handle_message_sync,
             inputs=[message, conversation_id, model_selection, temperature, max_tokens],
             outputs=[message, chatbot, db_status],
         )
 
         message.submit(
-            fn=handle_workbench_message_with_persistence,
+            fn=handle_message_sync,
             inputs=[message, conversation_id, model_selection, temperature, max_tokens],
             outputs=[message, chatbot, db_status],
         )
