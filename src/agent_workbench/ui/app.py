@@ -10,6 +10,13 @@ from ..services.model_config_service import model_config_service
 def create_workbench_app() -> gr.Blocks:
     """Create enhanced workbench interface with consolidated service integration"""
 
+    # Import ChatService for direct calls (avoid localhost HTTP calls)
+    import asyncio
+    import time
+
+    from ..models.schemas import ModelConfig
+    from ..services.llm_service import ChatService
+
     # Get dynamic configuration from environment
     provider_choices, default_provider = (
         model_config_service.get_provider_choices_for_ui()
@@ -74,10 +81,11 @@ def create_workbench_app() -> gr.Blocks:
                     )
                     send = gr.Button("Send", variant="primary", scale=1)
 
-        # Simple working handler using direct API call (FIXED for Gradio compatibility)
-        def handle_message(
+        # Direct ChatService handler (avoids localhost HTTP calls)
+        async def handle_message_async(
             msg, conv_id, provider_val, model_val, temp_val, max_tokens_val, debug_val
         ):
+            """Async handler that calls ChatService directly."""
             print(f"🎯 DEBUG: handle_message called with msg='{msg}'")
 
             if not msg.strip():
@@ -96,70 +104,50 @@ def create_workbench_app() -> gr.Blocks:
                     f"model='{selected_model}'"
                 )
 
-                # Use requests instead of httpx for simplicity
-                import requests  # type: ignore
-
-                print("🎯 DEBUG: Making direct API call...")
-
-                # Prepare request payload
-                payload = {
-                    "message": msg,
-                    "provider": selected_provider,
-                    "model_name": selected_model,
-                    "temperature": temp_val,
-                    "max_tokens": max_tokens_val,
-                }
-                print(f"🎯 DEBUG: Request payload: {payload}")
-
-                # Detect API port based on environment
-                # HF Spaces runs FastAPI on port 7860, local dev on port 8000
-                api_port = os.getenv("GRADIO_SERVER_PORT", "8000")
-                api_url = f"http://localhost:{api_port}/api/v1/chat/direct"
-                print(f"🎯 DEBUG: API URL: {api_url}")
-
-                # Make synchronous API call
-                response = requests.post(
-                    api_url,
-                    json=payload,
-                    timeout=30,  # 30 second timeout
+                # Create model configuration (direct service call)
+                print("🎯 DEBUG: Creating ModelConfig...")
+                model_config = ModelConfig(
+                    provider=selected_provider,
+                    model_name=selected_model,
+                    temperature=temp_val,
+                    max_tokens=max_tokens_val,
+                    streaming=False,
                 )
+                print(f"🎯 DEBUG: ModelConfig: {model_config}")
 
-                print(f"🎯 DEBUG: Response status: {response.status_code}")
+                # Initialize ChatService
+                print("🎯 DEBUG: Initializing ChatService...")
+                chat_service = ChatService(model_config)
+                print("🎯 DEBUG: ChatService initialized")
 
-                if response.status_code == 200:
-                    result = response.json()
-                    content_preview = result.get("content", "")[:50]
-                    print(f"🎯 DEBUG: Response received: {content_preview}...")
+                # Call chat completion directly
+                start_time = time.time()
+                print("🎯 DEBUG: Calling chat_completion...")
+                response = await chat_service.chat_completion(
+                    message=msg, conversation_id=None
+                )
+                latency_ms = (time.time() - start_time) * 1000
 
-                    # Simple history format for Gradio
-                    history = [
-                        {"role": "user", "content": msg},
-                        {
-                            "role": "assistant",
-                            "content": result.get("content", "No response"),
-                        },
-                    ]
+                print(f"🎯 DEBUG: Response received in {latency_ms:.0f}ms")
+                print(f"🎯 DEBUG: Response preview: {response.reply[:100]}...")
 
-                    # Show success status
-                    success_html = f"""
-                    <div class='success'>
-                        ✅ Direct chat successful<br>
-                        <strong>Provider:</strong> {selected_provider}<br>
-                        <strong>Model:</strong> {selected_model}<br>
-                        <strong>Latency:</strong> {result.get('latency_ms', 0):.0f}ms
-                    </div>
-                    """
+                # Simple history format for Gradio
+                history = [
+                    {"role": "user", "content": msg},
+                    {"role": "assistant", "content": response.reply},
+                ]
 
-                    return "", history, success_html
-                else:
-                    error_msg = f"API Error {response.status_code}: {response.text}"
-                    print(f"🎯 DEBUG: Error: {error_msg}")
-                    history = [
-                        {"role": "user", "content": msg},
-                        {"role": "assistant", "content": error_msg},
-                    ]
-                    error_html = f"<div class='error'>❌ API Error: {error_msg}</div>"
-                    return "", history, error_html
+                # Show success status
+                success_html = f"""
+                <div class='success'>
+                    ✅ Direct chat successful<br>
+                    <strong>Provider:</strong> {selected_provider}<br>
+                    <strong>Model:</strong> {selected_model}<br>
+                    <strong>Latency:</strong> {latency_ms:.0f}ms
+                </div>
+                """
+
+                return "", history, success_html
 
             except Exception as e:
                 print(f"🎯 DEBUG: Exception caught: {str(e)}")
@@ -167,14 +155,18 @@ def create_workbench_app() -> gr.Blocks:
 
                 print(f"🎯 DEBUG: Traceback: {traceback.format_exc()}")
 
-                error_msg = f"Connection Error: {str(e)}"
-                error_html = f"<div class='error'>❌ Connection failed: {str(e)}</div>"
+                error_msg = f"Error: {str(e)}"
+                error_html = f"<div class='error'>❌ {error_msg}</div>"
                 history = [
                     {"role": "user", "content": msg},
                     {"role": "assistant", "content": error_msg},
                 ]
                 print("🎯 DEBUG: Returning error response")
                 return "", history, error_html
+
+        def handle_message(*args):
+            """Sync wrapper for Gradio that runs async handler."""
+            return asyncio.run(handle_message_async(*args))
 
         # Wire up events to use FastAPI consolidated service
         send.click(

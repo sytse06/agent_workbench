@@ -128,6 +128,7 @@ async def direct_chat(request: DirectChatRequest) -> DirectChatResponse:
         logger.error(f"❌ DIRECT CHAT FAILED: {str(e)}")
         logger.error(f"❌ Exception type: {type(e).__name__}")
         import traceback
+
         logger.error(f"❌ Traceback:\n{traceback.format_exc()}")
         logger.error("=" * 80)
         raise HTTPException(status_code=500, detail=f"Direct chat failed: {str(e)}")

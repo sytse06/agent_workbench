@@ -73,6 +73,7 @@ class HubDatabase:
         except Exception as e:
             print(f"❌ Failed to save table {table_name}: {e}")
             import traceback
+
             print(f"Traceback: {traceback.format_exc()}")
 
     # Conversation operations (compatible with existing SQLAlchemy models)
