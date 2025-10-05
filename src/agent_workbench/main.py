@@ -4,7 +4,6 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Optional
-from uuid import UUID
 
 import gradio as gr
 import httpx
@@ -31,7 +30,6 @@ from .api.routes import (
     messages,
     models,
 )
-from .models.database import ConversationModel, MessageModel
 from .models.schemas import ModelConfig
 from .services.context_service import ContextService
 from .services.langgraph_bridge import LangGraphStateBridge
@@ -117,7 +115,7 @@ async def lifespan(app: FastAPI):
         # This initializes the event handlers properly
         print("🎯 Calling startup_events() to initialize event handlers...")
         try:
-            if hasattr(gradio_interface, 'startup_events'):
+            if hasattr(gradio_interface, "startup_events"):
                 gradio_interface.startup_events()
                 print("✅ startup_events() called successfully")
             else:
@@ -291,10 +289,16 @@ def create_fastapi_mounted_gradio_interface():
 
     Bypass all the complex layering and create interface directly.
     """
-    print("🎯 Creating SIMPLIFIED Gradio interface directly")
+    import os
 
-    # Just create the enhanced interface directly - no factory, no wrapping
-    return _create_enhanced_workbench_interface()
+    mode = os.getenv("APP_MODE", "workbench")
+    print(f"🎯 Creating SIMPLIFIED Gradio interface for mode: {mode}")
+
+    # Create the appropriate interface based on mode
+    if mode == "seo_coach":
+        return _create_enhanced_seo_coach_interface()
+    else:
+        return _create_enhanced_workbench_interface()
 
 
 def _enhance_interface_with_database_persistence(interface: gr.Blocks, mode: str):
@@ -352,11 +356,6 @@ def _create_enhanced_workbench_interface():
                 db_status = gr.HTML(value="<div class='info'>Ready</div>")
 
             with gr.Column(scale=2):
-                # Test button at the top
-                with gr.Row():
-                    test_btn = gr.Button("🧪 Test Event System", variant="secondary")
-                    test_output = gr.Textbox(label="Test Output", scale=3)
-
                 chatbot = gr.Chatbot(
                     height=400,
                     label="Enhanced Chat with Database Persistence",
@@ -371,16 +370,6 @@ def _create_enhanced_workbench_interface():
                         lines=2,
                     )
                     send = gr.Button("Send", variant="primary", scale=1)
-
-        # Test handler
-        def test_handler():
-            """Simple test to verify Gradio events work."""
-            print("=" * 80)
-            print("🧪 TEST BUTTON CLICKED - EVENT SYSTEM WORKS!")
-            print("=" * 80)
-            return "✅ Event system is working! Button click detected."
-
-        test_btn.click(fn=test_handler, outputs=test_output)
 
         async def handle_workbench_message_with_persistence(
             msg, conv_id, model_selection_val, temp_val, max_tokens_val
@@ -680,7 +669,25 @@ async def _handle_message_with_database_persistence(
         return "", [], "<div class='info'>Ready</div>"
 
     try:
-        # Create model config (skip DB persistence for Hub DB)
+        # Get Hub DB instance
+        hub_db = app.adaptive_db if hasattr(app, "adaptive_db") else None
+
+        # Load existing conversation from Hub DB
+        conversation = None
+        messages = []
+        if hub_db:
+            print(f"🎯 Loading conversation {conv_id} from Hub DB...")
+            conversation = hub_db.get_conversation(conv_id)
+            if conversation:
+                messages = conversation.get("data", {}).get("messages", [])
+                print(f"✅ Loaded {len(messages)} existing messages")
+            else:
+                print(f"🎯 Creating new conversation {conv_id}")
+
+        # Add user message to history
+        messages.append({"role": "user", "content": msg})
+
+        # Create model config
         print("🎯 Creating model config...")
         model_config = ModelConfig(
             provider=provider_val,
@@ -688,9 +695,9 @@ async def _handle_message_with_database_persistence(
             temperature=temp_val,
             max_tokens=max_tokens_val,
         )
-        print(f"✅ Model config created: {provider_val}/{model_val}")
+        print(f"✅ Model config: {provider_val}/{model_val}")
 
-        # Direct LLM service call - no HTTP
+        # Direct LLM service call
         print("🎯 Initializing ChatService...")
         llm_service = ChatService(model_config)
 
@@ -707,23 +714,36 @@ async def _handle_message_with_database_persistence(
 
             Geef praktische, Nederlandse SEO adviezen specifiek voor dit bedrijf.
             """
-            print("🎯 Calling chat_completion (SEO coach mode)...")
+            print("🎯 Calling chat_completion (SEO coach)...")
             response = await llm_service.chat_completion(
                 message=enhanced_msg, conversation_id=None
             )
         else:
-            print("🎯 Calling chat_completion (workbench mode)...")
+            print("🎯 Calling chat_completion (workbench)...")
             response = await llm_service.chat_completion(
                 message=msg, conversation_id=None
             )
 
         print(f"✅ Got response: {response.reply[:100]}...")
 
-        # Simple history (no database persistence for now)
-        history = [
-            {"role": "user", "content": msg},
-            {"role": "assistant", "content": response.reply},
-        ]
+        # Add assistant response to history
+        messages.append({"role": "assistant", "content": response.reply})
+
+        # Save to Hub DB
+        if hub_db:
+            print("💾 Saving conversation to Hub DB...")
+            hub_db.save_conversation(
+                {
+                    "id": conv_id,
+                    "title": f"{mode.title()} - {msg[:30]}...",
+                    "mode": mode,
+                    "data": {"messages": messages},
+                }
+            )
+            print(f"✅ Saved {len(messages)} messages to Hub DB")
+
+        # Convert to Gradio format
+        history = [{"role": m["role"], "content": m["content"]} for m in messages]
 
         # Success status
         success_html = f"""
@@ -731,7 +751,8 @@ async def _handle_message_with_database_persistence(
             ✅ Chat successful<br>
             <strong>Mode:</strong> {mode}<br>
             <strong>Provider:</strong> {provider_val}<br>
-            <strong>Model:</strong> {model_val}
+            <strong>Model:</strong> {model_val}<br>
+            <strong>Messages saved:</strong> {len(messages)}
         </div>
         """
 

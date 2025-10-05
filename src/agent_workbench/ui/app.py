@@ -200,6 +200,7 @@ def create_workbench_app() -> gr.Blocks:
             except Exception as e:
                 print(f"🚨 WRAPPER EXCEPTION: {e}")
                 import traceback
+
                 print(f"🚨 Traceback:\n{traceback.format_exc()}")
                 raise
 
