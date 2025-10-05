@@ -10,6 +10,10 @@ from ..services.model_config_service import model_config_service
 def create_workbench_app() -> gr.Blocks:
     """Create enhanced workbench interface with consolidated service integration"""
 
+    print("=" * 80)
+    print("🎯 CREATE_WORKBENCH_APP CALLED")
+    print("=" * 80)
+
     # Import ChatService for direct calls (avoid localhost HTTP calls)
     import asyncio
     import time
@@ -23,11 +27,15 @@ def create_workbench_app() -> gr.Blocks:
     )
     model_choices, default_model = model_config_service.get_model_choices_for_ui()
 
+    print(f"🎯 Provider choices: {provider_choices}")
+    print(f"🎯 Model choices: {model_choices}")
+
     # Get active mode for title
     import os
 
     active_mode = os.getenv("APP_MODE", "workbench")
     title = f"Agent Workbench - {active_mode.title()} Mode"
+    print(f"🎯 Active mode: {active_mode}")
 
     with gr.Blocks(title=title) as app:
         gr.Markdown(f"# 🛠️ Agent Workbench - {active_mode.title()} Mode")
@@ -166,7 +174,20 @@ def create_workbench_app() -> gr.Blocks:
 
         def handle_message(*args):
             """Sync wrapper for Gradio that runs async handler."""
-            return asyncio.run(handle_message_async(*args))
+            print("=" * 80)
+            print("🚨 HANDLE_MESSAGE WRAPPER CALLED")
+            print(f"🚨 Args received: {len(args)} arguments")
+            print(f"🚨 First arg (message): {args[0] if args else 'NO ARGS'}")
+            print("=" * 80)
+            try:
+                result = asyncio.run(handle_message_async(*args))
+                print("🚨 asyncio.run completed successfully")
+                return result
+            except Exception as e:
+                print(f"🚨 WRAPPER EXCEPTION: {e}")
+                import traceback
+                print(f"🚨 Traceback:\n{traceback.format_exc()}")
+                raise
 
         # Wire up events to use FastAPI consolidated service
         send.click(
@@ -196,6 +217,11 @@ def create_workbench_app() -> gr.Blocks:
             ],
             outputs=[message, chatbot, workflow_status],
         )
+
+    print("=" * 80)
+    print("🎯 GRADIO APP CREATED SUCCESSFULLY")
+    print("🎯 Event handlers wired to handle_message")
+    print("=" * 80)
 
     return app
 
