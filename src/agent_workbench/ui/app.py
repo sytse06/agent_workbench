@@ -78,6 +78,11 @@ def create_workbench_app() -> gr.Blocks:
                 debug_mode = gr.Checkbox(label="Debug Mode", value=False)
 
             with gr.Column(scale=2):
+                # Test button to verify event system works
+                with gr.Row():
+                    test_btn = gr.Button("🧪 Test Event System", variant="secondary")
+                    test_output = gr.Textbox(label="Test Output", scale=3)
+
                 chatbot = gr.Chatbot(height=400, label="Enhanced Chat", type="messages")
 
                 with gr.Row():
@@ -88,10 +93,6 @@ def create_workbench_app() -> gr.Blocks:
                         lines=2,
                     )
                     send = gr.Button("Send", variant="primary", scale=1)
-
-        # Test button to verify event system works
-        test_output = gr.Textbox(label="Test Output", visible=True)
-        test_btn = gr.Button("🧪 Test Event System", variant="secondary")
 
         def test_handler():
             """Simple test to verify Gradio events work at all."""
