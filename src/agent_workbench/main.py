@@ -275,40 +275,14 @@ async def health_check():
 
 
 def create_fastapi_mounted_gradio_interface():
-    """Create FastAPI-mounted Gradio interface with dual-mode support.
+    """Create FastAPI-mounted Gradio interface - SIMPLIFIED VERSION.
 
-    Provides direct service access for enhanced functionality.
+    Bypass all the complex layering and create interface directly.
     """
-    from .ui.mode_factory import InterfaceCreationError, InvalidModeError, ModeFactory
+    print("🎯 Creating SIMPLIFIED Gradio interface directly")
 
-    try:
-        # Use ModeFactory to create the appropriate interface based on APP_MODE
-        factory = ModeFactory()
-        current_mode = factory._determine_mode_safe(None)
-
-        print(f"🎯 Creating FastAPI-mounted Gradio interface for mode: {current_mode}")
-
-        # Create the base interface using the existing mode factory
-        base_interface = factory.create_interface(current_mode)
-
-        # Enhance the interface with database persistence by wrapping handlers
-        enhanced_interface = _enhance_interface_with_database_persistence(
-            base_interface, current_mode
-        )
-
-        return enhanced_interface
-
-    except (InvalidModeError, InterfaceCreationError) as e:
-        print(f"🎯 Mode factory error: {e}")
-        # Fallback to simple workbench interface
-        return _create_fallback_workbench_interface()
-    except Exception as e:
-        print(f"🎯 Unexpected error creating interface: {e}")
-        import traceback
-
-        print(f"🎯 Traceback: {traceback.format_exc()}")
-        # Fallback to simple workbench interface
-        return _create_fallback_workbench_interface()
+    # Just create the enhanced interface directly - no factory, no wrapping
+    return _create_enhanced_workbench_interface()
 
 
 def _enhance_interface_with_database_persistence(interface: gr.Blocks, mode: str):
