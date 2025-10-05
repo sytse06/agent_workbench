@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ModelConfig(BaseModel):
@@ -12,28 +12,122 @@ class ModelConfig(BaseModel):
 
     provider: str = Field(
         ...,
-        description="Provider name (openrouter, ollama, openai, anthropic, mistral)",
+        description="Provider name (openrouter, ollama, openai, anthropic, mistral, google)",
+        examples=["openrouter", "anthropic", "ollama", "openai", "mistral"],
     )
-    model_name: str = Field(..., description="Specific model name for the provider")
+    model_name: str = Field(
+        ...,
+        description="Specific model name for the provider",
+        examples=[
+            "anthropic/claude-3.5-sonnet",
+            "openai/gpt-4o",
+            "llama3.1:8b",
+            "google/gemini-pro",
+        ],
+    )
     temperature: float = Field(
-        default=0.7, ge=0.0, le=2.0, description="Sampling temperature"
+        default=0.7,
+        ge=0.0,
+        le=2.0,
+        description="Sampling temperature",
+        examples=[0.3, 0.7, 1.0],
     )
     max_tokens: int = Field(
-        default=1000, gt=0, le=100000, description="Maximum tokens to generate"
+        default=1000,
+        gt=0,
+        le=100000,
+        description="Maximum tokens to generate",
+        examples=[1000, 2000, 4000],
     )
     top_p: float = Field(
-        default=1.0, ge=0.0, le=1.0, description="Top-p sampling parameter"
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Top-p sampling parameter",
+        examples=[0.9, 0.95, 1.0],
     )
     frequency_penalty: float = Field(
-        default=0.0, ge=-2.0, le=2.0, description="Frequency penalty"
+        default=0.0,
+        ge=-2.0,
+        le=2.0,
+        description="Frequency penalty",
+        examples=[0.0, 0.5, 1.0],
     )
-    system_prompt: Optional[str] = Field(None, description="System prompt to use")
+    system_prompt: Optional[str] = Field(
+        None,
+        description="System prompt to use",
+        examples=["You are a helpful assistant.", "You are an expert Python programmer."],
+    )
     streaming: bool = Field(
-        default=True, description="Whether to use streaming responses"
+        default=True,
+        description="Whether to use streaming responses",
     )
     extra_params: Dict[str, Any] = Field(
-        default_factory=dict, description="Provider-specific parameters"
+        default_factory=dict,
+        description="Provider-specific parameters",
     )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "provider": "anthropic",
+                "model_name": "claude-3.5-sonnet",
+                "temperature": 0.7,
+                "max_tokens": 2000,
+                "streaming": True,
+            }
+        }
+    )
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        """Validate that provider is in the allowed list."""
+        allowed_providers = {
+            "openrouter",
+            "ollama",
+            "openai",
+            "anthropic",
+            "mistral",
+            "google",
+        }
+        if v.lower() not in allowed_providers:
+            raise ValueError(
+                f"Provider '{v}' not supported. Must be one of: {', '.join(sorted(allowed_providers))}"
+            )
+        return v.lower()
+
+    @field_validator("model_name")
+    @classmethod
+    def validate_model_name(cls, v: str) -> str:
+        """Validate model name format."""
+        if not v or not v.strip():
+            raise ValueError("Model name cannot be empty")
+
+        # For providers that use format "provider/model"
+        if "/" in v:
+            parts = v.split("/")
+            if len(parts) != 2:
+                raise ValueError(
+                    "Model name with '/' must have format 'provider/model' (e.g., 'anthropic/claude-3.5-sonnet')"
+                )
+            if not all(part.strip() for part in parts):
+                raise ValueError("Model name parts cannot be empty")
+
+        return v.strip()
+
+    @model_validator(mode="after")
+    def validate_sampling_params(self) -> "ModelConfig":
+        """Validate that sampling parameters are compatible."""
+        # Warn about contradictory sampling settings
+        # (temperature=0 means deterministic, but top_p<1 adds randomness)
+        if self.temperature == 0.0 and self.top_p < 1.0:
+            raise ValueError(
+                "Contradictory sampling: temperature=0.0 (deterministic) conflicts with top_p<1.0 (random). "
+                "Either use temperature>0 or set top_p=1.0"
+            )
+
+        return self
 
 
 # === Database Model Schemas ===
