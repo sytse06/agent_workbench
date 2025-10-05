@@ -26,6 +26,7 @@ from .api.routes import (
     consolidated_chat,
     conversations,
     direct_chat,
+    files,
     health,
     messages,
     models,
@@ -216,6 +217,7 @@ app.include_router(health.router)
 # Register consolidated routes BEFORE legacy chat routes to avoid conflicts
 app.include_router(consolidated_chat.router, prefix="/api/v1")
 app.include_router(direct_chat.router, prefix="/api/v1")  # Direct LLM baseline
+app.include_router(files.router, prefix="/api/v1")  # File upload/download
 app.include_router(chat.router)  # Legacy routes
 app.include_router(conversations.router)
 app.include_router(messages.router)
