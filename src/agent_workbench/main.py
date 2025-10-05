@@ -110,11 +110,12 @@ async def lifespan(app: FastAPI):
         print("🎯 Mounting FastAPI-Gradio interface...")
         gradio_interface = create_fastapi_mounted_gradio_interface()
 
-        # Apply queue fix for responsiveness
+        # Apply queue for responsiveness (must be before mounting)
         gradio_interface.queue()
 
-        # Mount interface
-        app.mount("/", gradio_interface.app, name="gradio")
+        # Use Gradio's official FastAPI mounting method
+        print("🎯 Using gr.mount_gradio_app() for proper event routing...")
+        app = gr.mount_gradio_app(app, gradio_interface, path="/")
         print("✅ FastAPI-mounted Gradio interface with database persistence")
 
     except Exception as e:
