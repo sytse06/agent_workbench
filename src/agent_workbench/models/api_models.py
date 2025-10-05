@@ -15,7 +15,25 @@ from .schemas import ModelConfig
 
 
 class ChatRequest(BaseModel):
-    """Request for chat completion with optional conversation state."""
+    """Request for chat completion with optional conversation state.
+
+    Used to send messages to the chat API, either creating a new conversation
+    or continuing an existing one. Supports model configuration overrides and
+    context injection for enhanced responses.
+
+    Examples:
+        New conversation:
+            >>> request = ChatRequest(
+            ...     message="Explain closures in JavaScript",
+            ...     llm_config=ModelConfig(provider="anthropic", model_name="claude-3.5-sonnet")
+            ... )
+
+        Continue existing conversation:
+            >>> request = ChatRequest(
+            ...     message="Can you give an example?",
+            ...     conversation_id=UUID("550e8400-e29b-41d4-a716-446655440000")
+            ... )
+    """
 
     message: str = Field(..., description="User message", min_length=1, max_length=10000)
     conversation_id: Optional[UUID] = Field(
@@ -64,7 +82,29 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    """Response from chat completion with conversation metadata."""
+    """Response from chat completion with conversation metadata.
+
+    Contains the assistant's response along with conversation tracking
+    information and model usage details. Used to return chat completions
+    to API clients.
+
+    Attributes:
+        message: The assistant's response text
+        conversation_id: UUID of the conversation this message belongs to
+        message_count: Position in conversation (1-indexed)
+        model_used: Full model identifier (provider/model-name format)
+        is_temporary: Whether conversation will be auto-deleted
+        metadata: Additional response metadata (e.g., token usage)
+        llm_config: Model configuration used for generation
+
+    Examples:
+        >>> response = ChatResponse(
+        ...     message="A closure is a function that captures...",
+        ...     conversation_id=UUID("550e8400-e29b-41d4-a716-446655440000"),
+        ...     model_used="anthropic/claude-3.5-sonnet",
+        ...     message_count=1
+        ... )
+    """
 
     message: str = Field(..., description="Assistant response content")
     conversation_id: UUID = Field(
@@ -117,7 +157,22 @@ class ChatResponse(BaseModel):
 
 
 class CreateConversationRequest(BaseModel):
-    """Request to create a new conversation."""
+    """Request to create a new conversation.
+
+    Creates a new conversation with optional title and model configuration.
+    Conversations can be permanent (stored in database) or temporary
+    (auto-deleted after session).
+
+    Examples:
+        >>> request = CreateConversationRequest(
+        ...     title="Debugging React Performance",
+        ...     llm_config=ModelConfig(
+        ...         provider="anthropic",
+        ...         model_name="claude-3.5-sonnet"
+        ...     ),
+        ...     is_temporary=False
+        ... )
+    """
 
     title: Optional[str] = Field(
         None,
@@ -152,7 +207,31 @@ class CreateConversationRequest(BaseModel):
 
 
 class ConversationResponse(BaseModel):
-    """Full conversation with messages."""
+    """Full conversation with messages.
+
+    Complete conversation object containing all messages and metadata.
+    Returned when fetching a specific conversation by ID.
+
+    Attributes:
+        id: Conversation UUID
+        title: Conversation title
+        created_at: Creation timestamp
+        updated_at: Last modification timestamp
+        messages: List of message dictionaries (role, content, timestamp)
+        llm_config: Model configuration for the conversation
+
+    Examples:
+        >>> response = ConversationResponse(
+        ...     id=UUID("550e8400-e29b-41d4-a716-446655440000"),
+        ...     title="Debug Session",
+        ...     created_at=datetime.now(),
+        ...     updated_at=datetime.now(),
+        ...     messages=[
+        ...         {"role": "user", "content": "Help debug this code"},
+        ...         {"role": "assistant", "content": "I'll help you..."}
+        ...     ]
+        ... )
+    """
 
     id: UUID
     title: str
@@ -165,7 +244,31 @@ class ConversationResponse(BaseModel):
 
 
 class ConversationSummary(BaseModel):
-    """Summary information about a conversation."""
+    """Summary information about a conversation.
+
+    Lightweight conversation representation for list views. Contains
+    essential metadata without message content for efficient querying.
+
+    Attributes:
+        id: Conversation UUID
+        title: Conversation title
+        created_at: Creation timestamp
+        last_activity: Last message timestamp
+        message_count: Total number of messages
+        llm_config: Model configuration
+        active_contexts: List of active context identifiers
+        is_temporary: Whether conversation is temporary
+
+    Examples:
+        >>> summary = ConversationSummary(
+        ...     id=UUID("550e8400-e29b-41d4-a716-446655440000"),
+        ...     title="Debug Session",
+        ...     created_at=datetime.now(),
+        ...     last_activity=datetime.now(),
+        ...     message_count=5,
+        ...     active_contexts=["user_preferences"]
+        ... )
+    """
 
     id: UUID
     title: str
@@ -185,7 +288,21 @@ class ConversationSummary(BaseModel):
 
 
 class ContextUpdateRequest(BaseModel):
-    """Request to update conversation context."""
+    """Request to update conversation context.
+
+    Used to inject additional context into conversations for enhanced
+    responses. Context can include user preferences, environment state,
+    or any other relevant data.
+
+    Examples:
+        >>> request = ContextUpdateRequest(
+        ...     context_data={
+        ...         "current_file": "src/App.tsx",
+        ...         "open_files": ["App.tsx", "Button.tsx"]
+        ...     },
+        ...     sources=["editor_state"]
+        ... )
+    """
 
     context_data: Dict[str, Any] = Field(
         ...,
@@ -217,7 +334,27 @@ class ContextUpdateRequest(BaseModel):
 
 
 class ModelInfo(BaseModel):
-    """Information about a specific LLM model."""
+    """Information about a specific LLM model.
+
+    Provides metadata about available models including capabilities
+    and limitations. Used for model selection and validation.
+
+    Attributes:
+        name: Full model identifier (provider/model-name format)
+        display_name: Human-readable model name for UI
+        context_length: Maximum context window in tokens
+        supports_streaming: Whether the model supports streaming responses
+        supports_tools: Whether the model supports function/tool calling
+
+    Examples:
+        >>> model_info = ModelInfo(
+        ...     name="anthropic/claude-3.5-sonnet",
+        ...     display_name="Claude 3.5 Sonnet",
+        ...     context_length=200000,
+        ...     supports_streaming=True,
+        ...     supports_tools=True
+        ... )
+    """
 
     name: str = Field(
         ...,
@@ -263,7 +400,28 @@ class ModelInfo(BaseModel):
 
 
 class ValidationResult(BaseModel):
-    """Result of model configuration validation."""
+    """Result of model configuration validation.
+
+    Contains validation status and any errors encountered during
+    model configuration validation.
+
+    Attributes:
+        is_valid: Whether the configuration passed validation
+        errors: List of validation error messages (empty if valid)
+
+    Examples:
+        Valid configuration:
+            >>> result = ValidationResult(is_valid=True, errors=[])
+
+        Invalid configuration:
+            >>> result = ValidationResult(
+            ...     is_valid=False,
+            ...     errors=[
+            ...         "Provider 'unknown_provider' is not supported",
+            ...         "Temperature 3.0 exceeds maximum of 2.0"
+            ...     ]
+            ... )
+    """
 
     is_valid: bool = Field(
         ...,

@@ -8,7 +8,37 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 class ModelConfig(BaseModel):
-    """Configuration for LLM model parameters."""
+    """Configuration for LLM model parameters.
+
+    Comprehensive model configuration with validation for all supported
+    providers. Includes sampling parameters, system prompts, and
+    provider-specific extensions.
+
+    Attributes:
+        provider: Provider name (openrouter, ollama, openai, anthropic, etc.)
+        model_name: Specific model identifier (may include provider prefix)
+        temperature: Sampling temperature (0.0=deterministic, 2.0=creative)
+        max_tokens: Maximum tokens to generate
+        top_p: Nucleus sampling parameter
+        frequency_penalty: Penalty for token frequency
+        system_prompt: Optional system prompt
+        streaming: Whether to stream responses
+        extra_params: Provider-specific additional parameters
+
+    Validation:
+        - Provider must be in allowed list
+        - Model name cannot be empty
+        - Temperature and top_p cannot both enforce determinism
+        - All numeric parameters have range constraints
+
+    Examples:
+        >>> config = ModelConfig(
+        ...     provider="anthropic",
+        ...     model_name="claude-3.5-sonnet",
+        ...     temperature=0.7,
+        ...     max_tokens=2000
+        ... )
+    """
 
     provider: str = Field(
         ...,
