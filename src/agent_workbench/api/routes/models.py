@@ -4,7 +4,7 @@ from typing import List
 
 from fastapi import APIRouter, status
 
-from ...services.chat_models import ModelInfo
+from ...models.api_models import ModelInfo
 from ...services.providers import provider_registry
 
 router = APIRouter(prefix="/api/v1/models", tags=["models"])

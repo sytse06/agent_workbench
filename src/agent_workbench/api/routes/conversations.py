@@ -5,8 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ...models.schemas import ConversationResponse, ConversationSummary
-from ...models.state_requests import CreateConversationRequest
+from ...models.api_models import ConversationResponse, ConversationSummary, CreateConversationRequest
 from ...services.conversation_service import ConversationService
 
 router = APIRouter(prefix="/api/v1/conversations", tags=["conversations"])

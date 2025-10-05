@@ -6,9 +6,9 @@ from uuid import UUID, uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.exceptions import ConversationError
+from ..models.api_models import ConversationResponse, ConversationSummary
 from ..models.database import ConversationModel, MessageModel
-from ..models.schemas import ConversationResponse, ConversationSummary
-from .chat_models import ModelConfig
+from ..models.schemas import ModelConfig
 
 
 class ConversationService:

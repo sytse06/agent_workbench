@@ -87,7 +87,7 @@ class TestConversationRoutes:
         from datetime import datetime
 
         from agent_workbench.models.schemas import ConversationResponse
-        from agent_workbench.services.chat_models import ModelConfig
+        from agent_workbench.models.schemas import ModelConfig
 
         mock_model_config = ModelConfig(
             provider="ollama",

@@ -1,7 +1,7 @@
 """Tests for chat models."""
 
 from agent_workbench.models.schemas import ConversationSummary
-from agent_workbench.services.chat_models import (
+from agent_workbench.models.api_models import (
     ChatRequest,
     ChatResponse,
     ConversationResponse,

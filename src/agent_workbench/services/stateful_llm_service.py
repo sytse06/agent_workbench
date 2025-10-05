@@ -6,8 +6,9 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.exceptions import ConversationError
+from ..models.api_models import ChatRequest, ChatResponse
+from ..models.schemas import ModelConfig
 from ..models.standard_messages import ConversationState, StandardMessage
-from ..models.state_requests import ChatRequest, ChatResponse, ModelConfig
 from .context_service import ContextService
 from .llm_service import ChatService
 from .message_converter import MessageConverter

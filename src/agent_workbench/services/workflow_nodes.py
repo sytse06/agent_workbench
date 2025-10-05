@@ -4,8 +4,9 @@ from datetime import datetime
 from typing import Any, Dict
 from uuid import UUID
 
+from ..models.api_models import ChatRequest
+from ..models.schemas import ModelConfig
 from ..models.standard_messages import StandardMessage
-from ..models.state_requests import ChatRequest, ModelConfig
 from ..services.context_service import ContextService
 from ..services.langgraph_bridge import LangGraphStateBridge
 from ..services.llm_service import ChatService

@@ -9,16 +9,16 @@ from ..core.exceptions import (
     StreamingError,
 )
 from ..core.retry import retry_api_call, retry_database_operation, retry_llm_call
-from ..models.schemas import ConversationSummary
-from .chat_models import (
+from ..models.api_models import (
     ChatRequest,
     ChatResponse,
     ConversationResponse,
+    ConversationSummary,
     CreateConversationRequest,
-    ModelConfig,
     ModelInfo,
     ValidationResult,
 )
+from ..models.schemas import ModelConfig
 from .conversation_service import ConversationService
 from .llm_service import ChatService, create_chat_service, get_default_chat_service
 from .providers import (

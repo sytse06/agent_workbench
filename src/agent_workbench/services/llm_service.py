@@ -9,8 +9,8 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ..core.exceptions import LLMProviderError, ModelConfigurationError, StreamingError
 from ..core.retry import retry_llm_call
-from ..models.state_requests import ChatResponse
-from .chat_models import ModelConfig
+from ..models.api_models import ChatResponse
+from ..models.schemas import ModelConfig
 from .providers import provider_registry
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ class ChatService:
                 )
 
             return ChatResponse(
-                reply=assistant_message,
+                message=assistant_message,
                 conversation_id=conversation_id or UUID(int=0),
                 model_used=f"{self.model_config.provider}:{self.model_config.model_name}",
                 llm_config=self.model_config,

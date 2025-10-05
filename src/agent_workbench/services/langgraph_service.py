@@ -5,7 +5,7 @@ from uuid import UUID
 
 from langgraph.graph import END, START, StateGraph
 
-from ..models.state_requests import ChatRequest, ChatResponse
+from ..models.api_models import ChatRequest, ChatResponse
 from ..services.context_service import ContextService
 from ..services.langgraph_bridge import LangGraphStateBridge
 from ..services.llm_service import ChatService

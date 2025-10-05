@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, status
 from fastapi.responses import StreamingResponse
 
 from ...core.exceptions import LLMProviderError, StreamingError
+from ...models.api_models import ChatRequest, ChatResponse
 from ...models.schemas import ModelConfig
-from ...models.state_requests import ChatRequest, ChatResponse
 from ...services.langgraph_service import WorkbenchLangGraphService
 from ...services.llm_service import ChatService, create_chat_service
 

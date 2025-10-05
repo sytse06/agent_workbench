@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ...models.state_requests import ContextUpdateRequest
+from ...models.api_models import ContextUpdateRequest
 from ...services.context_service import ContextService
 
 router = APIRouter(prefix="/api/v1/conversations", tags=["context"])

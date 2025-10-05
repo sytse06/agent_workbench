@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from agent_workbench.services.chat_models import ModelConfig
+from agent_workbench.models.schemas import ModelConfig
 from agent_workbench.services.providers import (
     PROVIDER_FACTORIES,
     AnthropicProvider,
