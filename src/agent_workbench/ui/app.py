@@ -151,12 +151,12 @@ def create_workbench_app() -> gr.Blocks:
                 latency_ms = (time.time() - start_time) * 1000
 
                 print(f"🎯 DEBUG: Response received in {latency_ms:.0f}ms")
-                print(f"🎯 DEBUG: Response preview: {response.reply[:100]}...")
+                print(f"🎯 DEBUG: Response preview: {response.message[:100]}...")
 
                 # Simple history format for Gradio
                 history = [
                     {"role": "user", "content": msg},
-                    {"role": "assistant", "content": response.reply},
+                    {"role": "assistant", "content": response.message},
                 ]
 
                 # Show success status
@@ -194,17 +194,26 @@ def create_workbench_app() -> gr.Blocks:
             print(f"🚨 First arg (message): {args[0] if args else 'NO ARGS'}")
             print("=" * 80)
             try:
+                # Use asyncio.run which handles event loop creation
                 result = asyncio.run(handle_message_async(*args))
                 print("🚨 asyncio.run completed successfully")
                 return result
             except Exception as e:
                 print(f"🚨 WRAPPER EXCEPTION: {e}")
                 import traceback
-
                 print(f"🚨 Traceback:\n{traceback.format_exc()}")
-                raise
 
-        # Wire up events to use FastAPI consolidated service
+                # Return error to UI instead of crashing
+                error_msg = f"Error: {str(e)}"
+                error_html = f"<div class='error'>❌ {error_msg}</div>"
+                history = [
+                    {"role": "user", "content": args[0] if args else ""},
+                    {"role": "assistant", "content": error_msg}
+                ]
+                return "", history, error_html
+
+        # Wire up events
+        print("🎯 Wiring up send button click event...")
         send.click(
             fn=handle_message,
             inputs=[
@@ -218,7 +227,9 @@ def create_workbench_app() -> gr.Blocks:
             ],
             outputs=[message, chatbot, workflow_status],
         )
+        print("✅ Send button click event wired")
 
+        print("🎯 Wiring up message submit event...")
         message.submit(
             fn=handle_message,
             inputs=[
@@ -232,6 +243,7 @@ def create_workbench_app() -> gr.Blocks:
             ],
             outputs=[message, chatbot, workflow_status],
         )
+        print("✅ Message submit event wired")
 
     print("=" * 80)
     print("🎯 GRADIO APP CREATED SUCCESSFULLY")

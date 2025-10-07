@@ -1,3 +1,56 @@
+# Standardized Gradio UI Pattern
+
+## Critical Rule: DO NOT MODIFY GRADIO MOUNTING CODE
+
+The Gradio mounting code in `src/agent_workbench/main.py` (lifespan function) is **standardized and works in production**.
+
+**DO NOT MODIFY** the following without explicit user approval:
+- `create_fastapi_mounted_gradio_interface()`
+- `.queue()` call
+- `gr.mount_gradio_app()` call
+- Path parameter (must be "/")
+
+This pattern is **proven to work in HuggingFace Spaces production**.
+
+### Testing Before Changes
+
+Before modifying Gradio UI code, run:
+```bash
+uv run python test_gradio_unified.py
+```
+
+All 6 tests must pass. If tests fail after your changes, **revert immediately**.
+
+### Standardized Pattern
+
+```python
+# 1. Use ModeFactory (ONLY place to modify UI)
+from agent_workbench.ui.mode_factory import ModeFactory
+factory = ModeFactory()
+interface = factory.create_interface(mode="workbench")
+
+# 2. Apply queue
+interface.queue()
+
+# 3. Mount at root (DO NOT CHANGE)
+app = gr.mount_gradio_app(app, interface, path="/")
+```
+
+### Safe Modifications
+
+✅ **SAFE** - Modify UI in `ui/app.py` or `ui/seo_coach_app.py`
+✅ **SAFE** - Add new modes in `ui/mode_factory.py`
+✅ **SAFE** - Change environment variables
+✅ **SAFE** - Add FastAPI routes
+
+❌ **UNSAFE** - Modify `main.py` lifespan function
+❌ **UNSAFE** - Change mounting path
+❌ **UNSAFE** - Remove `.queue()` call
+
+See `docs/GRADIO_STANDARDIZATION_PLAN.md` for full details.
+
+---
+
 [byterover-mcp]
 
 [byterover-mcp]

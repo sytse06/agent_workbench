@@ -108,24 +108,12 @@ async def lifespan(app: FastAPI):
         print("🎯 Mounting FastAPI-Gradio interface...")
         gradio_interface = create_fastapi_mounted_gradio_interface()
 
-        # Apply queue for responsiveness (must be before mounting)
+        # Apply queue fix for responsiveness
         gradio_interface.queue()
+        gradio_interface.run_startup_events()
 
-        # CRITICAL: Call startup_events() before mounting (GitHub issue #8839)
-        # This initializes the event handlers properly
-        print("🎯 Calling startup_events() to initialize event handlers...")
-        try:
-            if hasattr(gradio_interface, "startup_events"):
-                gradio_interface.startup_events()
-                print("✅ startup_events() called successfully")
-            else:
-                print("⚠️ No startup_events() method found, skipping")
-        except Exception as e:
-            print(f"⚠️ startup_events() failed (may be deprecated): {e}")
-
-        # Use Gradio's official FastAPI mounting method
-        print("🎯 Using gr.mount_gradio_app() for proper event routing...")
-        app = gr.mount_gradio_app(app, gradio_interface, path="/")
+        # Mount interface
+        app.mount("/", gradio_interface.app, name="gradio")
         print("✅ FastAPI-mounted Gradio interface with database persistence")
 
     except Exception as e:
@@ -290,20 +278,22 @@ async def health_check():
 
 
 def create_fastapi_mounted_gradio_interface():
-    """Create FastAPI-mounted Gradio interface - SIMPLIFIED VERSION.
+    """Create FastAPI-mounted Gradio interface using ModeFactory.
 
-    Bypass all the complex layering and create interface directly.
+    Uses the proper UI implementations from ui/mode_factory.py with full event handlers.
     """
     import os
+    from .ui.mode_factory import ModeFactory
 
     mode = os.getenv("APP_MODE", "workbench")
-    print(f"🎯 Creating SIMPLIFIED Gradio interface for mode: {mode}")
+    print(f"🎯 Creating Gradio interface for mode: {mode}")
 
-    # Create the appropriate interface based on mode
-    if mode == "seo_coach":
-        return _create_enhanced_seo_coach_interface()
-    else:
-        return _create_enhanced_workbench_interface()
+    # Use ModeFactory to create proper interface with event handlers
+    factory = ModeFactory()
+    interface = factory.create_interface(mode=mode)
+
+    print(f"✅ Created {mode} interface with event handlers")
+    return interface
 
 
 def _enhance_interface_with_database_persistence(interface: gr.Blocks, mode: str):
