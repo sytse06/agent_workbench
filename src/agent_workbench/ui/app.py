@@ -201,6 +201,7 @@ def create_workbench_app() -> gr.Blocks:
             except Exception as e:
                 print(f"🚨 WRAPPER EXCEPTION: {e}")
                 import traceback
+
                 print(f"🚨 Traceback:\n{traceback.format_exc()}")
 
                 # Return error to UI instead of crashing
@@ -208,7 +209,7 @@ def create_workbench_app() -> gr.Blocks:
                 error_html = f"<div class='error'>❌ {error_msg}</div>"
                 history = [
                     {"role": "user", "content": args[0] if args else ""},
-                    {"role": "assistant", "content": error_msg}
+                    {"role": "assistant", "content": error_msg},
                 ]
                 return "", history, error_html
 

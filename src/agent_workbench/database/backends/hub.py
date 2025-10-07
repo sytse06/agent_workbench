@@ -6,8 +6,6 @@ for use in HuggingFace Spaces deployment where SQLite persistence is not availab
 
 from typing import Any, Dict, List, Optional
 
-from agent_workbench.api.hub_database import HubDatabase
-
 
 class HubBackend:
     """HuggingFace Hub database backend.
@@ -85,7 +83,9 @@ class HubBackend:
         """
         # TODO: Implement delete in HubDatabase layer
         # Could be done by filtering out the row and re-saving the table
-        print(f"⚠️ Delete conversation not yet implemented for Hub DB: {conversation_id}")
+        print(
+            f"⚠️ Delete conversation not yet implemented for Hub DB: {conversation_id}"
+        )
         return False
 
     # ========================================================================
@@ -103,9 +103,7 @@ class HubBackend:
         import uuid
 
         message_id = message_data.get("id", str(uuid.uuid4()))
-        print(
-            f"⚠️ Message storage in Hub DB not yet fully implemented: {message_id}"
-        )
+        print(f"⚠️ Message storage in Hub DB not yet fully implemented: {message_id}")
         # Could store in separate messages table similar to conversations
         return message_id
 
@@ -116,7 +114,10 @@ class HubBackend:
         This would need to be implemented in HubDatabase layer.
         """
         # TODO: Implement message retrieval from HubDatabase
-        print(f"⚠️ Message retrieval from Hub DB not yet fully implemented: {conversation_id}")
+        print(
+            "⚠️ Message retrieval from Hub DB not yet fully implemented: "
+            f"{conversation_id}"
+        )
         return []
 
     def delete_message(self, message_id: str) -> bool:
@@ -179,9 +180,7 @@ class HubBackend:
     # Context Operations
     # ========================================================================
 
-    def save_context(
-        self, conversation_id: str, context_data: Dict[str, Any]
-    ) -> bool:
+    def save_context(self, conversation_id: str, context_data: Dict[str, Any]) -> bool:
         """Save conversation context to Hub DB.
 
         Context is stored using Hub DB's key-value operations.

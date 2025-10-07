@@ -47,12 +47,17 @@ class ConversationService:
 
             if not conversation:
                 # Create new conversation
-                self.db.save_conversation({
-                    "id": conversation_id,
-                    "title": f"Conversation {conversation_id[:8]}",
-                    "mode": "workbench",
-                })
+                self.db.save_conversation(
+                    {
+                        "id": conversation_id,
+                        "title": f"Conversation {conversation_id[:8]}",
+                        "mode": "workbench",
+                    }
+                )
                 conversation = self.db.get_conversation(conversation_id)
+
+                if not conversation:
+                    raise ConversationError("Failed to create conversation")
 
             return conversation
         except Exception as e:
@@ -75,11 +80,13 @@ class ConversationService:
         """
         try:
             # Create message in database
-            message_id = self.db.save_message({
-                "conversation_id": conv_id,
-                "role": role,
-                "content": content,
-            })
+            message_id = self.db.save_message(
+                {
+                    "conversation_id": conv_id,
+                    "role": role,
+                    "content": content,
+                }
+            )
 
             return message_id
         except Exception as e:
@@ -162,17 +169,21 @@ class ConversationService:
         """
         try:
             conversation_id = str(uuid4())
-            self.db.save_conversation({
-                "id": conversation_id,
-                "title": title or f"Conversation {conversation_id[:8]}",
-                "mode": "workbench",
-            })
+            self.db.save_conversation(
+                {
+                    "id": conversation_id,
+                    "title": title or f"Conversation {conversation_id[:8]}",
+                    "mode": "workbench",
+                }
+            )
             return conversation_id
         except Exception as e:
             error_msg = f"Failed to create conversation: {str(e)}"
             raise ConversationError(error_msg) from e
 
-    def get_conversations(self, limit: int = 50, mode: Optional[str] = None) -> List[ConversationSummary]:
+    def get_conversations(
+        self, limit: int = 50, mode: Optional[str] = None
+    ) -> List[ConversationSummary]:
         """Get list of conversations (legacy method).
 
         Args:
@@ -190,14 +201,24 @@ class ConversationService:
 
             summaries = []
             for conv in conversations:
-                summaries.append(ConversationSummary(
-                    id=UUID(conv["id"]),
-                    title=conv.get("title", "Untitled"),
-                    created_at=datetime.fromisoformat(conv["created_at"]) if isinstance(conv["created_at"], str) else conv["created_at"],
-                    last_activity=datetime.fromisoformat(conv["updated_at"]) if isinstance(conv["updated_at"], str) else conv["updated_at"],
-                    message_count=0,  # Would need to query separately
-                    llm_config=None,
-                ))
+                summaries.append(
+                    ConversationSummary(
+                        id=UUID(conv["id"]),
+                        title=conv.get("title", "Untitled"),
+                        created_at=(
+                            datetime.fromisoformat(conv["created_at"])
+                            if isinstance(conv["created_at"], str)
+                            else conv["created_at"]
+                        ),
+                        last_activity=(
+                            datetime.fromisoformat(conv["updated_at"])
+                            if isinstance(conv["updated_at"], str)
+                            else conv["updated_at"]
+                        ),
+                        message_count=0,  # Would need to query separately
+                        llm_config=None,
+                    )
+                )
 
             return summaries
         except Exception as e:
@@ -230,8 +251,16 @@ class ConversationService:
             return ConversationResponse(
                 id=UUID(conversation["id"]),
                 title=conversation.get("title", "Untitled"),
-                created_at=datetime.fromisoformat(conversation["created_at"]) if isinstance(conversation["created_at"], str) else conversation["created_at"],
-                updated_at=datetime.fromisoformat(conversation["updated_at"]) if isinstance(conversation["updated_at"], str) else conversation["updated_at"],
+                created_at=(
+                    datetime.fromisoformat(conversation["created_at"])
+                    if isinstance(conversation["created_at"], str)
+                    else conversation["created_at"]
+                ),
+                updated_at=(
+                    datetime.fromisoformat(conversation["updated_at"])
+                    if isinstance(conversation["updated_at"], str)
+                    else conversation["updated_at"]
+                ),
                 messages=messages,
                 llm_config=None,
             )

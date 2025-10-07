@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .schemas import ModelConfig
 
-
 # ============================================================================
 # Chat Models
 # ============================================================================
@@ -25,7 +24,9 @@ class ChatRequest(BaseModel):
         New conversation:
             >>> request = ChatRequest(
             ...     message="Explain closures in JavaScript",
-            ...     llm_config=ModelConfig(provider="anthropic", model_name="claude-3.5-sonnet")
+            ...     llm_config=ModelConfig(
+            ...         provider="anthropic", model_name="claude-3.5-sonnet"
+            ...     )
             ... )
 
         Continue existing conversation:
@@ -35,7 +36,9 @@ class ChatRequest(BaseModel):
             ... )
     """
 
-    message: str = Field(..., description="User message", min_length=1, max_length=10000)
+    message: str = Field(
+        ..., description="User message", min_length=1, max_length=10000
+    )
     conversation_id: Optional[UUID] = Field(
         None,
         description="Existing conversation ID (None creates new conversation)",
@@ -142,7 +145,10 @@ class ChatResponse(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "message": "A closure is a function that captures variables from its outer scope...",
+                "message": (
+                    "A closure is a function that captures variables "
+                    "from its outer scope..."
+                ),
                 "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
                 "message_count": 1,
                 "model_used": "anthropic/claude-3.5-sonnet",
@@ -430,7 +436,9 @@ class ValidationResult(BaseModel):
     errors: List[str] = Field(
         default_factory=list,
         description="List of validation errors",
-        examples=[["Invalid provider: 'unknown'", "Temperature must be between 0 and 2"]],
+        examples=[
+            ["Invalid provider: 'unknown'", "Temperature must be between 0 and 2"]
+        ],
     )
 
     model_config = ConfigDict(

@@ -1,17 +1,17 @@
-"""Tests for direct chat endpoint (Phase 0 baseline)."""
+"""Tests for simple chat endpoint (Phase 1)."""
 
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.agent_workbench.api.routes.direct_chat import (
-    DirectChatRequest,
-    DirectChatResponse,
+from src.agent_workbench.api.routes.simple_chat import (
     ModelTestRequest,
     ModelTestResponse,
-    direct_chat,
+    SimpleChatRequest,
+    SimpleChatResponse,
+    simple_chat,
 )
-from src.agent_workbench.api.routes.direct_chat import (
+from src.agent_workbench.api.routes.simple_chat import (
     test_model_connectivity as model_connectivity_endpoint,
 )
 
@@ -24,21 +24,21 @@ async def test_direct_chat_success():
     mock_response.reply = "Hello! This is a test response."
 
     with patch(
-        "src.agent_workbench.api.routes.direct_chat.ChatService"
+        "src.agent_workbench.api.routes.simple_chat.ChatService"
     ) as mock_service:
         mock_service.return_value.chat_completion = AsyncMock(
             return_value=mock_response
         )
 
-        request = DirectChatRequest(
+        request = SimpleChatRequest(
             message="Hello, test message",
             provider="openrouter",
             model_name="qwen/qwq-32b-preview",
         )
 
-        response = await direct_chat(request)
+        response = await simple_chat(request)
 
-        assert isinstance(response, DirectChatResponse)
+        assert isinstance(response, SimpleChatResponse)
         assert response.content == "Hello! This is a test response."
         assert response.model_used == "qwen/qwq-32b-preview"
         assert response.provider_used == "openrouter"
@@ -50,14 +50,14 @@ async def test_direct_chat_success():
 async def test_direct_chat_failure():
     """Test direct chat error handling."""
     with patch(
-        "src.agent_workbench.api.routes.direct_chat.ChatService"
+        "src.agent_workbench.api.routes.simple_chat.ChatService"
     ) as mock_service:
         # Mock service to raise an exception
         mock_service.return_value.chat_completion = AsyncMock(
             side_effect=Exception("API connection failed")
         )
 
-        request = DirectChatRequest(
+        request = SimpleChatRequest(
             message="Hello, test message",
             provider="openrouter",
             model_name="qwen/qwq-32b-preview",
@@ -65,7 +65,7 @@ async def test_direct_chat_failure():
 
         # Should raise HTTPException
         with pytest.raises(Exception):  # HTTPException from FastAPI
-            await direct_chat(request)
+            await simple_chat(request)
 
 
 @pytest.mark.asyncio
@@ -144,15 +144,15 @@ async def test_model_connectivity_failure():
 
 
 def test_direct_chat_request_validation():
-    """Test direct chat request validation."""
+    """Test simple chat request validation."""
     # Valid request
-    request = DirectChatRequest(message="Test message")
+    request = SimpleChatRequest(message="Test message")
     assert request.message == "Test message"
     assert request.provider == "openrouter"  # default
     assert request.model_name == "anthropic/claude-3.5-sonnet"  # default
 
     # Custom parameters
-    request = DirectChatRequest(
+    request = SimpleChatRequest(
         message="Test message",
         provider="anthropic",
         model_name="claude-3-sonnet",

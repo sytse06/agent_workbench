@@ -238,7 +238,7 @@ class HubSession:
     def __init__(self, hub_db: HubDatabase):
         self.hub_db = hub_db
 
-    def execute(self, query: str, params: Dict = None):
+    def execute(self, query: str, params: Optional[Dict] = None):
         """Execute a query (limited compatibility)."""
         # This is a simplified compatibility layer
         # Real implementation would need query parsing

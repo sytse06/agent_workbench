@@ -7,7 +7,7 @@ from typing import List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)

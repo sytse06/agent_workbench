@@ -18,7 +18,6 @@ except ImportError:
     DOTENV_AVAILABLE = False
 from fastapi.middleware.cors import CORSMiddleware
 
-from .database import init_adaptive_database
 from .api.database import get_session
 from .api.routes import (
     agent_configs,
@@ -30,6 +29,7 @@ from .api.routes import (
     models,
     simple_chat,
 )
+from .database import init_adaptive_database
 from .models.schemas import ModelConfig
 from .services.context_service import ContextService
 from .services.langgraph_bridge import LangGraphStateBridge
@@ -283,6 +283,7 @@ def create_fastapi_mounted_gradio_interface():
     Uses the proper UI implementations from ui/mode_factory.py with full event handlers.
     """
     import os
+
     from .ui.mode_factory import ModeFactory
 
     mode = os.getenv("APP_MODE", "workbench")

@@ -86,8 +86,7 @@ class TestConversationRoutes:
         # Mock get_conversation to return proper data
         from datetime import datetime
 
-        from agent_workbench.models.schemas import ConversationResponse
-        from agent_workbench.models.schemas import ModelConfig
+        from agent_workbench.models.schemas import ConversationResponse, ModelConfig
 
         mock_model_config = ModelConfig(
             provider="ollama",

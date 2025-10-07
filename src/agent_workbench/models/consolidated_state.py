@@ -269,9 +269,7 @@ class ValidatedWorkbenchState(BaseModel):
     def validate_retry_count(cls, v: int) -> int:
         """Validate retry count is within safe bounds."""
         if v > 5:
-            raise ValueError(
-                "Retry count cannot exceed 5 to prevent infinite loops"
-            )
+            raise ValueError("Retry count cannot exceed 5 to prevent infinite loops")
         return v
 
     def to_typeddict(self) -> WorkbenchState:
@@ -287,9 +285,7 @@ class ValidatedWorkbenchState(BaseModel):
         return data  # type: ignore
 
     @classmethod
-    def from_typeddict(
-        cls, state: WorkbenchState
-    ) -> "ValidatedWorkbenchState":
+    def from_typeddict(cls, state: WorkbenchState) -> "ValidatedWorkbenchState":
         """Create validated state from TypedDict.
 
         Args:

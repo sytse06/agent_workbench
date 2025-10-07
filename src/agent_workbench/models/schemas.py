@@ -42,7 +42,9 @@ class ModelConfig(BaseModel):
 
     provider: str = Field(
         ...,
-        description="Provider name (openrouter, ollama, openai, anthropic, mistral, google)",
+        description=(
+            "Provider name (openrouter, ollama, openai, anthropic, " "mistral, google)"
+        ),
         examples=["openrouter", "anthropic", "ollama", "openai", "mistral"],
     )
     model_name: str = Field(
@@ -86,7 +88,10 @@ class ModelConfig(BaseModel):
     system_prompt: Optional[str] = Field(
         None,
         description="System prompt to use",
-        examples=["You are a helpful assistant.", "You are an expert Python programmer."],
+        examples=[
+            "You are a helpful assistant.",
+            "You are an expert Python programmer.",
+        ],
     )
     streaming: bool = Field(
         default=True,
@@ -123,7 +128,8 @@ class ModelConfig(BaseModel):
         }
         if v.lower() not in allowed_providers:
             raise ValueError(
-                f"Provider '{v}' not supported. Must be one of: {', '.join(sorted(allowed_providers))}"
+                f"Provider '{v}' not supported. Must be one of: "
+                f"{', '.join(sorted(allowed_providers))}"
             )
         return v.lower()
 
@@ -139,7 +145,8 @@ class ModelConfig(BaseModel):
             parts = v.split("/")
             if len(parts) != 2:
                 raise ValueError(
-                    "Model name with '/' must have format 'provider/model' (e.g., 'anthropic/claude-3.5-sonnet')"
+                    "Model name with '/' must have format 'provider/model' "
+                    "(e.g., 'anthropic/claude-3.5-sonnet')"
                 )
             if not all(part.strip() for part in parts):
                 raise ValueError("Model name parts cannot be empty")
@@ -153,7 +160,8 @@ class ModelConfig(BaseModel):
         # (temperature=0 means deterministic, but top_p<1 adds randomness)
         if self.temperature == 0.0 and self.top_p < 1.0:
             raise ValueError(
-                "Contradictory sampling: temperature=0.0 (deterministic) conflicts with top_p<1.0 (random). "
+                "Contradictory sampling: temperature=0.0 (deterministic) "
+                "conflicts with top_p<1.0 (random). "
                 "Either use temperature>0 or set top_p=1.0"
             )
 
@@ -387,7 +395,10 @@ class AgentConfigSchema(BaseModel):
                 "id": "750e8400-e29b-41d4-a716-446655440002",
                 "name": "Code Reviewer",
                 "description": "Automated code review agent configuration",
-                "config": {"max_iterations": 5, "tools": ["git", "linter", "test_runner"]},
+                "config": {
+                    "max_iterations": 5,
+                    "tools": ["git", "linter", "test_runner"],
+                },
                 "created_at": "2025-01-05T10:00:00Z",
                 "updated_at": "2025-01-05T11:00:00Z",
             }

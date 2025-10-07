@@ -7,7 +7,7 @@ using SQLAlchemy ORM with async/await support.
 import asyncio
 import concurrent.futures
 from typing import Any, Callable, Dict, List, Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,6 +54,7 @@ class SQLiteBackend:
         This helper runs async operations in a separate thread to avoid
         "event loop already running" errors in pytest-asyncio.
         """
+
         def run_in_new_loop(coro_func):
             """Run coroutine in a new event loop in separate thread."""
             new_loop = asyncio.new_event_loop()
@@ -75,9 +76,7 @@ class SQLiteBackend:
         """Save conversation using SQLAlchemy async models."""
         return self._run_async(self._async_save_conversation(conversation_data))
 
-    async def _async_save_conversation(
-        self, conversation_data: Dict[str, Any]
-    ) -> str:
+    async def _async_save_conversation(self, conversation_data: Dict[str, Any]) -> str:
         """Async implementation of save_conversation."""
         async for session in self.session_factory():
             # Check if conversation ID provided and exists
@@ -97,9 +96,7 @@ class SQLiteBackend:
 
             # Create new conversation
             create_data = {
-                k: v
-                for k, v in conversation_data.items()
-                if k in ["user_id", "title"]
+                k: v for k, v in conversation_data.items() if k in ["user_id", "title"]
             }
 
             # Convert user_id string to UUID if provided
@@ -108,6 +105,9 @@ class SQLiteBackend:
 
             conversation = await ConversationModel.create(session, **create_data)
             return str(conversation.id)
+
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
 
     def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
         """Get conversation using SQLAlchemy async models."""
@@ -133,6 +133,9 @@ class SQLiteBackend:
                 "updated_at": conversation.updated_at.isoformat(),
                 "data": {},  # Additional metadata can be stored here
             }
+
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
 
     def list_conversations(
         self, mode: Optional[str] = None, limit: int = 50
@@ -169,6 +172,9 @@ class SQLiteBackend:
                 for conv in conversations
             ]
 
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
+
     def update_conversation(
         self, conversation_id: str, conversation_data: Dict[str, Any]
     ) -> bool:
@@ -189,9 +195,7 @@ class SQLiteBackend:
                 return False
 
             update_data = {
-                k: v
-                for k, v in conversation_data.items()
-                if k in ["title", "user_id"]
+                k: v for k, v in conversation_data.items() if k in ["title", "user_id"]
             }
 
             # Convert user_id string to UUID if provided
@@ -200,6 +204,9 @@ class SQLiteBackend:
 
             await conversation.update(session, **update_data)
             return True
+
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
 
     def delete_conversation(self, conversation_id: str) -> bool:
         """Delete conversation using SQLAlchemy async models."""
@@ -217,9 +224,12 @@ class SQLiteBackend:
             await conversation.delete(session)
             return True
 
-    # ========================================================================
-    # Message Operations
-    # ========================================================================
+        # ========================================================================
+        # Message Operations
+        # ========================================================================
+
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
 
     def save_message(self, message_data: Dict[str, Any]) -> str:
         """Save message using SQLAlchemy async models."""
@@ -241,13 +251,14 @@ class SQLiteBackend:
             message = await MessageModel.create(session, **create_data)
             return str(message.id)
 
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
+
     def get_messages(self, conversation_id: str) -> List[Dict[str, Any]]:
         """Get messages using SQLAlchemy async models."""
         return self._run_async(self._async_get_messages(conversation_id))
 
-    async def _async_get_messages(
-        self, conversation_id: str
-    ) -> List[Dict[str, Any]]:
+    async def _async_get_messages(self, conversation_id: str) -> List[Dict[str, Any]]:
         """Async implementation of get_messages."""
         async for session in self.session_factory():
             messages = await MessageModel.get_by_conversation(
@@ -266,6 +277,9 @@ class SQLiteBackend:
                 for msg in messages
             ]
 
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
+
     def delete_message(self, message_id: str) -> bool:
         """Delete message using SQLAlchemy async models."""
         return self._run_async(self._async_delete_message(message_id))
@@ -280,9 +294,12 @@ class SQLiteBackend:
             await message.delete(session)
             return True
 
-    # ========================================================================
-    # Business Profile Operations
-    # ========================================================================
+        # ========================================================================
+        # Business Profile Operations
+        # ========================================================================
+
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
 
     def save_business_profile(self, profile_data: Dict[str, Any]) -> str:
         """Save business profile.
@@ -299,7 +316,10 @@ class SQLiteBackend:
             # Store business profile data in config JSON field
             create_data = {
                 "name": profile_data.get("business_name", "Business Profile"),
-                "description": f"Business profile for {profile_data.get('business_name', 'Unknown')}",
+                "description": (
+                    f"Business profile for "
+                    f"{profile_data.get('business_name', 'Unknown')}"
+                ),
                 "config": profile_data,
             }
 
@@ -308,6 +328,9 @@ class SQLiteBackend:
 
             profile = await AgentConfigModel.create(session, **create_data)
             return str(profile.id)
+
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
 
     def get_business_profile(self, profile_id: str) -> Optional[Dict[str, Any]]:
         """Get business profile."""
@@ -327,6 +350,9 @@ class SQLiteBackend:
             business_data["id"] = str(profile.id)
             return business_data
 
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
+
     def list_business_profiles(self, limit: int = 50) -> List[Dict[str, Any]]:
         """List business profiles."""
         return self._run_async(self._async_list_business_profiles(limit))
@@ -338,12 +364,16 @@ class SQLiteBackend:
         async for session in self.session_factory():
             profiles = await AgentConfigModel.get_all(session)
 
-            # Filter for business profiles (simplified - in production would need better filtering)
+            # Filter for business profiles (simplified - in production would
+            # need better filtering)
             return [
                 {**profile.config, "id": str(profile.id)}
                 for profile in profiles[:limit]
                 if "business_name" in profile.config
             ]
+
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
 
     def update_business_profile(
         self, profile_id: str, profile_data: Dict[str, Any]
@@ -367,6 +397,9 @@ class SQLiteBackend:
             await profile.update(session, config=updated_config)
             return True
 
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
+
     def delete_business_profile(self, profile_id: str) -> bool:
         """Delete business profile."""
         return self._run_async(self._async_delete_business_profile(profile_id))
@@ -381,13 +414,14 @@ class SQLiteBackend:
             await profile.delete(session)
             return True
 
-    # ========================================================================
-    # Context Operations
-    # ========================================================================
+        # ========================================================================
+        # Context Operations
+        # ========================================================================
 
-    def save_context(
-        self, conversation_id: str, context_data: Dict[str, Any]
-    ) -> bool:
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
+
+    def save_context(self, conversation_id: str, context_data: Dict[str, Any]) -> bool:
         """Save conversation context.
 
         Note: Context is currently stored as metadata in conversation.
@@ -411,6 +445,9 @@ class SQLiteBackend:
             # Could extend ConversationModel to have context JSON field
             return True
 
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")
+
     def get_context(self, conversation_id: str) -> Optional[Dict[str, Any]]:
         """Get conversation context."""
         return self._run_async(self._async_get_context(conversation_id))
@@ -429,3 +466,6 @@ class SQLiteBackend:
             # Return empty context for now
             # In future, fetch from dedicated context table
             return {"active_contexts": [], "context_data": {}}
+
+        # Fallback if session factory yields no sessions
+        raise RuntimeError("No database session available")

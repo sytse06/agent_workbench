@@ -5,9 +5,8 @@ architecture while providing lightweight chat functionality for testing/debuggin
 """
 
 import logging
-from typing import Any, Dict, TypedDict
+from typing import Any, Dict, Optional, TypedDict
 
-from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import StateGraph
 
 from ..models.schemas import ModelConfig
@@ -27,7 +26,7 @@ class SimpleChatState(TypedDict):
     assistant_response: str
     model_config: ModelConfig
     execution_successful: bool
-    error_message: str | None
+    error_message: Optional[str]
 
 
 class SimpleChatWorkflow:
@@ -87,7 +86,7 @@ class SimpleChatWorkflow:
         Returns:
             Updated state
         """
-        logger.info(f"🔄 Simple workflow: Processing input...")
+        logger.info("🔄 Simple workflow: Processing input...")
 
         if not state.get("user_message"):
             logger.error("❌ No user message provided")
@@ -111,13 +110,13 @@ class SimpleChatWorkflow:
         Returns:
             Updated state with assistant response
         """
-        logger.info(f"🤖 Simple workflow: Generating response...")
+        logger.info("🤖 Simple workflow: Generating response...")
 
         try:
             # Get LLM response
             response = await self.llm_service.chat_completion(
                 message=state["user_message"],
-                conversation_id=None  # No conversation persistence
+                conversation_id=None,  # No conversation persistence
             )
 
             logger.info(f"✅ Response generated: {response.reply[:50]}...")
@@ -164,6 +163,9 @@ class SimpleChatWorkflow:
         # Execute workflow
         final_state = await self.workflow.ainvoke(initial_state)
 
-        logger.info(f"✅ Simple workflow completed: success={final_state['execution_successful']}")
+        logger.info(
+            "✅ Simple workflow completed: "
+            f"success={final_state['execution_successful']}"
+        )
 
         return final_state

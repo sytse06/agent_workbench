@@ -161,9 +161,7 @@ class AdaptiveDatabase:
     # Context Operations - Simple Delegation
     # ========================================================================
 
-    def save_context(
-        self, conversation_id: str, context_data: Dict[str, Any]
-    ) -> bool:
+    def save_context(self, conversation_id: str, context_data: Dict[str, Any]) -> bool:
         """Save conversation context (delegates to backend)."""
         return self.backend.save_context(conversation_id, context_data)
 

@@ -450,5 +450,5 @@ PROVIDER_FACTORIES: Dict[str, Type[ProviderFactory]] = {
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "mistral": MistralProvider,
-    "google": "GoogleProvider",  # Will be added if needed
+    # "google": GoogleProvider,  # Will be added if needed
 }

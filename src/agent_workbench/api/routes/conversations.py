@@ -5,7 +5,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ...models.api_models import ConversationResponse, ConversationSummary, CreateConversationRequest
+from ...models.api_models import (
+    ConversationResponse,
+    ConversationSummary,
+    CreateConversationRequest,
+)
 from ...services.conversation_service import ConversationService
 
 router = APIRouter(prefix="/api/v1/conversations", tags=["conversations"])
@@ -42,12 +46,12 @@ async def create_conversation(
     Returns:
         Created conversation response
     """
-    conversation_id = await service.create_conversation(
+    conversation_id = service.create_conversation(
         title=request.title,
         model_config=request.model_config,
         is_temporary=request.is_temporary,
     )
-    return await service.get_conversation(conversation_id)
+    return service.get_conversation(conversation_id)
 
 
 @router.get(
@@ -71,7 +75,7 @@ async def list_conversations(
     Returns:
         List of conversation summaries
     """
-    return await service.get_conversations(limit=limit)
+    return service.get_conversations(limit=limit)
 
 
 @router.get(
@@ -95,7 +99,7 @@ async def get_conversation(
     Returns:
         Conversation response
     """
-    return await service.get_conversation(conversation_id)
+    return service.get_conversation(str(conversation_id))
 
 
 @router.delete(
@@ -115,7 +119,7 @@ async def delete_conversation(
         conversation_id: Conversation ID
         service: Conversation service instance
     """
-    success = await service.delete_conversation(conversation_id)
+    success = service.delete_conversation(str(conversation_id))
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found"

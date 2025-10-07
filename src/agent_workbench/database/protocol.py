@@ -92,7 +92,8 @@ class DatabaseBackend(Protocol):
 
         Args:
             conversation_id: UUID string of conversation to update
-            conversation_data: Dictionary with fields to update (partial updates allowed)
+            conversation_data: Dictionary with fields to update (partial
+                updates allowed)
 
         Returns:
             True if update succeeded, False if conversation not found
@@ -279,9 +280,7 @@ class DatabaseBackend(Protocol):
     # Context Operations (Workflow State Management)
     # ========================================================================
 
-    def save_context(
-        self, conversation_id: str, context_data: Dict[str, Any]
-    ) -> bool:
+    def save_context(self, conversation_id: str, context_data: Dict[str, Any]) -> bool:
         """Save conversation context/state data.
 
         Used to persist LangGraph workflow state between sessions.

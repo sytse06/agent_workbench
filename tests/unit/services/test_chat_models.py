@@ -1,6 +1,5 @@
 """Tests for chat models."""
 
-from agent_workbench.models.schemas import ConversationSummary
 from agent_workbench.models.api_models import (
     ChatRequest,
     ChatResponse,
@@ -10,6 +9,7 @@ from agent_workbench.models.api_models import (
     ModelInfo,
     ValidationResult,
 )
+from agent_workbench.models.schemas import ConversationSummary
 
 
 class TestModelConfig:

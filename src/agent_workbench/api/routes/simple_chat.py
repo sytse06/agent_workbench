@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ...models.schemas import ModelConfig
+from ...services.llm_service import ChatService
 from ...services.simple_chat_workflow import SimpleChatWorkflow
 
 logger = logging.getLogger(__name__)
@@ -124,7 +125,9 @@ async def simple_chat(request: SimpleChatRequest) -> SimpleChatResponse:
             logger.error(f"❌ Workflow failed: {error_msg}")
             raise HTTPException(status_code=500, detail=f"Workflow failed: {error_msg}")
 
-        logger.info(f"📝 Response preview: {final_state['assistant_response'][:100]}...")
+        logger.info(
+            f"📝 Response preview: {final_state['assistant_response'][:100]}..."
+        )
 
         result = SimpleChatResponse(
             content=final_state["assistant_response"],
