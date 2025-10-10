@@ -111,6 +111,15 @@ async def lifespan(app: FastAPI):
         # Apply queue for responsiveness
         gradio_interface.queue()
 
+        # CRITICAL: Run startup events to initialize event handlers (Gradio 5.x)
+        # In Gradio 4.x, this method doesn't exist but .queue() is sufficient
+        # In Gradio 5.x, this is required for buttons to respond
+        if hasattr(gradio_interface, 'run_startup_events'):
+            print("🎯 Running startup events (Gradio 5.x)")
+            gradio_interface.run_startup_events()
+        else:
+            print("⚠️ run_startup_events() not available (Gradio 4.x), relying on .queue()")
+
         # Mount interface
         app.mount("/", gradio_interface.app, name="gradio")
         print("✅ FastAPI-mounted Gradio interface with database persistence")

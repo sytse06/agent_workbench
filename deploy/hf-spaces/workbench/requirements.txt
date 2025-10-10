@@ -2,9 +2,9 @@
 # Optimized for HF Spaces CPU Basic (16GB RAM, 8 vCPUs)
 
 # Core Framework
-gradio==4.44.0
-fastapi==0.104.1
-uvicorn==0.24.0
+gradio>=5.0.0
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
 
 # Database
 sqlalchemy==2.0.23
