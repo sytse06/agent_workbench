@@ -1,6 +1,6 @@
 """Tests for conversation API routes."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import Mock, patch
 from uuid import UUID
 
 from fastapi.testclient import TestClient
@@ -41,7 +41,7 @@ class TestConversationRoutes:
     def test_create_conversation(self, mock_conversation_service):
         """Test POST /api/v1/conversations endpoint."""
         # Setup mock
-        mock_service_instance = AsyncMock()
+        mock_service_instance = Mock()
         conversation_id = UUID("12345678-1234-5678-1234-567812345678")
         mock_service_instance.create_conversation.return_value = conversation_id
 
@@ -79,7 +79,7 @@ class TestConversationRoutes:
     def test_create_conversation_with_model_config(self, mock_conversation_service):
         """Test POST /api/v1/conversations endpoint with model config."""
         # Setup mock
-        mock_service_instance = AsyncMock()
+        mock_service_instance = Mock()
         conversation_id = UUID("12345678-1234-5678-1234-567812345678")
         mock_service_instance.create_conversation.return_value = conversation_id
 
@@ -163,7 +163,7 @@ class TestConversationRoutes:
         conversation_id = "12345678-1234-5678-1234-567812345678"
 
         # Setup mock
-        mock_service_instance = AsyncMock()
+        mock_service_instance = Mock()
         mock_service_instance.delete_conversation.return_value = True
         mock_conversation_service.return_value = mock_service_instance
 

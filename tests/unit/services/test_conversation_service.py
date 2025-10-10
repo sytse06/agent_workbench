@@ -17,8 +17,8 @@ class TestConversationService:
         """Setup method for tests."""
         self.service = ConversationService()
 
-    @pytest.mark.asyncio
-    async def test_create_conversation_without_title(self):
+    # @pytest.mark.asyncio
+    def test_create_conversation_without_title(self):
         """Test create_conversation without title."""
         conversation_id = UUID("12345678-1234-5678-1234-567812345678")
 
@@ -26,13 +26,13 @@ class TestConversationService:
             "agent_workbench.services.conversation_service.uuid4",
             return_value=conversation_id,
         ):
-            result = await self.service.create_conversation()
+            result = self.service.create_conversation()
 
             assert isinstance(result, UUID)
             assert result == conversation_id
 
-    @pytest.mark.asyncio
-    async def test_create_conversation_with_title(self):
+    # @pytest.mark.asyncio
+    def test_create_conversation_with_title(self):
         """Test create_conversation with title."""
         conversation_id = UUID("12345678-1234-5678-1234-567812345678")
 
@@ -40,13 +40,13 @@ class TestConversationService:
             "agent_workbench.services.conversation_service.uuid4",
             return_value=conversation_id,
         ):
-            result = await self.service.create_conversation(title="Test Conversation")
+            result = self.service.create_conversation(title="Test Conversation")
 
             assert isinstance(result, UUID)
             assert result == conversation_id
 
-    @pytest.mark.asyncio
-    async def test_create_conversation_with_model_config(self):
+    # @pytest.mark.asyncio
+    def test_create_conversation_with_model_config(self):
         """Test create_conversation with model config."""
         conversation_id = UUID("12345678-1234-5678-1234-567812345678")
         model_config = ModelConfig(
@@ -60,34 +60,34 @@ class TestConversationService:
             "agent_workbench.services.conversation_service.uuid4",
             return_value=conversation_id,
         ):
-            result = await self.service.create_conversation(
+            result = self.service.create_conversation(
                 title="Test Conversation", model_config=model_config
             )
 
             assert isinstance(result, UUID)
             assert result == conversation_id
 
-    @pytest.mark.asyncio
-    async def test_get_conversations(self):
+    # @pytest.mark.asyncio
+    def test_get_conversations(self):
         """Test get_conversations method."""
         # Should return empty list for now
-        result = await self.service.get_conversations()
+        result = self.service.get_conversations()
 
         assert isinstance(result, list)
         assert result == []
 
-    @pytest.mark.asyncio
-    async def test_get_conversations_with_limit(self):
+    # @pytest.mark.asyncio
+    def test_get_conversations_with_limit(self):
         """Test get_conversations with limit."""
         # Should return empty list for now
-        result = await self.service.get_conversations(limit=10)
+        result = self.service.get_conversations(limit=10)
 
         assert isinstance(result, list)
         assert result == []
         # In practice, this would test limiting, but we return empty list
 
-    @pytest.mark.asyncio
-    async def test_delete_conversation(self):
+    # @pytest.mark.asyncio
+    def test_delete_conversation(self):
         """Test delete_conversation method."""
         conversation_id = UUID("12345678-1234-5678-1234-567812345678")
 
@@ -105,24 +105,24 @@ class TestConversationService:
             "ConversationModel.get_by_id"
         )
         with patch(patch_path, return_value=None):
-            result = await service_with_session.delete_conversation(conversation_id)
+            result = service_with_session.delete_conversation(conversation_id)
             assert result is False
 
         # Mock ConversationModel.get_by_id to return a conversation
         mock_conversation = AsyncMock()
         mock_conversation.delete = AsyncMock()
         with patch(patch_path, return_value=mock_conversation):
-            result = await service_with_session.delete_conversation(conversation_id)
+            result = service_with_session.delete_conversation(conversation_id)
             assert result is True
             mock_conversation.delete.assert_called_once_with(mock_session)
 
-    @pytest.mark.asyncio
-    async def test_get_conversation(self):
+    # @pytest.mark.asyncio
+    def test_get_conversation(self):
         """Test get_conversation method."""
         conversation_id = UUID("12345678-1234-5678-1234-567812345678")
 
         # Should return ConversationResponse
-        result = await self.service.get_conversation(conversation_id)
+        result = self.service.get_conversation(conversation_id)
 
         assert result is not None
         assert isinstance(result, ConversationResponse)

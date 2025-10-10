@@ -1,6 +1,6 @@
 """Tests for simple chat endpoint (Phase 1)."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -75,7 +75,7 @@ async def test_model_connectivity_success():
     mock_response.reply = "Test response"
 
     with patch(
-        "src.agent_workbench.api.routes.direct_chat.ChatService"
+        "src.agent_workbench.api.routes.simple_chat.ChatService"
     ) as mock_service:
         mock_service.return_value.chat_completion = AsyncMock(
             return_value=mock_response
@@ -103,7 +103,7 @@ async def test_model_connectivity_with_api_key():
     mock_response.reply = "Test response"
 
     with patch(
-        "src.agent_workbench.api.routes.direct_chat.ChatService"
+        "src.agent_workbench.api.routes.simple_chat.ChatService"
     ) as mock_service:
         mock_service.return_value.chat_completion = AsyncMock(
             return_value=mock_response
@@ -125,7 +125,7 @@ async def test_model_connectivity_with_api_key():
 async def test_model_connectivity_failure():
     """Test model connectivity test failure."""
     with patch(
-        "src.agent_workbench.api.routes.direct_chat.ChatService"
+        "src.agent_workbench.api.routes.simple_chat.ChatService"
     ) as mock_service:
         mock_service.return_value.chat_completion = AsyncMock(
             side_effect=Exception("API connection failed")
