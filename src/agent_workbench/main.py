@@ -108,9 +108,8 @@ async def lifespan(app: FastAPI):
         print("🎯 Mounting FastAPI-Gradio interface...")
         gradio_interface = create_fastapi_mounted_gradio_interface()
 
-        # Apply queue fix for responsiveness
+        # Apply queue for responsiveness
         gradio_interface.queue()
-        gradio_interface.run_startup_events()
 
         # Mount interface
         app.mount("/", gradio_interface.app, name="gradio")
