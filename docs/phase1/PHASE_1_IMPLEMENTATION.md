@@ -2521,6 +2521,202 @@ app.mount("/", interface.app)
 
 ---
 
+### HuggingFace Spaces Docker SDK Deployment
+
+**Status:** ✅ Resolved
+**Issue Date:** 2025-10-12
+**Root Cause:** HuggingFace Spaces README.md `sdk_version` override
+
+#### Problem
+
+When deploying to HuggingFace Spaces, the application was experiencing non-responsive buttons despite the UI loading correctly. Investigation revealed a Gradio version mismatch:
+
+**Symptoms:**
+- ❌ UI loads but buttons don't respond to clicks
+- ❌ Event handlers not firing
+- ❌ "Test Event System" button shows no response
+
+**Root Cause Chain:**
+1. `deploy/hf-spaces/workbench/requirements.txt` specifies `gradio>=5.0.0`
+2. Build installs Gradio 5.49.1 initially
+3. HF Spaces detects `sdk: gradio` and `sdk_version: 4.44.0` in README.md frontmatter
+4. HF Spaces **overrides** with `pip install gradio[oauth]==4.44.0` at end of build
+5. Gradio 4.44.0 lacks `run_startup_events()` method (removed in Gradio 4.x, restored in 5.x)
+6. Code has conditional check but `.queue()` alone in Gradio 4.x wasn't sufficient
+
+**Build Log Evidence:**
+```
+Successfully installed ... gradio-5.49.1 ...
+--> RUN pip install gradio[oauth]==4.44.0  # Downgrades to 4.44.0
+```
+
+#### Solution
+
+**Step 1: Change README.md SDK to Docker**
+
+Modified `deploy/hf-spaces/workbench/README.md` and `deploy/hf-spaces/seo-coach/README.md`:
+
+```diff
+---
+title: Agent Workbench - Technical
+emoji: 🛠️
+colorFrom: blue
+colorTo: purple
+-sdk: gradio
+-sdk_version: 4.44.0
++sdk: docker
+app_file: app.py
+---
+```
+
+**Why this works:**
+- `sdk: gradio` triggers HF Spaces to manage Gradio version via `sdk_version`
+- `sdk: docker` tells HF Spaces to use custom Dockerfile instead
+- Custom Dockerfile maintains control over all package versions
+
+**Step 2: Custom Dockerfile**
+
+Created `deploy/hf-spaces/workbench/Dockerfile`:
+
+```dockerfile
+FROM python:3.10
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# CRITICAL: Ensure Gradio 5.x is installed (overrides any default HF Spaces Gradio 4.x)
+# This must come AFTER requirements.txt to ensure version compatibility
+RUN pip install --no-cache-dir --upgrade 'gradio>=5.0.0'
+
+# Install HF Spaces specific packages (without downgrading gradio)
+RUN pip install --no-cache-dir 'uvicorn>=0.14.0' spaces
+
+# Copy application code
+COPY . .
+
+# Expose port
+EXPOSE 7860
+
+# Set environment variables
+ENV GRADIO_SERVER_NAME="0.0.0.0"
+ENV GRADIO_SERVER_PORT="7860"
+
+# Run the application
+CMD ["python", "app.py"]
+```
+
+**Key Design:**
+1. Install requirements.txt first (gets Gradio 5.x)
+2. Explicitly upgrade to `gradio>=5.0.0` to ensure no downgrade
+3. Install HF dependencies without Gradio version pin
+
+**Step 3: Handle Permission Errors**
+
+Fixed `PermissionError` when creating data directory in Docker:
+
+```python
+# deploy/hf-spaces/workbench/app.py
+if __name__ == "__main__":
+    # Create data directory (optional - using Hub DB for persistence)
+    try:
+        data_dir = Path("./data")
+        data_dir.mkdir(exist_ok=True)
+    except PermissionError:
+        print("⚠️ Cannot create ./data directory (using Hub DB instead)")
+```
+
+**Why this matters:**
+- Docker SDK on HF Spaces doesn't allow writing to `/app` directory
+- Using Hub DB for persistence, so `./data` is optional
+- Try-except prevents startup crash
+
+#### Verification
+
+**Successful Deployment:**
+1. ✅ HF Space status: "Running"
+2. ✅ UI loads completely
+3. ✅ Buttons respond immediately
+4. ✅ Event handlers fire correctly
+5. ✅ "Test Event System" button shows timer: "0.1s"
+
+**Build Logs Confirm:**
+- Gradio 5.x installed and maintained throughout build
+- No downgrade to 4.44.0
+- Custom Dockerfile used instead of default HF Spaces build
+
+**Code Path:**
+```python
+# src/agent_workbench/main.py:114-121
+# CRITICAL: Run startup events to initialize event handlers (Gradio 5.x)
+# In Gradio 4.x, this method doesn't exist but .queue() is sufficient
+# In Gradio 5.x, this is required for buttons to respond
+if hasattr(gradio_interface, 'run_startup_events'):
+    print("🎯 Running startup events (Gradio 5.x)")
+    gradio_interface.run_startup_events()
+else:
+    print("⚠️ run_startup_events() not available (Gradio 4.x), relying on .queue()")
+```
+
+#### Lessons Learned
+
+**1. HuggingFace Spaces Build System**
+- README.md frontmatter controls build behavior
+- `sdk: gradio` + `sdk_version` triggers automatic Gradio installation
+- `sdk: docker` gives full control via custom Dockerfile
+
+**2. Gradio Version Compatibility**
+- Gradio 4.x: `.queue()` alone is sufficient for event handlers
+- Gradio 5.x: `.queue()` + `.run_startup_events()` required
+- Conditional check handles both versions gracefully
+
+**3. Docker Permissions**
+- HF Spaces Docker SDK doesn't allow writes to /app
+- Try-except for optional directory creation
+- Hub DB eliminates need for local filesystem
+
+#### Related Files
+
+**Fixed Files:**
+- `deploy/hf-spaces/workbench/README.md` - Changed `sdk: docker`
+- `deploy/hf-spaces/seo-coach/README.md` - Changed `sdk: docker`
+- `deploy/hf-spaces/workbench/Dockerfile` - Custom build with Gradio 5.x
+- `deploy/hf-spaces/workbench/app.py` - Permission error handling
+- `deploy/hf-spaces/seo-coach/app.py` - Permission error handling
+
+**Deployment Files:**
+- `deploy/hf-spaces/workbench/requirements.txt` - Already had `gradio>=5.0.0`
+- `deploy/deploy-manual.sh` - Deployment script
+
+**Core Code:**
+- `src/agent_workbench/main.py:114-121` - Conditional `run_startup_events()`
+
+**Commits:**
+- `88209ce` - fix(hf-spaces): change sdk from gradio to docker in README.md frontmatter
+- `ede6307` - fix(hf-spaces): handle PermissionError when creating data directory
+- `34b4512` - fix(gradio): restore event handlers with conditional run_startup_events()
+
+#### Prevention
+
+**For Future Deployments:**
+1. ✅ Always use `sdk: docker` for full version control
+2. ✅ Include explicit Gradio version upgrade in Dockerfile
+3. ✅ Test buttons after deployment (not just UI loading)
+4. ✅ Check build logs for version downgrades
+5. ✅ Use try-except for optional filesystem operations
+
+**This issue is now resolved and documented for future reference.**
+
+---
+
 ### Future Considerations
 
 #### Phase 2 Extensions
