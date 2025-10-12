@@ -3,8 +3,7 @@ title: Agent Workbench - Technical
 emoji: 🛠️
 colorFrom: blue
 colorTo: purple
-sdk: gradio
-sdk_version: 4.44.0
+sdk: docker
 app_file: app.py
 pinned: true
 license: mit
@@ -32,7 +31,7 @@ AI-powered development and research tool with advanced model controls, designed 
 
 ## Technical Specifications
 
-- **Framework**: Gradio 4.44.0 + FastAPI
+- **Framework**: Gradio 5.x + FastAPI
 - **Database**: SQLite with async support
 - **AI Integration**: LangChain + LangGraph workflows
 - **PWA Features**: Service worker, offline caching, push notifications

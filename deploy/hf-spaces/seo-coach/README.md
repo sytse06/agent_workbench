@@ -3,8 +3,7 @@ title: SEO Coach - Nederland
 emoji: 🚀
 colorFrom: green
 colorTo: blue
-sdk: gradio
-sdk_version: 4.44.0
+sdk: docker
 app_file: app.py
 pinned: true
 license: mit
@@ -57,7 +56,7 @@ Deze tool is speciaal gemaakt voor:
 
 ## Technische Specificaties
 
-- **Framework**: Gradio 4.44.0 + FastAPI
+- **Framework**: Gradio 5.x + FastAPI
 - **Database**: SQLite voor bedrijfsprofielen
 - **AI Integratie**: Geavanceerde taalmodellen voor SEO advies
 - **PWA Functies**: Service worker, offline caching, push notificaties
