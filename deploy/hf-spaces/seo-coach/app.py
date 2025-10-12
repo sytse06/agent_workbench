@@ -46,9 +46,12 @@ os.environ.setdefault('GRADIO_SHARE', 'false')
 
 # Import and run the main FastAPI application
 if __name__ == "__main__":
-    # Create data directory
-    data_dir = Path("./data")
-    data_dir.mkdir(exist_ok=True)
+    # Create data directory (optional - using Hub DB for persistence)
+    try:
+        data_dir = Path("./data")
+        data_dir.mkdir(exist_ok=True)
+    except PermissionError:
+        print("⚠️ Cannot create ./data directory (using Hub DB instead)")
 
     # Import full FastAPI+Gradio application
     from agent_workbench.main import app
