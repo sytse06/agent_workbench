@@ -414,7 +414,7 @@ async def test_agent_returns_structured_output():
 **ONE agent. No multi-agent. No swarm. Get the basics right first.**
 
 Phase 2 is about:
-1. Replacing current LLM calls with LangChain v1's `create_agent()`
+1. Adding LangChain v1's `create_agent()` to existing LLM calls
 2. Adding MCP tools via `langchain-mcp-adapters`
 3. Using middleware for PII redaction, summarization, context
 4. That's it.
