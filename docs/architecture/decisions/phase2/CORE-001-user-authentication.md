@@ -44,9 +44,27 @@ Implement user authentication and per-user settings management as the foundation
 
 ## Architectural Decisions
 
-### 1. HuggingFace OAuth Strategy
+### 1. Provider-Agnostic Authentication Strategy
 
-**Core Approach**: Use Gradio's built-in HF authentication via `auth="huggingface"`
+**Design Philosophy**: Build authentication layer that supports multiple providers without schema migration
+
+**Core Approach**: Generic user fields + provider-specific data in JSON
+
+```python
+# UserModel - Provider-agnostic design
+class UserModel(Base):
+    # Generic fields (work with any auth provider)
+    username: Mapped[str]              # Provider username
+    email: Mapped[Optional[str]]       # User email (if available)
+    auth_provider: Mapped[str]         # "huggingface", "google", "github", etc.
+
+    # Provider-specific data (flexible JSON storage)
+    provider_data: Mapped[Optional[JSON]]  # HF: {hf_user_id, hf_avatar_url, ...}
+```
+
+**Initial Implementation: HuggingFace OAuth**
+
+Use Gradio's built-in HF authentication via `auth="huggingface"`:
 
 ```python
 # Gradio app configuration
@@ -56,10 +74,16 @@ app.launch(auth="huggingface")  # Enables HF OAuth
 # Access authenticated user in handlers
 async def on_load(request: gr.Request):
     username = request.username  # HF username from OAuth
-    # Create/load user from username
+    user = await auth_service.get_or_create_user_from_request(
+        request=request,
+        provider="huggingface"
+    )
 ```
 
-**Pattern**: Extract username from `request.username` (provided by Gradio after HF OAuth)
+**Future Provider Support**: Adding new providers requires:
+1. Update AuthService with provider-specific extraction logic
+2. No database schema changes
+3. No data migration needed
 
 ### 2. Session Management Pattern
 
@@ -162,13 +186,32 @@ src/agent_workbench/main.py                     # Configure auth="huggingface"
 ```python
 # CREATE: services/auth_service.py
 class AuthService:
-    """Handle HuggingFace OAuth and session management."""
+    """Handle multi-provider OAuth and session management."""
 
     def __init__(self, db: AdaptiveDatabase):
         self.db = db
 
-    async def get_or_create_user_from_request(self, request: Request) -> UserModel:
-        """Get or create user from Gradio request."""
+    async def get_or_create_user_from_request(
+        self,
+        request: Request,
+        provider: str = "huggingface"
+    ) -> UserModel:
+        """
+        Get or create user from Gradio request.
+
+        Args:
+            request: Gradio request object with authenticated user info
+            provider: Authentication provider name ("huggingface", "google", etc.)
+
+        Returns:
+            UserModel with populated generic and provider-specific fields
+
+        Implementation:
+            - Extract username from request.username
+            - Extract provider-specific data into provider_data JSON
+            - Populate generic fields (username, email, avatar_url)
+            - Create or update user record
+        """
         pass
 
     async def get_active_session(
@@ -250,11 +293,19 @@ class UserSettingsService:
 
 # Database backend methods (ADD to protocol)
 class DatabaseBackend(Protocol):
-    # User methods
-    def get_user_by_hf_username(self, hf_username: str) -> Optional[UserModel]: ...
-    def get_user_by_hf_id(self, hf_user_id: str) -> Optional[UserModel]: ...
-    def create_user(self, **kwargs) -> UserModel: ...
+    # User methods (provider-agnostic)
+    def get_user_by_username(self, username: str) -> Optional[UserModel]: ...
+    def get_user_by_email(self, email: str, provider: str) -> Optional[UserModel]: ...
+    def create_user(
+        self,
+        username: str,
+        auth_provider: str,
+        email: Optional[str] = None,
+        avatar_url: Optional[str] = None,
+        provider_data: Optional[dict] = None
+    ) -> UserModel: ...
     def update_user_last_login(self, user_id: UUID) -> None: ...
+    def update_user_provider_data(self, user_id: UUID, provider_data: dict) -> None: ...
 
     # Session methods
     def create_user_session(
@@ -307,11 +358,17 @@ class UserModel(Base):
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
 
-    # HuggingFace OAuth data
-    hf_username: Mapped[str] = mapped_column(unique=True, index=True)
-    hf_user_id: Mapped[str] = mapped_column(unique=True)
-    hf_email: Mapped[Optional[str]]
-    hf_avatar_url: Mapped[Optional[str]]
+    # Generic authentication fields (provider-agnostic)
+    username: Mapped[str] = mapped_column(unique=True, index=True)
+    email: Mapped[Optional[str]] = mapped_column(index=True)
+    avatar_url: Mapped[Optional[str]]
+    auth_provider: Mapped[str] = mapped_column(default="huggingface", index=True)
+
+    # Provider-specific data (flexible JSON storage)
+    # HuggingFace: {"hf_user_id": "...", "hf_avatar_url": "...", ...}
+    # Google: {"google_id": "...", "picture": "...", ...}
+    # GitHub: {"github_id": "...", "login": "...", ...}
+    provider_data: Mapped[Optional[JSON]]
 
     # Account metadata
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
@@ -385,9 +442,14 @@ Index('idx_session_user_activity',
       UserSessionModel.user_id,
       UserSessionModel.last_activity)
 
-# User lookup by HF username
-Index('idx_users_hf_username',
-      UserModel.hf_username)
+# User lookup by username (provider-agnostic)
+Index('idx_users_username',
+      UserModel.username)
+
+# User lookup by provider + email (for multi-provider support)
+Index('idx_users_provider_email',
+      UserModel.auth_provider,
+      UserModel.email)
 
 # Settings lookup
 Index('idx_user_settings_key',
@@ -489,8 +551,18 @@ def test_session_activity_update():
 ALTER TABLE conversations ADD COLUMN user_id UUID REFERENCES users(id);
 
 -- Create default/system user for existing conversations
-INSERT INTO users (id, hf_username, hf_user_id)
-VALUES ('00000000-0000-0000-0000-000000000000', 'system', 'system');
+INSERT INTO users (
+    id,
+    username,
+    auth_provider,
+    provider_data
+)
+VALUES (
+    '00000000-0000-0000-0000-000000000000',
+    'system',
+    'internal',
+    '{"internal_user": true}'
+);
 
 -- Link existing conversations to system user
 UPDATE conversations SET user_id = '00000000-0000-0000-0000-000000000000'
@@ -500,9 +572,87 @@ WHERE user_id IS NULL;
 ALTER TABLE conversations ALTER COLUMN user_id SET NOT NULL;
 ```
 
+### Future: Adding New Authentication Provider
+
+**Scenario**: You want to add Google OAuth or GitHub OAuth in the future.
+
+**Required Changes** (no database migration needed):
+
+1. **Add provider-specific extraction logic** in `AuthService`:
+
+```python
+# services/auth_service.py
+
+async def get_or_create_user_from_request(
+    self,
+    request: Request,
+    provider: str = "huggingface"
+) -> UserModel:
+    """Extract user info from request based on provider."""
+
+    if provider == "huggingface":
+        username = request.username
+        # Extract HF-specific data
+        provider_data = {
+            "hf_user_id": request.user_id,  # if available
+            "hf_avatar": request.avatar_url  # if available
+        }
+
+    elif provider == "google":
+        # Extract from Google OAuth token
+        username = request.username
+        email = request.email
+        provider_data = {
+            "google_id": request.sub,
+            "picture": request.picture
+        }
+
+    elif provider == "github":
+        # Extract from GitHub OAuth token
+        username = request.username
+        email = request.email
+        provider_data = {
+            "github_id": request.id,
+            "github_login": request.login
+        }
+
+    # Create or update user with generic fields
+    user = await self.db.get_user_by_username(username)
+    if not user:
+        user = await self.db.create_user(
+            username=username,
+            email=email,
+            auth_provider=provider,
+            provider_data=provider_data
+        )
+
+    return user
+```
+
+2. **Update Gradio configuration** in `main.py`:
+
+```python
+# For Google OAuth (if Gradio supports it in the future)
+app.launch(auth="google")
+
+# Or use custom OAuth handler
+app.launch(auth_callback=custom_oauth_handler)
+```
+
+3. **No database changes needed** - all new data fits into existing schema
+
+**Benefits of Provider-Agnostic Design**:
+- ✅ No schema migration when adding providers
+- ✅ Users from different providers coexist in same table
+- ✅ Generic fields (username, email) work across all providers
+- ✅ Provider-specific data isolated in JSON field
+- ✅ Easy to query users by provider: `WHERE auth_provider = 'google'`
+
 ## Notes
 
 - **Session Timeout**: 30 minutes is configurable via environment variable
 - **Request Metadata**: Extract IP, user agent, referrer from Gradio Request
 - **Privacy**: HF OAuth only provides username, not email (requires additional API call)
 - **Gradio Pattern**: `request.username` is the standard way to access authenticated user
+- **Provider-Agnostic Design**: Architecture supports multiple auth providers without schema changes
+- **Future-Proof**: Adding new providers requires only service layer changes, no database migration
