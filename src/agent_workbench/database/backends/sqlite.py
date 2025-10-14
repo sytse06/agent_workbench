@@ -760,7 +760,7 @@ class SQLiteBackend:
                 session_id=UUID(session_id),
                 user_id=UUID(user_id),
                 action=action,
-                metadata=metadata,
+                activity_metadata=metadata,
             )
             return str(activity.id)
 

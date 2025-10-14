@@ -494,7 +494,7 @@ class SessionActivityModel(Base):
 
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
     action: Mapped[str] = mapped_column(String(100), nullable=False)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    activity_metadata: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
 
     # Relationships
     session: Mapped["UserSessionModel"] = relationship(
