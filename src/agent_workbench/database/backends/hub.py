@@ -4,6 +4,7 @@ This backend provides a Protocol-compliant interface to HuggingFace Hub database
 for use in HuggingFace Spaces deployment where SQLite persistence is not available.
 """
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 
@@ -205,3 +206,417 @@ class HubBackend:
         except Exception as e:
             print(f"❌ Failed to get context for {conversation_id}: {e}")
             return None
+
+    # ========================================================================
+    # User Operations (Provider-Agnostic Authentication)
+    # ========================================================================
+
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """Get user by username using Hub DB key-value store."""
+        try:
+            user_key = f"user_username_{username}"
+            return self.hub_db.get_value(user_key, table="users")
+        except Exception as e:
+            print(f"❌ Failed to get user by username {username}: {e}")
+            return None
+
+    def get_user_by_email(
+        self, email: str, provider: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get user by email and provider using Hub DB key-value store."""
+        try:
+            user_key = f"user_email_{provider}_{email}"
+            return self.hub_db.get_value(user_key, table="users")
+        except Exception as e:
+            print(f"❌ Failed to get user by email {email}: {e}")
+            return None
+
+    def create_user(
+        self,
+        username: str,
+        auth_provider: str,
+        email: Optional[str] = None,
+        avatar_url: Optional[str] = None,
+        provider_data: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Create a new user in Hub DB."""
+        import uuid
+
+        try:
+            user_id = str(uuid.uuid4())
+            user_data = {
+                "id": user_id,
+                "username": username,
+                "email": email,
+                "avatar_url": avatar_url,
+                "auth_provider": auth_provider,
+                "provider_data": provider_data or {},
+                "created_at": datetime.utcnow().isoformat(),
+                "last_login": datetime.utcnow().isoformat(),
+                "is_active": True,
+            }
+
+            # Store by user_id (primary key)
+            self.hub_db.set_value(f"user_id_{user_id}", user_data, table="users")
+
+            # Store by username (for lookup)
+            self.hub_db.set_value(
+                f"user_username_{username}", user_data, table="users"
+            )
+
+            # Store by email if provided (for lookup)
+            if email:
+                self.hub_db.set_value(
+                    f"user_email_{auth_provider}_{email}", user_data, table="users"
+                )
+
+            return user_id
+        except Exception as e:
+            print(f"❌ Failed to create user {username}: {e}")
+            raise
+
+    def update_user_last_login(self, user_id: str) -> bool:
+        """Update user's last_login timestamp."""
+        try:
+            user = self.hub_db.get_value(f"user_id_{user_id}", table="users")
+            if not user:
+                return False
+
+            user["last_login"] = datetime.utcnow().isoformat()
+
+            # Update all user keys
+            self.hub_db.set_value(f"user_id_{user_id}", user, table="users")
+            self.hub_db.set_value(
+                f"user_username_{user['username']}", user, table="users"
+            )
+            if user.get("email"):
+                self.hub_db.set_value(
+                    f"user_email_{user['auth_provider']}_{user['email']}",
+                    user,
+                    table="users",
+                )
+
+            return True
+        except Exception as e:
+            print(f"❌ Failed to update user last_login {user_id}: {e}")
+            return False
+
+    def update_user_provider_data(
+        self, user_id: str, provider_data: Dict[str, Any]
+    ) -> bool:
+        """Update user's provider-specific data."""
+        try:
+            user = self.hub_db.get_value(f"user_id_{user_id}", table="users")
+            if not user:
+                return False
+
+            user["provider_data"] = provider_data
+
+            # Update all user keys
+            self.hub_db.set_value(f"user_id_{user_id}", user, table="users")
+            self.hub_db.set_value(
+                f"user_username_{user['username']}", user, table="users"
+            )
+            if user.get("email"):
+                self.hub_db.set_value(
+                    f"user_email_{user['auth_provider']}_{user['email']}",
+                    user,
+                    table="users",
+                )
+
+            return True
+        except Exception as e:
+            print(f"❌ Failed to update user provider_data {user_id}: {e}")
+            return False
+
+    # ========================================================================
+    # Session Operations (User Session Tracking)
+    # ========================================================================
+
+    def create_user_session(
+        self,
+        user_id: str,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        referrer: Optional[str] = None,
+    ) -> str:
+        """Create a new user session."""
+        import uuid
+
+        try:
+            session_id = str(uuid.uuid4())
+            session_data = {
+                "id": session_id,
+                "user_id": user_id,
+                "session_start": datetime.utcnow().isoformat(),
+                "session_end": None,
+                "last_activity": datetime.utcnow().isoformat(),
+                "ip_address": ip_address,
+                "user_agent": user_agent,
+                "referrer": referrer,
+                "total_messages": 0,
+                "total_tool_calls": 0,
+            }
+
+            self.hub_db.set_value(
+                f"session_{session_id}", session_data, table="sessions"
+            )
+            return session_id
+        except Exception as e:
+            print(f"❌ Failed to create session for user {user_id}: {e}")
+            raise
+
+    def get_active_user_session(
+        self, user_id: str, since: datetime
+    ) -> Optional[Dict[str, Any]]:
+        """Get active session for user (within timeout window).
+
+        Note: Hub DB doesn't have efficient querying, so this is a simplified
+        implementation that would need to be optimized in production.
+        """
+        try:
+            # This is a simplified implementation
+            # In production, would need to maintain a user_id -> active_session mapping
+            session_key = f"active_session_{user_id}"
+            session_data = self.hub_db.get_value(session_key, table="sessions")
+
+            if not session_data:
+                return None
+
+            # Check if session is still active (within timeout)
+            last_activity = datetime.fromisoformat(session_data["last_activity"])
+            if last_activity >= since and not session_data.get("session_end"):
+                return session_data
+
+            return None
+        except Exception as e:
+            print(f"❌ Failed to get active session for user {user_id}: {e}")
+            return None
+
+    def update_session_activity(self, session_id: str) -> bool:
+        """Update session's last_activity timestamp."""
+        try:
+            session = self.hub_db.get_value(f"session_{session_id}", table="sessions")
+            if not session:
+                return False
+
+            session["last_activity"] = datetime.utcnow().isoformat()
+            self.hub_db.set_value(f"session_{session_id}", session, table="sessions")
+
+            # Update active_session mapping
+            self.hub_db.set_value(
+                f"active_session_{session['user_id']}", session, table="sessions"
+            )
+
+            return True
+        except Exception as e:
+            print(f"❌ Failed to update session activity {session_id}: {e}")
+            return False
+
+    def increment_session_messages(self, session_id: str) -> bool:
+        """Increment session's total_messages counter."""
+        try:
+            session = self.hub_db.get_value(f"session_{session_id}", table="sessions")
+            if not session:
+                return False
+
+            session["total_messages"] = session.get("total_messages", 0) + 1
+            self.hub_db.set_value(f"session_{session_id}", session, table="sessions")
+            return True
+        except Exception as e:
+            print(f"❌ Failed to increment session messages {session_id}: {e}")
+            return False
+
+    def increment_session_tool_calls(self, session_id: str) -> bool:
+        """Increment session's total_tool_calls counter."""
+        try:
+            session = self.hub_db.get_value(f"session_{session_id}", table="sessions")
+            if not session:
+                return False
+
+            session["total_tool_calls"] = session.get("total_tool_calls", 0) + 1
+            self.hub_db.set_value(f"session_{session_id}", session, table="sessions")
+            return True
+        except Exception as e:
+            print(f"❌ Failed to increment session tool_calls {session_id}: {e}")
+            return False
+
+    def create_session_activity(
+        self,
+        session_id: str,
+        user_id: str,
+        action: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Log activity within a session."""
+        import uuid
+
+        try:
+            activity_id = str(uuid.uuid4())
+            activity_data = {
+                "id": activity_id,
+                "session_id": session_id,
+                "user_id": user_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "action": action,
+                "metadata": metadata or {},
+            }
+
+            self.hub_db.set_value(
+                f"activity_{activity_id}", activity_data, table="activities"
+            )
+            return activity_id
+        except Exception as e:
+            print(f"❌ Failed to create session activity: {e}")
+            raise
+
+    def end_session(self, session_id: str) -> bool:
+        """Mark session as ended."""
+        try:
+            session = self.hub_db.get_value(f"session_{session_id}", table="sessions")
+            if not session:
+                return False
+
+            session["session_end"] = datetime.utcnow().isoformat()
+            self.hub_db.set_value(f"session_{session_id}", session, table="sessions")
+
+            # Remove from active_session mapping
+            # (Could check if it matches before removing)
+            return True
+        except Exception as e:
+            print(f"❌ Failed to end session {session_id}: {e}")
+            return False
+
+    # ========================================================================
+    # User Settings Operations (Key-Value Store)
+    # ========================================================================
+
+    def get_user_settings(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all settings for a user.
+
+        Note: Hub DB doesn't have efficient list operations.
+        This is a simplified implementation.
+        """
+        try:
+            settings_list_key = f"user_settings_list_{user_id}"
+            settings_list = self.hub_db.get_value(
+                settings_list_key, table="settings"
+            ) or []
+
+            # Retrieve each setting
+            settings = []
+            for setting_key in settings_list:
+                setting = self.hub_db.get_value(
+                    f"setting_{user_id}_{setting_key}", table="settings"
+                )
+                if setting:
+                    settings.append(setting)
+
+            return settings
+        except Exception as e:
+            print(f"❌ Failed to get user settings for {user_id}: {e}")
+            return []
+
+    def get_user_setting(
+        self, user_id: str, setting_key: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get a specific user setting by key."""
+        try:
+            setting = self.hub_db.get_value(
+                f"setting_{user_id}_{setting_key}", table="settings"
+            )
+            return setting
+        except Exception as e:
+            print(f"❌ Failed to get user setting {setting_key}: {e}")
+            return None
+
+    def create_user_setting(
+        self,
+        user_id: str,
+        setting_key: str,
+        setting_value: Dict[str, Any],
+        setting_type: str = "active",
+        category: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> str:
+        """Create a new user setting."""
+        import uuid
+
+        try:
+            setting_id = str(uuid.uuid4())
+            setting_data = {
+                "id": setting_id,
+                "user_id": user_id,
+                "setting_key": setting_key,
+                "setting_value": setting_value,
+                "setting_type": setting_type,
+                "category": category,
+                "description": description,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+
+            self.hub_db.set_value(
+                f"setting_{user_id}_{setting_key}", setting_data, table="settings"
+            )
+
+            # Add to user's settings list
+            settings_list_key = f"user_settings_list_{user_id}"
+            settings_list = self.hub_db.get_value(
+                settings_list_key, table="settings"
+            ) or []
+            if setting_key not in settings_list:
+                settings_list.append(setting_key)
+                self.hub_db.set_value(settings_list_key, settings_list, table="settings")
+
+            return setting_id
+        except Exception as e:
+            print(f"❌ Failed to create user setting {setting_key}: {e}")
+            raise
+
+    def update_user_setting(
+        self, user_id: str, setting_key: str, setting_value: Dict[str, Any]
+    ) -> bool:
+        """Update a user setting's value."""
+        try:
+            setting = self.hub_db.get_value(
+                f"setting_{user_id}_{setting_key}", table="settings"
+            )
+            if not setting:
+                return False
+
+            setting["setting_value"] = setting_value
+            setting["updated_at"] = datetime.utcnow().isoformat()
+
+            self.hub_db.set_value(
+                f"setting_{user_id}_{setting_key}", setting, table="settings"
+            )
+            return True
+        except Exception as e:
+            print(f"❌ Failed to update user setting {setting_key}: {e}")
+            return False
+
+    def delete_user_setting(self, user_id: str, setting_key: str) -> bool:
+        """Delete a user setting.
+
+        Note: Hub DB doesn't have native delete. This is a placeholder.
+        """
+        try:
+            # In a full implementation, would remove from storage
+            # For now, just return True to indicate it would succeed
+            print(
+                f"⚠️ Delete user setting not fully implemented in Hub DB: {setting_key}"
+            )
+
+            # Remove from user's settings list
+            settings_list_key = f"user_settings_list_{user_id}"
+            settings_list = self.hub_db.get_value(
+                settings_list_key, table="settings"
+            ) or []
+            if setting_key in settings_list:
+                settings_list.remove(setting_key)
+                self.hub_db.set_value(settings_list_key, settings_list, table="settings")
+
+            return True
+        except Exception as e:
+            print(f"❌ Failed to delete user setting {setting_key}: {e}")
+            return False
