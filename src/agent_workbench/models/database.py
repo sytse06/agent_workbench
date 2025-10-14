@@ -245,8 +245,12 @@ class UserModel(Base):
     provider_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Account metadata
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
-    last_login: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )
+    last_login: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Relationships
@@ -254,10 +258,16 @@ class UserModel(Base):
         "ConversationModel", back_populates="user", lazy="select"
     )
     settings: Mapped[List["UserSettingModel"]] = relationship(
-        "UserSettingModel", back_populates="user", cascade="all, delete-orphan", lazy="select"
+        "UserSettingModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="select",
     )
     sessions: Mapped[List["UserSessionModel"]] = relationship(
-        "UserSessionModel", back_populates="user", cascade="all, delete-orphan", lazy="select"
+        "UserSessionModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="select",
     )
 
     __table_args__ = (
@@ -324,7 +334,9 @@ class UserSettingModel(Base):
         PG_UUID(as_uuid=True), primary_key=True, default=uuid4
     )
     user_id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
     )
 
     setting_key: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -344,9 +356,7 @@ class UserSettingModel(Base):
     # Relationships
     user: Mapped["UserModel"] = relationship("UserModel", back_populates="settings")
 
-    __table_args__ = (
-        Index("idx_user_settings_key", "user_id", "setting_key"),
-    )
+    __table_args__ = (Index("idx_user_settings_key", "user_id", "setting_key"),)
 
     @classmethod
     async def create(cls, session: AsyncSession, **kwargs) -> "UserSettingModel":
@@ -399,13 +409,19 @@ class UserSessionModel(Base):
         PG_UUID(as_uuid=True), primary_key=True, default=uuid4
     )
     user_id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
     )
 
     # Session tracking
-    session_start: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
+    session_start: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )
     session_end: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    last_activity: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
+    last_activity: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )
 
     # Request metadata
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
@@ -419,12 +435,13 @@ class UserSessionModel(Base):
     # Relationships
     user: Mapped["UserModel"] = relationship("UserModel", back_populates="sessions")
     activities: Mapped[List["SessionActivityModel"]] = relationship(
-        "SessionActivityModel", back_populates="session", cascade="all, delete-orphan", lazy="select"
+        "SessionActivityModel",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        lazy="select",
     )
 
-    __table_args__ = (
-        Index("idx_session_user_activity", "user_id", "last_activity"),
-    )
+    __table_args__ = (Index("idx_session_user_activity", "user_id", "last_activity"),)
 
     @classmethod
     async def create(cls, session: AsyncSession, **kwargs) -> "UserSessionModel":
@@ -457,6 +474,7 @@ class UserSessionModel(Base):
                 cls.last_activity >= since,
             )
             .order_by(cls.last_activity.desc())
+            .limit(1)  # Only get the most recent active session
         )
         scalar_result = result.scalar_one_or_none()
         return cast(Optional["UserSessionModel"], scalar_result)
@@ -489,12 +507,18 @@ class SessionActivityModel(Base):
         nullable=False,
     )
     user_id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
     )
 
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )
     action: Mapped[str] = mapped_column(String(100), nullable=False)
-    activity_metadata: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
+    activity_metadata: Mapped[Optional[dict]] = mapped_column(
+        "metadata", JSON, nullable=True
+    )
 
     # Relationships
     session: Mapped["UserSessionModel"] = relationship(

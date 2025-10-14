@@ -6,7 +6,6 @@ enabling clean separation between interface and implementation.
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Protocol
-from uuid import UUID
 
 
 class DatabaseBackend(Protocol):
@@ -350,9 +349,7 @@ class DatabaseBackend(Protocol):
         """
         ...
 
-    def get_user_by_email(
-        self, email: str, provider: str
-    ) -> Optional[Dict[str, Any]]:
+    def get_user_by_email(self, email: str, provider: str) -> Optional[Dict[str, Any]]:
         """Get user by email and provider.
 
         Args:

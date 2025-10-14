@@ -220,9 +220,7 @@ class HubBackend:
             print(f"❌ Failed to get user by username {username}: {e}")
             return None
 
-    def get_user_by_email(
-        self, email: str, provider: str
-    ) -> Optional[Dict[str, Any]]:
+    def get_user_by_email(self, email: str, provider: str) -> Optional[Dict[str, Any]]:
         """Get user by email and provider using Hub DB key-value store."""
         try:
             user_key = f"user_email_{provider}_{email}"
@@ -260,9 +258,7 @@ class HubBackend:
             self.hub_db.set_value(f"user_id_{user_id}", user_data, table="users")
 
             # Store by username (for lookup)
-            self.hub_db.set_value(
-                f"user_username_{username}", user_data, table="users"
-            )
+            self.hub_db.set_value(f"user_username_{username}", user_data, table="users")
 
             # Store by email if provided (for lookup)
             if email:
@@ -499,9 +495,9 @@ class HubBackend:
         """
         try:
             settings_list_key = f"user_settings_list_{user_id}"
-            settings_list = self.hub_db.get_value(
-                settings_list_key, table="settings"
-            ) or []
+            settings_list = (
+                self.hub_db.get_value(settings_list_key, table="settings") or []
+            )
 
             # Retrieve each setting
             settings = []
@@ -561,12 +557,14 @@ class HubBackend:
 
             # Add to user's settings list
             settings_list_key = f"user_settings_list_{user_id}"
-            settings_list = self.hub_db.get_value(
-                settings_list_key, table="settings"
-            ) or []
+            settings_list = (
+                self.hub_db.get_value(settings_list_key, table="settings") or []
+            )
             if setting_key not in settings_list:
                 settings_list.append(setting_key)
-                self.hub_db.set_value(settings_list_key, settings_list, table="settings")
+                self.hub_db.set_value(
+                    settings_list_key, settings_list, table="settings"
+                )
 
             return setting_id
         except Exception as e:
@@ -609,12 +607,14 @@ class HubBackend:
 
             # Remove from user's settings list
             settings_list_key = f"user_settings_list_{user_id}"
-            settings_list = self.hub_db.get_value(
-                settings_list_key, table="settings"
-            ) or []
+            settings_list = (
+                self.hub_db.get_value(settings_list_key, table="settings") or []
+            )
             if setting_key in settings_list:
                 settings_list.remove(setting_key)
-                self.hub_db.set_value(settings_list_key, settings_list, table="settings")
+                self.hub_db.set_value(
+                    settings_list_key, settings_list, table="settings"
+                )
 
             return True
         except Exception as e:

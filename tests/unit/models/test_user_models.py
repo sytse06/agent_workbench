@@ -3,9 +3,6 @@
 Tests UserModel, UserSettingModel, UserSessionModel, and SessionActivityModel.
 """
 
-from datetime import datetime
-from uuid import uuid4
-
 import pytest
 from sqlalchemy import inspect
 
@@ -40,7 +37,6 @@ def test_user_model_indexes():
     # Get model indexes
     mapper = inspect(UserModel)
     table = mapper.tables[0]
-    indexes = {idx.name for idx in table.indexes}
 
     # Verify key indexes exist (index names may vary by implementation)
     # At minimum, username should be indexed
@@ -132,7 +128,7 @@ def test_session_activity_model_fields():
     assert "user_id" in columns
     assert "timestamp" in columns
     assert "action" in columns
-    assert "activity_metadata" in columns  # Note: renamed from 'metadata'
+    assert "metadata" in columns  # Column name is 'metadata' in database
 
 
 def test_session_activity_model_foreign_keys():
@@ -199,9 +195,9 @@ def test_user_model_provider_agnostic_design():
     assert "provider_data" in mapper.columns  # JSON field for flexibility
 
     # Verify provider_data is JSON type
-    provider_data_col = mapper.columns["provider_data"]
     # Note: Type check may vary based on SQLAlchemy version
     # Just verify column exists and is configured for JSON
+    assert mapper.columns["provider_data"] is not None
 
 
 def test_user_setting_json_value_storage():
@@ -209,18 +205,18 @@ def test_user_setting_json_value_storage():
     mapper = inspect(UserSettingModel)
 
     # Verify setting_value is JSON type
-    setting_value_col = mapper.columns["setting_value"]
     # Note: Type check may vary based on SQLAlchemy version
     # Just verify column exists
+    assert mapper.columns["setting_value"] is not None
 
 
 def test_session_activity_metadata_field():
-    """Test SessionActivityModel metadata field (renamed to avoid SQLAlchemy conflict)."""
+    """Test SessionActivityModel metadata field (renamed to avoid conflict)."""
     mapper = inspect(SessionActivityModel)
     columns = {col.key for col in mapper.columns}
 
-    # Verify metadata field exists with renamed column
-    assert "activity_metadata" in columns
+    # Verify metadata field exists (column name is 'metadata' in database)
+    assert "metadata" in columns
 
 
 @pytest.mark.parametrize(
@@ -298,7 +294,10 @@ def test_user_setting_model_updated_at():
     assert (
         updated_at_col.default is not None or updated_at_col.server_default is not None
     )
-    assert updated_at_col.onupdate is not None or updated_at_col.server_onupdate is not None
+    assert (
+        updated_at_col.onupdate is not None
+        or updated_at_col.server_onupdate is not None
+    )
 
 
 def test_session_activity_timestamp_default():
@@ -306,9 +305,7 @@ def test_session_activity_timestamp_default():
     mapper = inspect(SessionActivityModel)
     timestamp_col = mapper.columns["timestamp"]
 
-    assert (
-        timestamp_col.default is not None or timestamp_col.server_default is not None
-    )
+    assert timestamp_col.default is not None or timestamp_col.server_default is not None
 
 
 def test_composite_index_for_session_queries():
@@ -318,11 +315,7 @@ def test_composite_index_for_session_queries():
 
     # Check for composite index on (user_id, last_activity)
     # This optimizes the get_active_session query
-    composite_indexes = [
-        idx
-        for idx in table.indexes
-        if len(list(idx.columns)) > 1
-    ]
+    composite_indexes = [idx for idx in table.indexes if len(list(idx.columns)) > 1]
 
     # Verify at least one composite index exists
     # Specific index name and columns may vary
@@ -333,15 +326,15 @@ def test_cascade_delete_relationships():
     """Test cascade delete is configured properly."""
     # UserModel -> UserSettingModel (cascade delete)
     user_mapper = inspect(UserModel)
-    settings_rel = user_mapper.relationships["settings"]
+    assert "settings" in user_mapper.relationships
 
     # Check cascade configuration
     # Note: Cascade may be configured at relationship or foreign key level
     # Just verify relationship exists
 
     # UserModel -> UserSessionModel (cascade delete)
-    sessions_rel = user_mapper.relationships["sessions"]
+    assert "sessions" in user_mapper.relationships
 
     # UserSessionModel -> SessionActivityModel (cascade delete)
     session_mapper = inspect(UserSessionModel)
-    activities_rel = session_mapper.relationships["activities"]
+    assert "activities" in session_mapper.relationships

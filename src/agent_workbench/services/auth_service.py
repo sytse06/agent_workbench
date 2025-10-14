@@ -4,13 +4,11 @@ import logging
 import os
 from datetime import datetime, timedelta
 from typing import Optional
-from uuid import UUID
 
 from gradio import Request
 
 from ..core.exceptions import AuthenticationError
 from ..database import AdaptiveDatabase
-from ..models.database import UserModel, UserSessionModel
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +38,7 @@ class AuthService:
             db: AdaptiveDatabase instance (creates new if not provided)
         """
         self.db = db or AdaptiveDatabase()
-        self.session_timeout_minutes = int(
-            os.getenv("SESSION_TIMEOUT_MINUTES", "30")
-        )
+        self.session_timeout_minutes = int(os.getenv("SESSION_TIMEOUT_MINUTES", "30"))
 
     async def get_or_create_user_from_request(
         self, request: Request, provider: str = "huggingface"
@@ -116,7 +112,7 @@ class AuthService:
                 }
 
             # Create new user
-            user_id = self.db.create_user(
+            self.db.create_user(
                 username=username,
                 auth_provider=provider,
                 email=email,
@@ -158,9 +154,7 @@ class AuthService:
             session = self.db.get_active_user_session(user_id, since)
 
             if session:
-                logger.debug(
-                    f"Found active session {session['id']} for user {user_id}"
-                )
+                logger.debug(f"Found active session {session['id']} for user {user_id}")
 
             return session
 
@@ -207,9 +201,21 @@ class AuthService:
             # Extract request metadata
             # Note: Gradio Request may have limited metadata
             # These fields might not be available in all Gradio versions
-            ip_address = getattr(request, "client", {}).get("host", None) if hasattr(request, "client") else None
-            user_agent = getattr(request, "headers", {}).get("user-agent", None) if hasattr(request, "headers") else None
-            referrer = getattr(request, "headers", {}).get("referer", None) if hasattr(request, "headers") else None
+            ip_address = (
+                getattr(request, "client", {}).get("host", None)
+                if hasattr(request, "client")
+                else None
+            )
+            user_agent = (
+                getattr(request, "headers", {}).get("user-agent", None)
+                if hasattr(request, "headers")
+                else None
+            )
+            referrer = (
+                getattr(request, "headers", {}).get("referer", None)
+                if hasattr(request, "headers")
+                else None
+            )
 
             # Create session
             session_id = self.db.create_user_session(
@@ -234,7 +240,9 @@ class AuthService:
             session = self.db.get_active_user_session(user_id, since)
 
             if not session:
-                raise AuthenticationError(f"Failed to retrieve created session {session_id}")
+                raise AuthenticationError(
+                    f"Failed to retrieve created session {session_id}"
+                )
 
             logger.info(f"Created session {session_id} for user {user_id}")
             return session

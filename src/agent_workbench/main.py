@@ -114,11 +114,13 @@ async def lifespan(app: FastAPI):
         # CRITICAL: Run startup events to initialize event handlers (Gradio 5.x)
         # In Gradio 4.x, this method doesn't exist but .queue() is sufficient
         # In Gradio 5.x, this is required for buttons to respond
-        if hasattr(gradio_interface, 'run_startup_events'):
+        if hasattr(gradio_interface, "run_startup_events"):
             print("🎯 Running startup events (Gradio 5.x)")
             gradio_interface.run_startup_events()
         else:
-            print("⚠️ run_startup_events() not available (Gradio 4.x), relying on .queue()")
+            print(
+                "⚠️ run_startup_events() not available (Gradio 4.x), relying on .queue()"
+            )
 
         # Mount interface
         app.mount("/", gradio_interface.app, name="gradio")
@@ -915,12 +917,8 @@ def create_hf_spaces_app(mode: Optional[str] = None):
             api_open=False,  # Disable API access for security
         )
 
-        logger.info(
-            f"✅ Successfully created {current_mode} interface for HF Spaces"
-        )
-        logger.info(
-            f"🔐 Authentication: {ENABLE_AUTH} (provider: {AUTH_PROVIDER})"
-        )
+        logger.info(f"✅ Successfully created {current_mode} interface for HF Spaces")
+        logger.info(f"🔐 Authentication: {ENABLE_AUTH} (provider: {AUTH_PROVIDER})")
         return interface
 
     except (InvalidModeError, InterfaceCreationError) as e:

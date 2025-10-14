@@ -506,9 +506,7 @@ class SQLiteBackend:
 
         raise RuntimeError("No database session available")
 
-    def get_user_by_email(
-        self, email: str, provider: str
-    ) -> Optional[Dict[str, Any]]:
+    def get_user_by_email(self, email: str, provider: str) -> Optional[Dict[str, Any]]:
         """Get user by email and provider."""
         return self._run_async(self._async_get_user_by_email(email, provider))
 
@@ -909,9 +907,7 @@ class SQLiteBackend:
         """Delete a user setting."""
         return self._run_async(self._async_delete_user_setting(user_id, setting_key))
 
-    async def _async_delete_user_setting(
-        self, user_id: str, setting_key: str
-    ) -> bool:
+    async def _async_delete_user_setting(self, user_id: str, setting_key: str) -> bool:
         """Async implementation of delete_user_setting."""
         async for session in self.session_factory():
             setting = await UserSettingModel.get_by_user_and_key(

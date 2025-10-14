@@ -1,0 +1,13 @@
+All the failing tests point to a handful of common root causes:
+
+Test	Why it fails	What to fix
+test_session_reuse_prevents_pollution	Two login‑flows create two separate Session objects. The second one overwrites the first in the global cache, so the user‑agent from the first flow is lost – a “pollution” bug.	Keep a per‑user (or per‑agent) mapping, or clear the cache between flows.
+TestConversationRoutes::test_get_conversation_by_id	The route calls ConversationService.get_by_id() but the service returns a 404‑style error instead of the expected Conversation object.	The service should return the object or raise a ConversationError only when the ID does not exist.
+test_direct_chat_success	The workflow crashes because the chat_completion function is not registered or is missing a required parameter.	Register the function correctly in the workflow and ensure the signature matches the call.
+All ConversationService tests (create, get, list, delete)	The service is either:
+• Not persisting conversations (create returns None/False).
+• Returning an empty list from list.
+• Receiving the wrong keyword argument (db_session vs session).	Update the constructor to accept the right keyword (session), persist the conversation, and return the proper objects.
+test_get_conversation	Same as above – the service cannot find the conversation.	Same as above.
+test_set_setting_update_existing	The UserSettingsService.update() method fails validation when the setting value already exists.	Relax the validation or allow overwrite.
+test_get_all_user_settings	The returned list does not contain the setting_key field, causing the assertion to fail.	Ensure the schema used for serialization includes setting_key.

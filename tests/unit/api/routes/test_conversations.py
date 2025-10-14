@@ -146,16 +146,36 @@ class TestConversationRoutes:
         data = response.json()
         assert "detail" in data
 
-    def test_get_conversation_by_id(self):
+    @patch("agent_workbench.api.routes.conversations.ConversationService")
+    def test_get_conversation_by_id(self, mock_conversation_service):
         """Test GET /api/v1/conversations/{conversation_id} endpoint."""
         conversation_id = "12345678-1234-5678-1234-567812345678"
+
+        # Setup mock to return conversation
+        from datetime import datetime
+
+        from agent_workbench.models.schemas import ConversationResponse
+
+        mock_service_instance = Mock()
+        mock_conversation_response = ConversationResponse(
+            id=UUID(conversation_id),
+            title="Test Conversation",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            messages=[],
+            llm_config=None,
+        )
+        mock_service_instance.get_conversation.return_value = mock_conversation_response
+        mock_conversation_service.return_value = mock_service_instance
 
         # Make request
         response = client.get(f"/api/v1/conversations/{conversation_id}")
 
-        # For now, this will return 404 since we don't have real implementation
-        # In practice, this would return the conversation data
-        assert response.status_code in [200, 404]
+        # Should return 200 OK with conversation data
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == conversation_id
+        assert data["title"] == "Test Conversation"
 
     @patch("agent_workbench.api.routes.conversations.ConversationService")
     def test_delete_conversation(self, mock_conversation_service):

@@ -3,7 +3,6 @@
 Tests user settings management in isolation with mocked dependencies.
 """
 
-from datetime import datetime
 from unittest.mock import MagicMock
 from uuid import uuid4
 
@@ -141,7 +140,7 @@ async def test_set_setting_update_existing(settings_service, mock_db):
     # Verify database calls
     mock_db.get_user_setting.assert_called_once_with(user_id, setting_key)
     mock_db.update_user_setting.assert_called_once_with(
-        user_id, setting_key, new_value
+        user_id=user_id, setting_key=setting_key, setting_value=new_value
     )
     mock_db.create_user_setting.assert_not_called()
 
@@ -224,7 +223,9 @@ async def test_delete_setting_success(settings_service, mock_db):
     mock_db.delete_user_setting.return_value = True
 
     # Delete setting
-    result = await settings_service.delete_setting(user_id=user_id, setting_key=setting_key)
+    result = await settings_service.delete_setting(
+        user_id=user_id, setting_key=setting_key
+    )
 
     # Verify deletion
     assert result is True
@@ -241,7 +242,9 @@ async def test_delete_setting_not_found(settings_service, mock_db):
     mock_db.delete_user_setting.return_value = False
 
     # Delete setting
-    result = await settings_service.delete_setting(user_id=user_id, setting_key=setting_key)
+    result = await settings_service.delete_setting(
+        user_id=user_id, setting_key=setting_key
+    )
 
     # Verify not found
     assert result is False

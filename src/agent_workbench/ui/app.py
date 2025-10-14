@@ -33,7 +33,6 @@ def create_workbench_app() -> gr.Blocks:
     print(f"🎯 Model choices: {model_choices}")
 
     # Get active mode for title
-    import os
 
     active_mode = os.getenv("APP_MODE", "workbench")
     title = f"Agent Workbench - {active_mode.title()} Mode"

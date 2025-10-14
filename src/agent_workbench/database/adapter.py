@@ -5,6 +5,7 @@ between SQLite (local/Docker) and Hub DB (HuggingFace Spaces) backends based
 on environment detection.
 """
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from .backends.hub import HubBackend
@@ -168,6 +169,144 @@ class AdaptiveDatabase:
     def get_context(self, conversation_id: str) -> Optional[Dict[str, Any]]:
         """Get conversation context (delegates to backend)."""
         return self.backend.get_context(conversation_id)
+
+    # ========================================================================
+    # User Operations - Simple Delegation
+    # ========================================================================
+
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """Get user by username (delegates to backend)."""
+        return self.backend.get_user_by_username(username)
+
+    def get_user_by_email(self, email: str, provider: str) -> Optional[Dict[str, Any]]:
+        """Get user by email and provider (delegates to backend)."""
+        return self.backend.get_user_by_email(email, provider)
+
+    def create_user(
+        self,
+        username: str,
+        auth_provider: str,
+        email: Optional[str] = None,
+        avatar_url: Optional[str] = None,
+        provider_data: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Create a new user (delegates to backend)."""
+        return self.backend.create_user(
+            username=username,
+            auth_provider=auth_provider,
+            email=email,
+            avatar_url=avatar_url,
+            provider_data=provider_data,
+        )
+
+    def update_user_last_login(self, user_id: str) -> bool:
+        """Update user's last_login timestamp (delegates to backend)."""
+        return self.backend.update_user_last_login(user_id)
+
+    def update_user_provider_data(
+        self, user_id: str, provider_data: Dict[str, Any]
+    ) -> bool:
+        """Update user's provider-specific data (delegates to backend)."""
+        return self.backend.update_user_provider_data(user_id, provider_data)
+
+    # ========================================================================
+    # Session Operations - Simple Delegation
+    # ========================================================================
+
+    def create_user_session(
+        self,
+        user_id: str,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        referrer: Optional[str] = None,
+    ) -> str:
+        """Create a new user session (delegates to backend)."""
+        return self.backend.create_user_session(
+            user_id=user_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            referrer=referrer,
+        )
+
+    def get_active_user_session(
+        self, user_id: str, since: datetime
+    ) -> Optional[Dict[str, Any]]:
+        """Get active session for user (delegates to backend)."""
+        return self.backend.get_active_user_session(user_id, since)
+
+    def update_session_activity(self, session_id: str) -> bool:
+        """Update session's last_activity timestamp (delegates to backend)."""
+        return self.backend.update_session_activity(session_id)
+
+    def increment_session_messages(self, session_id: str) -> bool:
+        """Increment session's total_messages counter (delegates to backend)."""
+        return self.backend.increment_session_messages(session_id)
+
+    def increment_session_tool_calls(self, session_id: str) -> bool:
+        """Increment session's total_tool_calls counter (delegates to backend)."""
+        return self.backend.increment_session_tool_calls(session_id)
+
+    def create_session_activity(
+        self,
+        session_id: str,
+        user_id: str,
+        action: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Log activity within a session (delegates to backend)."""
+        return self.backend.create_session_activity(
+            session_id=session_id,
+            user_id=user_id,
+            action=action,
+            metadata=metadata,
+        )
+
+    def end_session(self, session_id: str) -> bool:
+        """Mark session as ended (delegates to backend)."""
+        return self.backend.end_session(session_id)
+
+    # ========================================================================
+    # User Settings Operations - Simple Delegation
+    # ========================================================================
+
+    def get_user_settings(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all settings for a user (delegates to backend)."""
+        return self.backend.get_user_settings(user_id)
+
+    def get_user_setting(
+        self, user_id: str, setting_key: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get a specific user setting by key (delegates to backend)."""
+        return self.backend.get_user_setting(user_id, setting_key)
+
+    def create_user_setting(
+        self,
+        user_id: str,
+        setting_key: str,
+        setting_value: Dict[str, Any],
+        setting_type: str = "active",
+        category: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> str:
+        """Create a new user setting (delegates to backend)."""
+        return self.backend.create_user_setting(
+            user_id=user_id,
+            setting_key=setting_key,
+            setting_value=setting_value,
+            setting_type=setting_type,
+            category=category,
+            description=description,
+        )
+
+    def update_user_setting(
+        self, user_id: str, setting_key: str, setting_value: Dict[str, Any]
+    ) -> bool:
+        """Update a user setting's value (delegates to backend)."""
+        return self.backend.update_user_setting(user_id, setting_key, setting_value)
+
+    def delete_user_setting(self, user_id: str, setting_key: str) -> bool:
+        """Delete a user setting (delegates to backend)."""
+        return self.backend.delete_user_setting(user_id, setting_key)
 
 
 # ============================================================================

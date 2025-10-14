@@ -4,7 +4,7 @@ Tests authentication service methods in isolation with mocked dependencies.
 """
 
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -54,17 +54,19 @@ async def test_get_or_create_user_creates_new_user(auth_service, mock_db):
         username="newuser", email="new@example.com", avatar_url="https://avatar.url"
     )
 
-    # Mock database responses
-    mock_db.get_user_by_username.return_value = None  # User doesn't exist
+    # Mock database responses - use side_effect for successive calls
     new_user_id = str(uuid4())
-    mock_db.create_user.return_value = new_user_id
-    mock_db.get_user_by_username.return_value = {
+    new_user_data = {
         "id": new_user_id,
         "username": "newuser",
         "email": "new@example.com",
         "auth_provider": "huggingface",
         "is_active": True,
     }
+
+    # First call returns None (user doesn't exist), second call returns created user
+    mock_db.get_user_by_username.side_effect = [None, new_user_data]
+    mock_db.create_user.return_value = new_user_id
 
     # Create user
     user = await auth_service.get_or_create_user_from_request(
@@ -179,9 +181,7 @@ async def test_get_active_session_found(auth_service, mock_db):
     }
 
     # Get active session
-    session = await auth_service.get_active_session(
-        user_id=user_id, max_age_minutes=30
-    )
+    session = await auth_service.get_active_session(user_id=user_id, max_age_minutes=30)
 
     # Verify session retrieval
     assert session is not None
@@ -206,9 +206,7 @@ async def test_get_active_session_not_found(auth_service, mock_db):
     mock_db.get_active_user_session.return_value = None
 
     # Get active session
-    session = await auth_service.get_active_session(
-        user_id=user_id, max_age_minutes=30
-    )
+    session = await auth_service.get_active_session(user_id=user_id, max_age_minutes=30)
 
     # Verify no session returned
     assert session is None
@@ -327,10 +325,8 @@ async def test_provider_specific_data_extraction(auth_service, mock_db):
         username="hf_user", email="hf@example.com", avatar_url="https://hf.co/pic"
     )
 
-    mock_db.get_user_by_username.return_value = None
     new_user_id = str(uuid4())
-    mock_db.create_user.return_value = new_user_id
-    mock_db.get_user_by_username.return_value = {
+    new_user_data = {
         "id": new_user_id,
         "username": "hf_user",
         "email": "hf@example.com",
@@ -339,7 +335,11 @@ async def test_provider_specific_data_extraction(auth_service, mock_db):
         "is_active": True,
     }
 
-    user = await auth_service.get_or_create_user_from_request(
+    # First call returns None (user doesn't exist), second call returns created user
+    mock_db.get_user_by_username.side_effect = [None, new_user_data]
+    mock_db.create_user.return_value = new_user_id
+
+    await auth_service.get_or_create_user_from_request(
         request=hf_request, provider="huggingface"
     )
 

@@ -1,7 +1,7 @@
 """Service for managing user settings (key-value store)."""
 
 import logging
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from ..core.exceptions import ValidationError
 from ..database import AdaptiveDatabase
@@ -108,8 +108,7 @@ class UserSettingsService:
                 raise ValidationError("setting_key is required")
             if setting_type not in ("active", "passive"):
                 raise ValidationError(
-                    "setting_type must be 'active' or 'passive'",
-                    field="setting_type"
+                    "setting_type must be 'active' or 'passive'", field="setting_type"
                 )
 
             # Ensure setting_value is a dict (protocol requirement)
@@ -121,15 +120,17 @@ class UserSettingsService:
 
             if existing:
                 # Update existing setting
-                success = self.db.update_user_setting(
-                    user_id=user_id,
-                    setting_key=setting_key,
-                    setting_value=setting_value,
-                )
-                if not success:
-                    raise ValidationError(f"Failed to update setting '{setting_key}'")
-
-                logger.debug(f"Updated setting '{setting_key}' for user {user_id}")
+                try:
+                    self.db.update_user_setting(
+                        user_id=user_id,
+                        setting_key=setting_key,
+                        setting_value=setting_value,
+                    )
+                    logger.debug(f"Updated setting '{setting_key}' for user {user_id}")
+                except Exception as e:
+                    raise ValidationError(
+                        f"Failed to update setting '{setting_key}': {str(e)}"
+                    )
             else:
                 # Create new setting
                 self.db.create_user_setting(
@@ -193,14 +194,14 @@ class UserSettingsService:
             logger.error(error_msg)
             raise ValidationError(error_msg, field="category") from e
 
-    async def get_all_settings(self, user_id: str) -> List[Dict[str, Any]]:
+    async def get_all_settings(self, user_id: str) -> Dict[str, Any]:
         """Get all settings for a user.
 
         Args:
             user_id: User UUID string
 
         Returns:
-            List of setting dictionaries
+            Dictionary mapping setting keys to values
 
         Raises:
             ValidationError: If user_id is invalid
@@ -209,10 +210,15 @@ class UserSettingsService:
             if not user_id:
                 raise ValidationError("user_id is required")
 
-            settings = self.db.get_user_settings(user_id)
+            settings_list = self.db.get_user_settings(user_id)
 
-            logger.debug(f"Retrieved {len(settings)} settings for user {user_id}")
-            return settings
+            # Convert list to dictionary mapping setting keys to values
+            settings_dict = {}
+            for setting in settings_list:
+                settings_dict[setting["setting_key"]] = setting["setting_value"]
+
+            logger.debug(f"Retrieved {len(settings_dict)} settings for user {user_id}")
+            return settings_dict
 
         except ValidationError:
             raise
