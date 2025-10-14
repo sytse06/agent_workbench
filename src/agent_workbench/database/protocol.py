@@ -4,7 +4,9 @@ This protocol defines the contract that all database backends must implement,
 enabling clean separation between interface and implementation.
 """
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Protocol
+from uuid import UUID
 
 
 class DatabaseBackend(Protocol):
@@ -316,5 +318,376 @@ class DatabaseBackend(Protocol):
             >>> context = backend.get_context("550e8400-...")
             >>> if context:
             ...     print(context["active_contexts"])
+        """
+        ...
+
+    # ========================================================================
+    # User Operations (Provider-Agnostic Authentication)
+    # ========================================================================
+
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """Get user by username (provider-agnostic).
+
+        Args:
+            username: Username string
+
+        Returns:
+            Dictionary with user data or None if not found:
+                - id: UUID string
+                - username: Username
+                - email: Email address (optional)
+                - avatar_url: Avatar URL (optional)
+                - auth_provider: Provider name (huggingface, google, etc.)
+                - provider_data: Provider-specific data dict
+                - created_at: ISO timestamp string
+                - last_login: ISO timestamp string
+                - is_active: Boolean
+
+        Examples:
+            >>> user = backend.get_user_by_username("johndoe")
+            >>> if user:
+            ...     print(user["email"])
+        """
+        ...
+
+    def get_user_by_email(
+        self, email: str, provider: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get user by email and provider.
+
+        Args:
+            email: Email address
+            provider: Authentication provider name
+
+        Returns:
+            Dictionary with user data or None if not found
+
+        Examples:
+            >>> user = backend.get_user_by_email("john@example.com", "google")
+        """
+        ...
+
+    def create_user(
+        self,
+        username: str,
+        auth_provider: str,
+        email: Optional[str] = None,
+        avatar_url: Optional[str] = None,
+        provider_data: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Create a new user.
+
+        Args:
+            username: Username
+            auth_provider: Provider name (huggingface, google, etc.)
+            email: Email address (optional)
+            avatar_url: Avatar URL (optional)
+            provider_data: Provider-specific data (optional)
+
+        Returns:
+            User ID as string
+
+        Examples:
+            >>> user_id = backend.create_user(
+            ...     username="johndoe",
+            ...     auth_provider="huggingface",
+            ...     email="john@example.com",
+            ...     provider_data={"hf_user_id": "12345"}
+            ... )
+        """
+        ...
+
+    def update_user_last_login(self, user_id: str) -> bool:
+        """Update user's last_login timestamp.
+
+        Args:
+            user_id: UUID string of user
+
+        Returns:
+            True if update succeeded, False if user not found
+
+        Examples:
+            >>> success = backend.update_user_last_login("550e8400-...")
+        """
+        ...
+
+    def update_user_provider_data(
+        self, user_id: str, provider_data: Dict[str, Any]
+    ) -> bool:
+        """Update user's provider-specific data.
+
+        Args:
+            user_id: UUID string of user
+            provider_data: Provider-specific data dict
+
+        Returns:
+            True if update succeeded, False if user not found
+
+        Examples:
+            >>> success = backend.update_user_provider_data(
+            ...     "550e8400-...",
+            ...     {"hf_user_id": "12345", "hf_avatar_url": "https://..."}
+            ... )
+        """
+        ...
+
+    # ========================================================================
+    # Session Operations (User Session Tracking)
+    # ========================================================================
+
+    def create_user_session(
+        self,
+        user_id: str,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        referrer: Optional[str] = None,
+    ) -> str:
+        """Create a new user session.
+
+        Args:
+            user_id: UUID string of user
+            ip_address: IP address (optional)
+            user_agent: User agent string (optional)
+            referrer: Referrer URL (optional)
+
+        Returns:
+            Session ID as string
+
+        Examples:
+            >>> session_id = backend.create_user_session(
+            ...     user_id="550e8400-...",
+            ...     ip_address="127.0.0.1",
+            ...     user_agent="Mozilla/5.0..."
+            ... )
+        """
+        ...
+
+    def get_active_user_session(
+        self, user_id: str, since: datetime
+    ) -> Optional[Dict[str, Any]]:
+        """Get active session for user (within timeout window).
+
+        Args:
+            user_id: UUID string of user
+            since: Datetime threshold for active session
+
+        Returns:
+            Dictionary with session data or None if no active session:
+                - id: Session UUID string
+                - user_id: User UUID string
+                - session_start: ISO timestamp string
+                - session_end: ISO timestamp string (optional)
+                - last_activity: ISO timestamp string
+                - ip_address: IP address
+                - user_agent: User agent string
+                - referrer: Referrer URL
+                - total_messages: Message count
+                - total_tool_calls: Tool call count
+
+        Examples:
+            >>> from datetime import datetime, timedelta
+            >>> since = datetime.utcnow() - timedelta(minutes=30)
+            >>> session = backend.get_active_user_session("550e8400-...", since)
+        """
+        ...
+
+    def update_session_activity(self, session_id: str) -> bool:
+        """Update session's last_activity timestamp.
+
+        Args:
+            session_id: UUID string of session
+
+        Returns:
+            True if update succeeded, False if session not found
+
+        Examples:
+            >>> success = backend.update_session_activity("650e8400-...")
+        """
+        ...
+
+    def increment_session_messages(self, session_id: str) -> bool:
+        """Increment session's total_messages counter.
+
+        Args:
+            session_id: UUID string of session
+
+        Returns:
+            True if update succeeded, False if session not found
+
+        Examples:
+            >>> success = backend.increment_session_messages("650e8400-...")
+        """
+        ...
+
+    def increment_session_tool_calls(self, session_id: str) -> bool:
+        """Increment session's total_tool_calls counter.
+
+        Args:
+            session_id: UUID string of session
+
+        Returns:
+            True if update succeeded, False if session not found
+
+        Examples:
+            >>> success = backend.increment_session_tool_calls("650e8400-...")
+        """
+        ...
+
+    def create_session_activity(
+        self,
+        session_id: str,
+        user_id: str,
+        action: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Log activity within a session.
+
+        Args:
+            session_id: UUID string of session
+            user_id: UUID string of user
+            action: Action name (e.g., "message_sent", "tool_called")
+            metadata: Additional metadata (optional)
+
+        Returns:
+            Activity ID as string
+
+        Examples:
+            >>> activity_id = backend.create_session_activity(
+            ...     session_id="650e8400-...",
+            ...     user_id="550e8400-...",
+            ...     action="message_sent",
+            ...     metadata={"message_id": "750e8400-..."}
+            ... )
+        """
+        ...
+
+    def end_session(self, session_id: str) -> bool:
+        """Mark session as ended.
+
+        Args:
+            session_id: UUID string of session
+
+        Returns:
+            True if update succeeded, False if session not found
+
+        Examples:
+            >>> success = backend.end_session("650e8400-...")
+        """
+        ...
+
+    # ========================================================================
+    # User Settings Operations (Key-Value Store)
+    # ========================================================================
+
+    def get_user_settings(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all settings for a user.
+
+        Args:
+            user_id: UUID string of user
+
+        Returns:
+            List of setting dictionaries:
+                - id: Setting UUID string
+                - user_id: User UUID string
+                - setting_key: Setting key
+                - setting_value: Setting value (dict)
+                - setting_type: Type (active/passive)
+                - category: Category (optional)
+                - description: Description (optional)
+                - updated_at: ISO timestamp string
+
+        Examples:
+            >>> settings = backend.get_user_settings("550e8400-...")
+            >>> for setting in settings:
+            ...     print(f"{setting['setting_key']}: {setting['setting_value']}")
+        """
+        ...
+
+    def get_user_setting(
+        self, user_id: str, setting_key: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get a specific user setting by key.
+
+        Args:
+            user_id: UUID string of user
+            setting_key: Setting key
+
+        Returns:
+            Dictionary with setting data or None if not found
+
+        Examples:
+            >>> setting = backend.get_user_setting("550e8400-...", "preferred_model")
+            >>> if setting:
+            ...     print(setting["setting_value"])
+        """
+        ...
+
+    def create_user_setting(
+        self,
+        user_id: str,
+        setting_key: str,
+        setting_value: Dict[str, Any],
+        setting_type: str = "active",
+        category: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> str:
+        """Create a new user setting.
+
+        Args:
+            user_id: UUID string of user
+            setting_key: Setting key
+            setting_value: Setting value (dict)
+            setting_type: Type (active/passive), default "active"
+            category: Category (optional)
+            description: Description (optional)
+
+        Returns:
+            Setting ID as string
+
+        Examples:
+            >>> setting_id = backend.create_user_setting(
+            ...     user_id="550e8400-...",
+            ...     setting_key="preferred_model",
+            ...     setting_value={"model": "gpt-4", "temperature": 0.7},
+            ...     setting_type="active",
+            ...     category="agent"
+            ... )
+        """
+        ...
+
+    def update_user_setting(
+        self, user_id: str, setting_key: str, setting_value: Dict[str, Any]
+    ) -> bool:
+        """Update a user setting's value.
+
+        Args:
+            user_id: UUID string of user
+            setting_key: Setting key
+            setting_value: New setting value (dict)
+
+        Returns:
+            True if update succeeded, False if setting not found
+
+        Examples:
+            >>> success = backend.update_user_setting(
+            ...     user_id="550e8400-...",
+            ...     setting_key="preferred_model",
+            ...     setting_value={"model": "gpt-4-turbo", "temperature": 0.8}
+            ... )
+        """
+        ...
+
+    def delete_user_setting(self, user_id: str, setting_key: str) -> bool:
+        """Delete a user setting.
+
+        Args:
+            user_id: UUID string of user
+            setting_key: Setting key
+
+        Returns:
+            True if deletion succeeded, False if setting not found
+
+        Examples:
+            >>> deleted = backend.delete_user_setting("550e8400-...", "old_setting")
         """
         ...
