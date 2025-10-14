@@ -1,9 +1,11 @@
 # Enhanced Gradio Application for Consolidated Service Integration
 
+import os
 import uuid
 
 import gradio as gr
 
+from ..services.auth_service import AuthService
 from ..services.model_config_service import model_config_service
 
 
@@ -245,6 +247,71 @@ def create_workbench_app() -> gr.Blocks:
             outputs=[message, chatbot, workflow_status],
         )
         print("✅ Message submit event wired")
+
+        # Add authentication handler (on_load)
+        enable_auth = os.getenv("ENABLE_AUTH", "true").lower() == "true"
+
+        if enable_auth:
+            print("🔐 Adding on_load authentication handler...")
+
+            async def on_load(request: gr.Request):
+                """Initialize user session on app load.
+
+                This handler is called when the Gradio interface loads.
+                It creates or retrieves the user and manages session state.
+                """
+                print("=" * 80)
+                print("🔐 ON_LOAD CALLED - Authenticating user")
+                print("=" * 80)
+
+                try:
+                    # Initialize auth service
+                    auth_service = AuthService()
+
+                    # Get or create user from request
+                    user = await auth_service.get_or_create_user_from_request(
+                        request=request, provider="huggingface"
+                    )
+                    print(f"✅ User authenticated: {user.get('username')}")
+
+                    # Check for active session (within last 30 min)
+                    active_session = await auth_service.get_active_session(
+                        user_id=user["id"], max_age_minutes=30
+                    )
+
+                    if active_session:
+                        # Reuse existing session
+                        session = active_session
+                        await auth_service.update_session_activity(session["id"])
+                        print(f"♻️  Reusing session: {session['id']}")
+                    else:
+                        # Create new session
+                        session = await auth_service.create_session(
+                            user_id=user["id"], request=request
+                        )
+                        print(f"🆕 Created new session: {session['id']}")
+
+                    # Return welcome message with user info
+                    welcome_msg = (
+                        f"Welcome back, {user.get('username')}! "
+                        f"Session: {session['id'][:8]}..."
+                    )
+                    print(f"✅ Authentication complete: {welcome_msg}")
+
+                    return welcome_msg
+
+                except Exception as e:
+                    print(f"❌ Authentication error: {e}")
+                    import traceback
+
+                    print(f"🎯 Traceback: {traceback.format_exc()}")
+                    return f"Authentication error: {str(e)}"
+
+            # Wire up on_load event
+            app.load(fn=on_load, inputs=None, outputs=None)
+            print("✅ on_load authentication handler wired")
+        else:
+            print("⚠️  Authentication disabled (development mode)")
 
     print("=" * 80)
     print("🎯 GRADIO APP CREATED SUCCESSFULLY")

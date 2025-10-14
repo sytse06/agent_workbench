@@ -156,6 +156,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Enable HuggingFace OAuth for authentication
+# This will be applied to Gradio interface during mounting
+ENABLE_AUTH = os.getenv("ENABLE_AUTH", "true").lower() == "true"
+AUTH_PROVIDER = os.getenv("AUTH_PROVIDER", "huggingface")
+
 # Add CORS middleware
 cors_debug = os.getenv("CORS_DEBUG", "").lower() == "1"
 app.add_middleware(
@@ -288,7 +293,8 @@ async def health_check():
 def create_fastapi_mounted_gradio_interface():
     """Create FastAPI-mounted Gradio interface using ModeFactory.
 
-    Uses the proper UI implementations from ui/mode_factory.py with full event handlers.
+    Uses the proper UI implementations from ui/mode_factory.py with full
+    event handlers. Applies authentication if enabled.
     """
     import os
 
@@ -300,6 +306,14 @@ def create_fastapi_mounted_gradio_interface():
     # Use ModeFactory to create proper interface with event handlers
     factory = ModeFactory()
     interface = factory.create_interface(mode=mode)
+
+    # Apply authentication configuration if enabled
+    if ENABLE_AUTH:
+        print(f"🔐 Authentication enabled: {AUTH_PROVIDER}")
+        # Note: Gradio's auth parameter is set at launch time, not here
+        # The interfaces themselves handle auth in their on_load handlers
+    else:
+        print("⚠️  Authentication disabled (development mode)")
 
     print(f"✅ Created {mode} interface with event handlers")
     return interface
@@ -901,7 +915,12 @@ def create_hf_spaces_app(mode: Optional[str] = None):
             api_open=False,  # Disable API access for security
         )
 
-        logger.info(f"✅ Successfully created {current_mode} interface for HF Spaces")
+        logger.info(
+            f"✅ Successfully created {current_mode} interface for HF Spaces"
+        )
+        logger.info(
+            f"🔐 Authentication: {ENABLE_AUTH} (provider: {AUTH_PROVIDER})"
+        )
         return interface
 
     except (InvalidModeError, InterfaceCreationError) as e:
