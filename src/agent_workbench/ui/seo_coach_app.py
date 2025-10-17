@@ -163,9 +163,14 @@ def create_seo_coach_app() -> gr.Blocks:
         )
 
         # Add authentication handler (on_load)
-        # Supports both production OAuth and local development
+        # NOTE: Temporarily disabled until Phase 2.1 login UI is implemented
+        # See: docs/architecture/decisions/UI-004-pwa-app-user-settings.md
+        # When enabled, requires application-level auth (LoginButton), not Space-level OAuth
         auth_mode = os.getenv("AUTH_MODE", "disabled")  # "disabled", "development", or "oauth"
         enable_auth = auth_mode in ["development", "oauth"]
+
+        # TEMP: Force disable until login UI exists (Phase 2.1)
+        enable_auth = False
 
         if enable_auth:
             print(f"🔐 [SEO Coach] Adding on_load auth handler (mode: {auth_mode})...")
