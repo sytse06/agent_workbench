@@ -111,6 +111,15 @@ class AuthService:
                     "github_login": getattr(request, "login", username),
                 }
 
+            elif provider == "development":
+                # Development mode: local authentication without OAuth
+                email = getattr(request, "email", None)
+                avatar_url = getattr(request, "avatar_url", None)
+                provider_data = {
+                    "dev_username": username,
+                    "dev_mode": True,
+                }
+
             # Create new user
             self.db.create_user(
                 username=username,

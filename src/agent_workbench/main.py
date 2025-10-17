@@ -158,10 +158,30 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Enable HuggingFace OAuth for authentication
-# This will be applied to Gradio interface during mounting
-ENABLE_AUTH = os.getenv("ENABLE_AUTH", "true").lower() == "true"
+# Authentication Configuration
+# AUTH_MODE determines authentication behavior:
+# - "disabled" (default): No authentication
+# - "development": Local mock authentication (for testing auth features)
+# - "oauth": Production OAuth (HuggingFace, requires proper callback setup)
+AUTH_MODE = os.getenv("AUTH_MODE", "disabled")  # "disabled", "development", or "oauth"
 AUTH_PROVIDER = os.getenv("AUTH_PROVIDER", "huggingface")
+
+# Enable auth if mode is development or oauth
+ENABLE_AUTH = AUTH_MODE in ["development", "oauth"]
+
+# Log authentication configuration
+print("=" * 80)
+print("🔐 AUTHENTICATION CONFIGURATION")
+print(f"   AUTH_MODE: {AUTH_MODE}")
+if ENABLE_AUTH:
+    print(f"   Status: Authentication enabled")
+    print(f"   AUTH_PROVIDER: {AUTH_PROVIDER}")
+    if AUTH_MODE == "development":
+        dev_user = os.getenv("DEV_USERNAME", "local-dev-user")
+        print(f"   DEV_USERNAME: {dev_user}")
+else:
+    print("   Status: Authentication disabled")
+print("=" * 80)
 
 # Add CORS middleware
 cors_debug = os.getenv("CORS_DEBUG", "").lower() == "1"
