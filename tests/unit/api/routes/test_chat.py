@@ -1,9 +1,9 @@
 """Tests for chat API routes."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 
 from agent_workbench.main import app
@@ -13,7 +13,9 @@ from agent_workbench.models.schemas import ModelConfig
 client = TestClient(app)
 
 
-@pytest.mark.skip(reason="chat.py routes deprecated - use chat_workflow.py or simple_chat.py instead")
+@pytest.mark.skip(
+    reason="chat.py routes deprecated - use chat_workflow.py or simple_chat.py instead"
+)
 class TestChatRoutes:
     """Tests for deprecated chat API routes."""
 

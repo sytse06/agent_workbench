@@ -1,6 +1,6 @@
 """Tests for simple chat endpoint (Phase 1)."""
 
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -19,16 +19,19 @@ from src.agent_workbench.api.routes.simple_chat import (
 @pytest.mark.asyncio
 async def test_direct_chat_success():
     """Test successful direct chat response."""
-    # Mock the LLM service response
-    mock_response = AsyncMock()
-    mock_response.reply = "Hello! This is a test response."
+    # Mock the SimpleChatWorkflow execution
+    mock_workflow = AsyncMock()
+    mock_workflow.execute = AsyncMock(
+        return_value={
+            "execution_successful": True,
+            "assistant_response": "Hello! This is a test response.",
+        }
+    )
 
     with patch(
-        "src.agent_workbench.api.routes.simple_chat.ChatService"
-    ) as mock_service:
-        mock_service.return_value.chat_completion = AsyncMock(
-            return_value=mock_response
-        )
+        "src.agent_workbench.api.routes.simple_chat.SimpleChatWorkflow"
+    ) as mock_workflow_class:
+        mock_workflow_class.return_value = mock_workflow
 
         request = SimpleChatRequest(
             message="Hello, test message",
@@ -49,13 +52,14 @@ async def test_direct_chat_success():
 @pytest.mark.asyncio
 async def test_direct_chat_failure():
     """Test direct chat error handling."""
+    # Mock the SimpleChatWorkflow to raise an exception
+    mock_workflow = AsyncMock()
+    mock_workflow.execute = AsyncMock(side_effect=Exception("API connection failed"))
+
     with patch(
-        "src.agent_workbench.api.routes.simple_chat.ChatService"
-    ) as mock_service:
-        # Mock service to raise an exception
-        mock_service.return_value.chat_completion = AsyncMock(
-            side_effect=Exception("API connection failed")
-        )
+        "src.agent_workbench.api.routes.simple_chat.SimpleChatWorkflow"
+    ) as mock_workflow_class:
+        mock_workflow_class.return_value = mock_workflow
 
         request = SimpleChatRequest(
             message="Hello, test message",

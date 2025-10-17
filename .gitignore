@@ -62,6 +62,9 @@ logs/
 # UV
 .uv/
 
+# Designs
+design/
+
 # Testing
 .pytest_cache/
 htmlcov/

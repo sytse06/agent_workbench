@@ -114,11 +114,13 @@ async def lifespan(app: FastAPI):
         # CRITICAL: Run startup events to initialize event handlers (Gradio 5.x)
         # In Gradio 4.x, this method doesn't exist but .queue() is sufficient
         # In Gradio 5.x, this is required for buttons to respond
-        if hasattr(gradio_interface, 'run_startup_events'):
+        if hasattr(gradio_interface, "run_startup_events"):
             print("🎯 Running startup events (Gradio 5.x)")
             gradio_interface.run_startup_events()
         else:
-            print("⚠️ run_startup_events() not available (Gradio 4.x), relying on .queue()")
+            print(
+                "⚠️ run_startup_events() not available (Gradio 4.x), relying on .queue()"
+            )
 
         # Mount interface
         app.mount("/", gradio_interface.app, name="gradio")
@@ -155,6 +157,11 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Enable HuggingFace OAuth for authentication
+# This will be applied to Gradio interface during mounting
+ENABLE_AUTH = os.getenv("ENABLE_AUTH", "true").lower() == "true"
+AUTH_PROVIDER = os.getenv("AUTH_PROVIDER", "huggingface")
 
 # Add CORS middleware
 cors_debug = os.getenv("CORS_DEBUG", "").lower() == "1"
@@ -288,7 +295,8 @@ async def health_check():
 def create_fastapi_mounted_gradio_interface():
     """Create FastAPI-mounted Gradio interface using ModeFactory.
 
-    Uses the proper UI implementations from ui/mode_factory.py with full event handlers.
+    Uses the proper UI implementations from ui/mode_factory.py with full
+    event handlers. Applies authentication if enabled.
     """
     import os
 
@@ -300,6 +308,14 @@ def create_fastapi_mounted_gradio_interface():
     # Use ModeFactory to create proper interface with event handlers
     factory = ModeFactory()
     interface = factory.create_interface(mode=mode)
+
+    # Apply authentication configuration if enabled
+    if ENABLE_AUTH:
+        print(f"🔐 Authentication enabled: {AUTH_PROVIDER}")
+        # Note: Gradio's auth parameter is set at launch time, not here
+        # The interfaces themselves handle auth in their on_load handlers
+    else:
+        print("⚠️  Authentication disabled (development mode)")
 
     print(f"✅ Created {mode} interface with event handlers")
     return interface
@@ -902,6 +918,7 @@ def create_hf_spaces_app(mode: Optional[str] = None):
         )
 
         logger.info(f"✅ Successfully created {current_mode} interface for HF Spaces")
+        logger.info(f"🔐 Authentication: {ENABLE_AUTH} (provider: {AUTH_PROVIDER})")
         return interface
 
     except (InvalidModeError, InterfaceCreationError) as e:

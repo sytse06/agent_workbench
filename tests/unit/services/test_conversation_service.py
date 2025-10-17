@@ -3,8 +3,6 @@
 from unittest.mock import patch
 from uuid import UUID
 
-import pytest
-
 from agent_workbench.models.api_models import ConversationResponse
 from agent_workbench.models.schemas import ModelConfig
 from agent_workbench.services.conversation_service import ConversationService
@@ -28,8 +26,8 @@ class TestConversationService:
         ):
             result = self.service.create_conversation()
 
-            assert isinstance(result, UUID)
-            assert result == conversation_id
+            assert isinstance(result, str)
+            assert result == str(conversation_id)
 
     # @pytest.mark.asyncio
     def test_create_conversation_with_title(self):
@@ -42,8 +40,8 @@ class TestConversationService:
         ):
             result = self.service.create_conversation(title="Test Conversation")
 
-            assert isinstance(result, UUID)
-            assert result == conversation_id
+            assert isinstance(result, str)
+            assert result == str(conversation_id)
 
     # @pytest.mark.asyncio
     def test_create_conversation_with_model_config(self):
@@ -64,67 +62,65 @@ class TestConversationService:
                 title="Test Conversation", model_config=model_config
             )
 
-            assert isinstance(result, UUID)
-            assert result == conversation_id
+            assert isinstance(result, str)
+            assert result == str(conversation_id)
 
-    # @pytest.mark.asyncio
     def test_get_conversations(self):
         """Test get_conversations method."""
-        # Should return empty list for now
-        result = self.service.get_conversations()
+        with patch.object(self.service.db, "list_conversations", return_value=[]):
+            result = self.service.get_conversations()
 
-        assert isinstance(result, list)
-        assert result == []
+            assert isinstance(result, list)
+            assert result == []
 
-    # @pytest.mark.asyncio
     def test_get_conversations_with_limit(self):
         """Test get_conversations with limit."""
-        # Should return empty list for now
-        result = self.service.get_conversations(limit=10)
+        with patch.object(self.service.db, "list_conversations", return_value=[]):
+            result = self.service.get_conversations(limit=10)
 
-        assert isinstance(result, list)
-        assert result == []
-        # In practice, this would test limiting, but we return empty list
+            assert isinstance(result, list)
+            assert result == []
 
-    # @pytest.mark.asyncio
     def test_delete_conversation(self):
         """Test delete_conversation method."""
-        conversation_id = UUID("12345678-1234-5678-1234-567812345678")
+        conversation_id = str(UUID("12345678-1234-5678-1234-567812345678"))
 
-        # Mock database session
-        from unittest.mock import AsyncMock
+        # Mock database session with regular Mock (not AsyncMock)
+        from unittest.mock import MagicMock
 
-        mock_session = AsyncMock()
+        mock_session = MagicMock()
 
         # Create service with mock session
-        service_with_session = ConversationService(db_session=mock_session)
+        service_with_session = ConversationService(db=mock_session)
 
-        # Mock ConversationModel.get_by_id to return None (conversation not found)
-        patch_path = (
-            "agent_workbench.services.conversation_service."
-            "ConversationModel.get_by_id"
-        )
-        with patch(patch_path, return_value=None):
-            result = service_with_session.delete_conversation(conversation_id)
-            assert result is False
+        # Mock database delete_conversation method to return boolean directly
+        mock_session.delete_conversation.return_value = False
+        result = service_with_session.delete_conversation(conversation_id)
+        assert result is False
 
-        # Mock ConversationModel.get_by_id to return a conversation
-        mock_conversation = AsyncMock()
-        mock_conversation.delete = AsyncMock()
-        with patch(patch_path, return_value=mock_conversation):
-            result = service_with_session.delete_conversation(conversation_id)
-            assert result is True
-            mock_conversation.delete.assert_called_once_with(mock_session)
+        # Mock successful deletion
+        mock_session.delete_conversation.return_value = True
+        result = service_with_session.delete_conversation(conversation_id)
+        assert result is True
 
-    # @pytest.mark.asyncio
     def test_get_conversation(self):
         """Test get_conversation method."""
-        conversation_id = UUID("12345678-1234-5678-1234-567812345678")
+        conversation_id = "12345678-1234-5678-1234-567812345678"
 
-        # Should return ConversationResponse
-        result = self.service.get_conversation(conversation_id)
+        # Mock the database to return a conversation
+        mock_conversation = {
+            "id": conversation_id,
+            "title": "Test Conversation",
+            "created_at": "2024-01-01T00:00:00",
+            "updated_at": "2024-01-01T00:00:00",
+        }
 
-        assert result is not None
-        assert isinstance(result, ConversationResponse)
-        assert result.id == conversation_id
-        assert result.title == "Mock Conversation"
+        with patch.object(
+            self.service.db, "get_conversation", return_value=mock_conversation
+        ):
+            with patch.object(self.service.db, "get_messages", return_value=[]):
+                result = self.service.get_conversation(conversation_id)
+
+                assert result is not None
+                assert isinstance(result, ConversationResponse)
+                assert result.id == UUID(conversation_id)

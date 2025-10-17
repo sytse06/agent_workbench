@@ -163,6 +163,21 @@ class ResourceNotFoundError(AgentWorkbenchError):
         self.resource_id = resource_id
 
 
+class AuthenticationError(AgentWorkbenchError):
+    """Exception for authentication and authorization errors."""
+
+    def __init__(self, message: str, user_id: Optional[str] = None, **kwargs):
+        context = {"user_id": user_id} if user_id else {}
+        context.update(kwargs.get("context", {}))
+        super().__init__(
+            message,
+            ErrorCategory.AUTHENTICATION,
+            error_code="AUTHENTICATION_ERROR",
+            context=context,
+        )
+        self.user_id = user_id
+
+
 # Backwards compatibility aliases - these will be removed in next phase
 class RetryExhaustedError(AgentWorkbenchError):
     """Exception raised when retry attempts are exhausted."""

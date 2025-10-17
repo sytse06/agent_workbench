@@ -1,0 +1,5 @@
+Issue	Fix	Why it fixes the test
+Session cache uses a single key	Key the cache by user id / token (e.g. session_cache[user_id])	Prevents one user’s login from overwriting another’s session.
+get_by_id never finds the conversation	Ensure the repository mock returns a Conversation DTO for the id used in the test, or seed the test database with that conversation.	The service can then return the expected conversation.
+delete_conversation returns a coroutine	Add await when calling repo.delete(...) inside the service, or make the method async def and return await repo.delete(...).	The test will then receive a real boolean.
+Settings update call missing	Patch the exact repository method (update_setting/update_user_setting) that the service uses, or rename the service method so that the test’s expected call matches the real call.	The mock will then see the expected call.
