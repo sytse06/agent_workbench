@@ -249,8 +249,8 @@ def create_workbench_app() -> gr.Blocks:
 
         # Add authentication handler (on_load)
         # Supports both production OAuth and local development
-        enable_auth = os.getenv("ENABLE_AUTH", "false").lower() == "true"
-        auth_mode = os.getenv("AUTH_MODE", "oauth")  # "oauth" or "development"
+        auth_mode = os.getenv("AUTH_MODE", "disabled")  # "disabled", "development", or "oauth"
+        enable_auth = auth_mode in ["development", "oauth"]
 
         if enable_auth:
             print(f"🔐 Adding on_load authentication handler (mode: {auth_mode})...")

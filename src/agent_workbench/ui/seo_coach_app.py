@@ -164,8 +164,8 @@ def create_seo_coach_app() -> gr.Blocks:
 
         # Add authentication handler (on_load)
         # Supports both production OAuth and local development
-        enable_auth = os.getenv("ENABLE_AUTH", "false").lower() == "true"
-        auth_mode = os.getenv("AUTH_MODE", "oauth")  # "oauth" or "development"
+        auth_mode = os.getenv("AUTH_MODE", "disabled")  # "disabled", "development", or "oauth"
+        enable_auth = auth_mode in ["development", "oauth"]
 
         if enable_auth:
             print(f"🔐 [SEO Coach] Adding on_load auth handler (mode: {auth_mode})...")
