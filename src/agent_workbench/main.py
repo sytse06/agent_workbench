@@ -937,8 +937,20 @@ def create_hf_spaces_app(mode: Optional[str] = None):
             api_open=False,  # Disable API access for security
         )
 
+        # Apply Gradio OAuth if authentication is enabled
+        if ENABLE_AUTH and AUTH_MODE == "oauth":
+            logger.info(f"🔐 Applying Gradio OAuth: {AUTH_PROVIDER}")
+            # Note: The interface.auth property must be set BEFORE launch
+            # HF Spaces will call launch() internally, so we set it here
+            interface.auth = AUTH_PROVIDER  # "huggingface", "google", or "github"
+            logger.info(f"✅ Gradio OAuth enabled - users must log in with {AUTH_PROVIDER}")
+        elif ENABLE_AUTH and AUTH_MODE == "development":
+            logger.info("⚠️  Development mode - no Gradio OAuth (local testing only)")
+        else:
+            logger.info("⚠️  Authentication disabled - no login required")
+
         logger.info(f"✅ Successfully created {current_mode} interface for HF Spaces")
-        logger.info(f"🔐 Authentication: {ENABLE_AUTH} (provider: {AUTH_PROVIDER})")
+        logger.info(f"🔐 Authentication status: {ENABLE_AUTH} (mode: {AUTH_MODE}, provider: {AUTH_PROVIDER})")
         return interface
 
     except (InvalidModeError, InterfaceCreationError) as e:
