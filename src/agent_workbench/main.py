@@ -330,14 +330,14 @@ def create_fastapi_mounted_gradio_interface():
     interface = factory.create_interface(mode=mode)
 
     # Apply Gradio OAuth if authentication is enabled
+    # Note: For HuggingFace Spaces, OAuth is handled automatically via Space settings
+    # We rely on Space-level auth + our on_load handlers for user management
     if ENABLE_AUTH and AUTH_MODE == "oauth":
-        print(f"🔐 Applying Gradio OAuth: {AUTH_PROVIDER}")
-        # Set auth parameter to force OAuth login
-        # This must be set BEFORE the interface is launched/mounted
-        interface.auth = AUTH_PROVIDER  # "huggingface", "google", or "github"
-        print(f"✅ Gradio OAuth enabled - users must log in with {AUTH_PROVIDER}")
+        print(f"🔐 OAuth mode enabled: {AUTH_PROVIDER}")
+        print("ℹ️  HuggingFace Spaces: OAuth handled at Space level (Settings > Visibility)")
+        print("ℹ️  Application will use on_load handlers to manage authenticated users")
     elif ENABLE_AUTH and AUTH_MODE == "development":
-        print("⚠️  Development mode - no Gradio OAuth (local testing only)")
+        print("⚠️  Development mode - no OAuth (local testing only)")
     else:
         print("⚠️  Authentication disabled")
 
@@ -941,20 +941,19 @@ def create_hf_spaces_app(mode: Optional[str] = None):
             api_open=False,  # Disable API access for security
         )
 
-        # Apply Gradio OAuth if authentication is enabled
+        # Authentication for HF Spaces
+        # OAuth is handled at Space level (Settings > Visibility)
+        # Application uses on_load handlers to manage authenticated users
         if ENABLE_AUTH and AUTH_MODE == "oauth":
-            logger.info(f"🔐 Applying Gradio OAuth: {AUTH_PROVIDER}")
-            # Note: The interface.auth property must be set BEFORE launch
-            # HF Spaces will call launch() internally, so we set it here
-            interface.auth = AUTH_PROVIDER  # "huggingface", "google", or "github"
-            logger.info(f"✅ Gradio OAuth enabled - users must log in with {AUTH_PROVIDER}")
+            logger.info(f"🔐 OAuth mode enabled: {AUTH_PROVIDER}")
+            logger.info("ℹ️  HuggingFace Spaces: OAuth handled at Space level")
+            logger.info("ℹ️  Application will use on_load handlers for user management")
         elif ENABLE_AUTH and AUTH_MODE == "development":
-            logger.info("⚠️  Development mode - no Gradio OAuth (local testing only)")
+            logger.info("⚠️  Development mode - no OAuth (local testing only)")
         else:
-            logger.info("⚠️  Authentication disabled - no login required")
+            logger.info("⚠️  Authentication disabled")
 
         logger.info(f"✅ Successfully created {current_mode} interface for HF Spaces")
-        logger.info(f"🔐 Authentication status: {ENABLE_AUTH} (mode: {AUTH_MODE}, provider: {AUTH_PROVIDER})")
         return interface
 
     except (InvalidModeError, InterfaceCreationError) as e:
