@@ -52,6 +52,380 @@ This phase builds on Phase 2.0's authentication system, requiring user_id to per
 
 ## Architectural Decisions
 
+### 0. Authentication Architecture (Phase 2.0 Foundation)
+
+**Critical Realization**: HuggingFace Spaces visibility modes don't support multi-user OAuth.
+
+#### HF Spaces Visibility Options:
+- **Public**: No authentication - anyone can access
+- **Private**: Owner-only access - you're always authenticated
+- **Organization**: Org members only - not suitable for multi-user apps
+
+#### The Authentication Testing Dilemma:
+
+**Option A: Private Space (HF Space-Level Auth)**
+- ✅ OAuth handled by HuggingFace automatically
+- ❌ Only you (the owner) can access
+- ❌ Can't test "unauthenticated user" flow
+- ❌ Can't share with external users
+- ❌ Can't have multiple user accounts
+- **Use Case**: Personal tools, internal prototypes
+
+**Option B: Public Space (Application-Level Auth)**
+- ✅ Anyone can discover the Space
+- ✅ Multiple users with individual accounts
+- ✅ Testable authentication flow
+- ✅ Shareable with external users
+- ✅ Real-world SaaS deployment pattern
+- ❌ Must implement own login system
+- **Use Case**: Multi-user production applications
+
+#### Chosen Approach: Application-Level Authentication (Option B)
+
+**Rationale**: Agent Workbench is a **multi-user SaaS application**, not a personal tool.
+
+**Architecture Pattern**:
+```
+Public HF Space (no Space-level auth)
+    ↓
+Application Login Screen (Gradio LoginButton)
+    ↓
+User Authentication (against database)
+    ↓
+Session Creation (30-min timeout)
+    ↓
+Protected Chat Interface + Settings
+```
+
+#### Implementation Strategy:
+
+**Phase 2.0 Components (Already Built)**:
+- ✅ `UserModel`: User records in database
+- ✅ `SessionModel`: Session tracking with activity timestamps
+- ✅ `AuthService`: User CRUD, session management
+- ✅ Database migrations for users/sessions tables
+
+**Phase 2.1 Additions (This Document)**:
+- `gr.LoginButton()`: Gradio's built-in login component
+- Login form interface (username/password or OAuth providers)
+- Protected route middleware
+- Session validation on page load
+- Logout functionality
+
+#### Gradio Authentication Patterns:
+
+**Pattern 1: LoginButton with OAuth Providers**
+```python
+import gradio as gr
+
+with gr.Blocks() as app:
+    gr.LoginButton()  # Supports HuggingFace, Google, GitHub OAuth
+
+    # Protected interface (only shown after login)
+    with gr.Column(visible=False) as protected_ui:
+        gr.Markdown("# Welcome!")
+        chatbot = gr.Chatbot()
+        # ... rest of interface
+```
+
+**Pattern 2: Custom Login Form**
+```python
+def create_login_interface():
+    with gr.Blocks() as login:
+        gr.Markdown("# Agent Workbench")
+        username = gr.Textbox(label="Username")
+        password = gr.Textbox(label="Password", type="password")
+        login_btn = gr.Button("Login")
+
+        login_btn.click(
+            fn=authenticate_user,
+            inputs=[username, password],
+            outputs=[...]
+        )
+
+    return login
+```
+
+**Pattern 3: Hybrid (OAuth + Username/Password)**
+```python
+with gr.Blocks() as app:
+    with gr.Column(visible=True) as login_ui:
+        gr.Markdown("## Login to Agent Workbench")
+
+        # OAuth providers
+        gr.LoginButton(providers=["huggingface", "google", "github"])
+
+        gr.Markdown("**OR**")
+
+        # Username/password fallback
+        username = gr.Textbox(label="Username")
+        password = gr.Textbox(label="Password", type="password")
+        login_btn = gr.Button("Login")
+```
+
+#### Session Management:
+
+**on_load Handler Pattern**:
+```python
+async def check_session(request: gr.Request):
+    """Check if user has active session on app load."""
+
+    # Extract session token from request (cookie or header)
+    session_token = request.cookies.get("session_token")
+
+    if not session_token:
+        # No session → show login
+        return gr.Column(visible=True), gr.Column(visible=False)
+
+    # Validate session
+    auth_service = AuthService()
+    session = await auth_service.get_active_session_by_token(session_token)
+
+    if not session or session_expired(session):
+        # Invalid/expired → show login
+        return gr.Column(visible=True), gr.Column(visible=False)
+
+    # Valid session → show protected UI
+    user = await auth_service.get_user(session["user_id"])
+    return gr.Column(visible=False), gr.Column(visible=True)
+
+# Wire up on app load
+app.load(fn=check_session, outputs=[login_ui, protected_ui])
+```
+
+**Session Storage Options**:
+1. **Cookies**: `Set-Cookie: session_token=xxx; HttpOnly; Secure`
+2. **Local Storage** (via JavaScript): `localStorage.setItem("session", token)`
+3. **Gradio State** (in-memory, lost on refresh)
+
+**Chosen: HTTP-only Cookies** (most secure, persists across refreshes)
+
+#### Authentication Flow:
+
+**1. First Visit (Unauthenticated)**:
+```
+User visits public Space
+    ↓
+on_load checks for session_token cookie
+    ↓
+No cookie found
+    ↓
+Show login interface (LoginButton or form)
+```
+
+**2. Login**:
+```
+User clicks "Login with HuggingFace" OR enters username/password
+    ↓
+authenticate_user() validates credentials against database
+    ↓
+Create session record (SessionModel)
+    ↓
+Generate session_token (JWT or UUID)
+    ↓
+Set HTTP-only cookie: session_token=xxx
+    ↓
+Redirect to chat interface
+```
+
+**3. Subsequent Visits (Authenticated)**:
+```
+User visits Space
+    ↓
+on_load reads session_token cookie
+    ↓
+Validate token → get user_id
+    ↓
+Check session not expired (last_activity < 30min ago)
+    ↓
+Update last_activity timestamp
+    ↓
+Show protected UI with user context
+```
+
+**4. Logout**:
+```
+User clicks "Logout"
+    ↓
+Delete session record from database
+    ↓
+Clear session_token cookie
+    ↓
+Redirect to login interface
+```
+
+#### Security Considerations:
+
+**Session Tokens**:
+- Use cryptographically secure random tokens (UUID4 or JWT)
+- Store hashed in database (bcrypt or argon2)
+- Rotate on sensitive actions (password change, etc.)
+- Expire after inactivity (30 minutes default)
+
+**Password Storage** (if using custom auth):
+- Hash with bcrypt (cost factor 12+)
+- Never store plaintext passwords
+- Add password complexity requirements
+- Implement rate limiting on login attempts
+
+**Cookie Security**:
+```python
+response.set_cookie(
+    key="session_token",
+    value=token,
+    httponly=True,      # Not accessible to JavaScript (XSS protection)
+    secure=True,        # HTTPS only
+    samesite="Lax",     # CSRF protection
+    max_age=1800        # 30 minutes in seconds
+)
+```
+
+**CSRF Protection**:
+- Use SameSite cookie attribute
+- Add CSRF tokens to forms (if needed)
+- Validate Referer header on sensitive actions
+
+#### Integration with Settings (Phase 2.1):
+
+**Settings Page Requires Authentication**:
+```python
+@app.get("/settings")
+async def settings_page_route(request: gr.Request):
+    # Middleware validates session
+    session_token = request.cookies.get("session_token")
+    session = await auth_service.validate_session(session_token)
+
+    if not session:
+        # Redirect to login
+        return RedirectResponse("/")
+
+    # Load settings for authenticated user
+    user_id = session["user_id"]
+    return create_settings_page(user_id=user_id)
+```
+
+**Chat Interface Requires Authentication**:
+```python
+def create_fastapi_mounted_gradio_interface():
+    with gr.Blocks() as app:
+        # Login UI (shown by default)
+        with gr.Column(visible=True) as login_ui:
+            gr.Markdown("# Agent Workbench")
+            gr.LoginButton()
+
+        # Protected UI (hidden until logged in)
+        with gr.Column(visible=False) as protected_ui:
+            # Minimal chat interface
+            chatbot = gr.Chatbot()
+            # ... rest of interface
+
+        # Check session on load
+        app.load(fn=check_session, outputs=[login_ui, protected_ui])
+
+    return app
+```
+
+#### AUTH_MODE Environment Variable:
+
+**Keep Existing AUTH_MODE for Development**:
+```python
+AUTH_MODE = os.getenv("AUTH_MODE", "disabled")
+# "disabled": No auth (Phase 1 behavior)
+# "development": Mock user (testing auth features locally)
+# "production": Full Gradio LoginButton + session management
+```
+
+**Development Mode (Local Testing)**:
+```python
+if AUTH_MODE == "development":
+    # Auto-login as dev user (skip login screen)
+    mock_user = {"id": "dev-user-123", "username": "developer"}
+    # ... auto-create session
+```
+
+**Production Mode (Public Space)**:
+```python
+if AUTH_MODE == "production":
+    # Show login screen
+    # Require actual authentication
+```
+
+#### Migration from Phase 2.0:
+
+**Phase 2.0 Built** (database + services):
+- ✅ User/session database models
+- ✅ AuthService with CRUD operations
+- ✅ on_load handlers (stub implementation)
+
+**Phase 2.1 Completes** (UI + flow):
+- 🔨 LoginButton or custom login form
+- 🔨 Session cookie management
+- 🔨 Protected UI visibility logic
+- 🔨 Settings page requires auth
+
+**No Breaking Changes**:
+- Database schema unchanged (reuses Phase 2.0 models)
+- AuthService unchanged (add session token validation)
+- Deployment unchanged (still Public Space)
+
+#### Testing Authentication:
+
+**Unit Tests**:
+```python
+async def test_authenticate_valid_credentials(db):
+    """Test successful authentication."""
+    auth = AuthService(db)
+    session = await auth.authenticate("testuser", "password123")
+    assert session["user_id"] is not None
+    assert session["token"] is not None
+
+async def test_authenticate_invalid_credentials(db):
+    """Test failed authentication."""
+    auth = AuthService(db)
+    with pytest.raises(AuthenticationError):
+        await auth.authenticate("testuser", "wrongpassword")
+```
+
+**E2E Tests**:
+```python
+def test_login_flow_redirects_to_chat(client):
+    """Test login redirects to chat interface."""
+    # Visit app (should show login)
+    response = client.get("/")
+    assert "Login" in response.text
+
+    # Submit login
+    response = client.post("/login", data={"username": "test", "password": "pass"})
+    assert response.status_code == 303  # Redirect
+    assert "session_token" in response.cookies
+
+    # Visit again (should show chat)
+    response = client.get("/", cookies=response.cookies)
+    assert "Chatbot" in response.text
+```
+
+**Manual Testing Checklist**:
+- [ ] Visit public Space → see login screen
+- [ ] Login with valid credentials → see chat interface
+- [ ] Close browser and revisit → still logged in (cookie persists)
+- [ ] Wait 30 minutes → session expires, see login again
+- [ ] Logout → session cleared, back to login screen
+
+#### Summary: Why Application-Level Auth?
+
+| Factor | Space-Level Auth | App-Level Auth |
+|--------|------------------|----------------|
+| Multiple Users | ❌ Owner only | ✅ Yes |
+| Testable Flow | ❌ Can't test | ✅ Yes |
+| External Sharing | ❌ No | ✅ Yes |
+| Session Management | N/A | ✅ 30-min timeout |
+| Settings Per User | N/A | ✅ Yes |
+| Production Ready | ❌ Personal tool | ✅ SaaS app |
+
+**Decision**: Implement Gradio `LoginButton` with session management for multi-user SaaS deployment.
+
+---
+
 ### 1. Progressive Web App Architecture
 
 **Core Approach**: Transform Gradio interface into installable PWA with comprehensive manifest
