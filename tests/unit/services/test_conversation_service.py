@@ -85,10 +85,10 @@ class TestConversationService:
         """Test delete_conversation method."""
         conversation_id = str(UUID("12345678-1234-5678-1234-567812345678"))
 
-        # Mock database session
-        from unittest.mock import AsyncMock
+        # Mock database session with regular Mock (not AsyncMock)
+        from unittest.mock import MagicMock
 
-        mock_session = AsyncMock()
+        mock_session = MagicMock()
 
         # Create service with mock session
         service_with_session = ConversationService(db=mock_session)
