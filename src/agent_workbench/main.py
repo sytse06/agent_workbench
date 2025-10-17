@@ -329,13 +329,17 @@ def create_fastapi_mounted_gradio_interface():
     factory = ModeFactory()
     interface = factory.create_interface(mode=mode)
 
-    # Apply authentication configuration if enabled
-    if ENABLE_AUTH:
-        print(f"🔐 Authentication enabled: {AUTH_PROVIDER}")
-        # Note: Gradio's auth parameter is set at launch time, not here
-        # The interfaces themselves handle auth in their on_load handlers
+    # Apply Gradio OAuth if authentication is enabled
+    if ENABLE_AUTH and AUTH_MODE == "oauth":
+        print(f"🔐 Applying Gradio OAuth: {AUTH_PROVIDER}")
+        # Set auth parameter to force OAuth login
+        # This must be set BEFORE the interface is launched/mounted
+        interface.auth = AUTH_PROVIDER  # "huggingface", "google", or "github"
+        print(f"✅ Gradio OAuth enabled - users must log in with {AUTH_PROVIDER}")
+    elif ENABLE_AUTH and AUTH_MODE == "development":
+        print("⚠️  Development mode - no Gradio OAuth (local testing only)")
     else:
-        print("⚠️  Authentication disabled (development mode)")
+        print("⚠️  Authentication disabled")
 
     print(f"✅ Created {mode} interface with event handlers")
     return interface
