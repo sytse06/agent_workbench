@@ -45,9 +45,7 @@ async def share_target_handler(
         - Share file: "Uploaded: document.pdf" (Phase 2.4)
     """
     file_count = len(documents) if documents else 0
-    logger.info(
-        f"Share target received: title={title}, url={url}, files={file_count}"
-    )
+    logger.info(f"Share target received: title={title}, url={url}, files={file_count}")
 
     # Build message from shared content
     message_parts = []
