@@ -67,6 +67,48 @@
     }
   ],
 
+  "shortcuts": [
+    {
+      "name": "New Chat",
+      "short_name": "New Chat",
+      "description": "Start a new conversation",
+      "url": "/?new=true",
+      "icons": [
+        {
+          "src": "/static/icons/shortcut-chat.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Settings",
+      "short_name": "Settings",
+      "description": "Open application settings",
+      "url": "/settings",
+      "icons": [
+        {
+          "src": "/static/icons/shortcut-settings.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "History",
+      "short_name": "History",
+      "description": "View conversation history",
+      "url": "/?history=true",
+      "icons": [
+        {
+          "src": "/static/icons/shortcut-history.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+
   "share_target": {
     "action": "/share",
     "method": "POST",
