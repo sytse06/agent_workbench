@@ -31,6 +31,8 @@ def create_seo_coach_app() -> gr.Blocks:
         title="AI SEO Coach - Nederlandse Bedrijven",
         theme=gr.themes.Soft(),
         css="""
+        @import url('/static/assets/css/fonts.css');
+
         .business-panel { background: #f8f9fa; padding: 20px; border-radius: 8px; }
         .coaching-panel { min-height: 500px; }
         .success { color: #155724; background: #d4edda; padding: 10px;
@@ -165,8 +167,11 @@ def create_seo_coach_app() -> gr.Blocks:
         # Add authentication handler (on_load)
         # NOTE: Temporarily disabled until Phase 2.1 login UI is implemented
         # See: docs/architecture/decisions/UI-004-pwa-app-user-settings.md
-        # When enabled, requires application-level auth (LoginButton), not Space-level OAuth
-        auth_mode = os.getenv("AUTH_MODE", "disabled")  # "disabled", "development", or "oauth"
+        # When enabled, requires application-level auth (LoginButton),
+        # not Space-level OAuth
+        auth_mode = os.getenv(
+            "AUTH_MODE", "disabled"
+        )  # "disabled", "development", or "oauth"
         enable_auth = auth_mode in ["development", "oauth"]
 
         # TEMP: Force disable until login UI exists (Phase 2.1)

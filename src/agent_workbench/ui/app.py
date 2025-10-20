@@ -38,7 +38,12 @@ def create_workbench_app() -> gr.Blocks:
     title = f"Agent Workbench - {active_mode.title()} Mode"
     print(f"🎯 Active mode: {active_mode}")
 
-    with gr.Blocks(title=title) as app:
+    # Load custom CSS with Ubuntu font
+    custom_css = """
+        @import url('/static/assets/css/fonts.css');
+    """
+
+    with gr.Blocks(title=title, css=custom_css) as app:
         gr.Markdown(f"# 🛠️ Agent Workbench - {active_mode.title()} Mode")
 
         conversation_id = gr.State(str(uuid.uuid4()))
@@ -250,8 +255,11 @@ def create_workbench_app() -> gr.Blocks:
         # Add authentication handler (on_load)
         # NOTE: Temporarily disabled until Phase 2.1 login UI is implemented
         # See: docs/architecture/decisions/UI-004-pwa-app-user-settings.md
-        # When enabled, requires application-level auth (LoginButton), not Space-level OAuth
-        auth_mode = os.getenv("AUTH_MODE", "disabled")  # "disabled", "development", or "oauth"
+        # When enabled, requires application-level auth (LoginButton),
+        # not Space-level OAuth
+        auth_mode = os.getenv(
+            "AUTH_MODE", "disabled"
+        )  # "disabled", "development", or "oauth"
         enable_auth = auth_mode in ["development", "oauth"]
 
         # TEMP: Force disable until login UI exists (Phase 2.1)

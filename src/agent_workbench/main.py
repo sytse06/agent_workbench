@@ -3,11 +3,14 @@ import os
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Optional
 
 import gradio as gr
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 # Import dotenv conditionally - not needed for HuggingFace Spaces
 try:
@@ -27,6 +30,7 @@ from .api.routes import (
     health,
     messages,
     models,
+    share,
     simple_chat,
 )
 from .database import init_adaptive_database
@@ -158,6 +162,60 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Get base directory for static files
+BASE_DIR = Path(__file__).resolve().parent
+
+# Mount static files BEFORE Gradio mount (critical order)
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+
+# PWA Routes - must be registered before Gradio mount
+@app.get("/manifest.json")
+async def pwa_manifest() -> FileResponse:
+    """
+    Serve PWA manifest file.
+
+    Returns manifest.json with proper MIME type for PWA installation.
+    """
+    manifest_path = BASE_DIR / "static" / "manifest.json"
+    return FileResponse(
+        manifest_path,
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "public, max-age=3600"},  # Cache for 1 hour
+    )
+
+
+@app.get("/sw.js")
+@app.get("/service-worker.js")  # Support both naming conventions
+async def service_worker() -> FileResponse:
+    """
+    Serve service worker script.
+
+    Returns sw.js with proper JavaScript MIME type.
+    IMPORTANT: No caching for service worker (always fetch fresh).
+    """
+    sw_path = BASE_DIR / "static" / "sw.js"
+    return FileResponse(
+        sw_path,
+        media_type="application/javascript",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Service-Worker-Allowed": "/",  # Allow SW to control root scope
+        },
+    )
+
+
+@app.get("/offline")
+async def offline_page() -> FileResponse:
+    """
+    Serve offline fallback page.
+
+    Shown when user is offline and requested page is not cached.
+    """
+    offline_path = BASE_DIR / "static" / "offline.html"
+    return FileResponse(offline_path, media_type="text/html")
+
+
 # Authentication Configuration
 # AUTH_MODE determines authentication behavior:
 # - "disabled" (default): No authentication
@@ -174,7 +232,7 @@ print("=" * 80)
 print("🔐 AUTHENTICATION CONFIGURATION")
 print(f"   AUTH_MODE: {AUTH_MODE}")
 if ENABLE_AUTH:
-    print(f"   Status: Authentication enabled")
+    print("   Status: Authentication enabled")
     print(f"   AUTH_PROVIDER: {AUTH_PROVIDER}")
     if AUTH_MODE == "development":
         dev_user = os.getenv("DEV_USERNAME", "local-dev-user")
@@ -242,6 +300,9 @@ app.include_router(chat_workflow.router, prefix="/api/v1")
 
 # UTILITY: Minimal 2-node LangGraph workflow for testing/debugging
 app.include_router(simple_chat.router, prefix="/api/v1")
+
+# PWA Share handler
+app.include_router(share.router)
 
 # Other routes
 app.include_router(files.router, prefix="/api/v1")  # File upload/download
@@ -334,8 +395,8 @@ def create_fastapi_mounted_gradio_interface():
     # We rely on Space-level auth + our on_load handlers for user management
     if ENABLE_AUTH and AUTH_MODE == "oauth":
         print(f"🔐 OAuth mode enabled: {AUTH_PROVIDER}")
-        print("ℹ️  HuggingFace Spaces: OAuth handled at Space level (Settings > Visibility)")
-        print("ℹ️  Application will use on_load handlers to manage authenticated users")
+        print("ℹ️  HuggingFace Spaces: OAuth handled at Space level")
+        print("ℹ️  Application will use on_load handlers for user management")
     elif ENABLE_AUTH and AUTH_MODE == "development":
         print("⚠️  Development mode - no OAuth (local testing only)")
     else:
