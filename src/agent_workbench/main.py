@@ -128,7 +128,23 @@ async def lifespan(app: FastAPI):
                 "⚠️ run_startup_events() not available (Gradio 4.x), relying on .queue()"
             )
 
-        # Mount interface
+        # Mount settings page at /settings-app
+        print("🎯 Mounting settings interface at /settings-app...")
+        import gradio as gr
+
+        from .ui.mode_factory import ModeFactory
+
+        factory = ModeFactory()
+        settings_interface = factory.create_interface("settings")
+        settings_interface.queue()
+        if hasattr(settings_interface, "run_startup_events"):
+            settings_interface.run_startup_events()
+
+        # Mount settings using Gradio's mount_gradio_app
+        gr.mount_gradio_app(app, settings_interface, path="/settings-app")
+        print("✅ Settings interface mounted at /settings-app")
+
+        # Mount main interface at root (must be last to catch all other routes)
         app.mount("/", gradio_interface.app, name="gradio")
         print("✅ FastAPI-mounted Gradio interface with database persistence")
 
@@ -219,38 +235,16 @@ async def offline_page() -> FileResponse:
 
 
 @app.get("/settings")
-async def settings_page_route():
+async def settings_page_redirect():
     """
-    Serve settings page with 4-tab interface.
+    Redirect to settings page.
 
-    Shows Account, Models, Company (SEO coach), and Advanced tabs.
-    Navigation point from chat interface via settings button.
+    The settings page is mounted at /settings-app via Gradio.
+    This redirect ensures users can access it via the /settings URL.
     """
-    from .ui.mode_factory import ModeFactory
+    from fastapi.responses import RedirectResponse
 
-    try:
-        factory = ModeFactory()
-
-        # Create settings interface
-        settings_interface = factory.create_interface("settings")
-
-        # Note: This returns the Gradio interface which will be mounted
-        # The actual rendering happens through Gradio's internal routing
-        return settings_interface
-
-    except Exception as e:
-        logger.error(f"Failed to create settings page: {e}")
-        # Return minimal error interface
-        import gradio as gr
-
-        error_msg = str(e)
-        error_interface = gr.Interface(
-            fn=lambda: f"Error loading settings: {error_msg}",
-            inputs=[],
-            outputs=gr.Textbox(label="Error"),
-            title="Settings - Error",
-        )
-        return error_interface
+    return RedirectResponse(url="/settings-app")
 
 
 # Authentication Configuration
