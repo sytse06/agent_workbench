@@ -128,9 +128,9 @@ async def lifespan(app: FastAPI):
                 "⚠️ run_startup_events() not available (Gradio 4.x), relying on .queue()"
             )
 
-        # Mount settings page at /settings-app
+        # Mount settings page BEFORE main interface
+        # Order matters: specific paths must be mounted before catch-all "/"
         print("🎯 Mounting settings interface at /settings-app...")
-        import gradio as gr
 
         from .ui.mode_factory import ModeFactory
 
@@ -140,11 +140,11 @@ async def lifespan(app: FastAPI):
         if hasattr(settings_interface, "run_startup_events"):
             settings_interface.run_startup_events()
 
-        # Mount settings using Gradio's mount_gradio_app
-        gr.mount_gradio_app(app, settings_interface, path="/settings-app")
+        # Mount settings at /settings-app (specific path, must be before /)
+        app.mount("/settings-app", settings_interface.app, name="settings")
         print("✅ Settings interface mounted at /settings-app")
 
-        # Mount main interface at root (must be last to catch all other routes)
+        # Mount main interface at root LAST (catch-all, must be last)
         app.mount("/", gradio_interface.app, name="gradio")
         print("✅ FastAPI-mounted Gradio interface with database persistence")
 
