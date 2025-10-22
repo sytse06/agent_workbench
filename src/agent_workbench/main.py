@@ -57,9 +57,11 @@ def load_environment():
     app_env = os.getenv("APP_ENV", "development")
 
     # 3. Load environment-specific config
+    # Note: override=False preserves environment variables set on command line
+    # This allows: APP_MODE=seo_coach make start-app
     env_file = f"config/{app_env}.env"
     if os.path.exists(env_file):
-        load_dotenv(env_file, override=True)
+        load_dotenv(env_file, override=False)
         print(f"✅ Loaded {app_env} environment from {env_file}")
     else:
         print(f"⚠️  No config file found for {app_env}, using base .env")
