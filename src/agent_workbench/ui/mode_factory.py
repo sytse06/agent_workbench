@@ -13,6 +13,7 @@ import gradio as gr
 
 from .app import create_workbench_app
 from .seo_coach_app import create_seo_coach_app
+from .settings_page import create_settings_page
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class ModeFactory:
         self.mode_registry: Dict[str, Callable[[], gr.Blocks]] = {
             "workbench": create_workbench_app,
             "seo_coach": create_seo_coach_app,
+            "settings": create_settings_page,
         }
         # Extension pathway for Phase 2
         self.extension_registry: Dict[str, Callable[[], gr.Blocks]] = {}

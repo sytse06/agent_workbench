@@ -44,9 +44,14 @@ def create_seo_coach_app() -> gr.Blocks:
         """,
     ) as interface:
 
-        # Header
-        gr.Markdown("# 🚀 AI SEO Coach voor Nederlandse Bedrijven")
-        gr.Markdown("*Verbeter je website ranking met persoonlijke AI coaching*")
+        # Header with settings button
+        with gr.Row():
+            with gr.Column(scale=4):
+                gr.Markdown("# 🚀 AI SEO Coach voor Nederlandse Bedrijven")
+                gr.Markdown(
+                    "*Verbeter je website ranking met persoonlijke AI coaching*"
+                )
+            settings_btn = gr.Button("⚙️ Instellingen", size="sm", scale=1)
 
         # State management (minimal, following UI-001 patterns)
         conversation_id = gr.State(str(uuid.uuid4()))
@@ -254,6 +259,9 @@ def create_seo_coach_app() -> gr.Blocks:
             print("✅ [SEO Coach] on_load authentication handler wired")
         else:
             print("⚠️  [SEO Coach] Authentication disabled")
+
+        # Settings navigation
+        settings_btn.click(fn=None, js="window.location.href = '/settings'")
 
     return interface
 

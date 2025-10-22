@@ -44,7 +44,10 @@ def create_workbench_app() -> gr.Blocks:
     """
 
     with gr.Blocks(title=title, css=custom_css) as app:
-        gr.Markdown(f"# 🛠️ Agent Workbench - {active_mode.title()} Mode")
+        # Header with settings button
+        with gr.Row():
+            gr.Markdown(f"# 🛠️ Agent Workbench - {active_mode.title()} Mode", scale=4)
+            settings_btn = gr.Button("⚙️ Settings", size="sm", scale=1)
 
         conversation_id = gr.State(str(uuid.uuid4()))
 
@@ -344,6 +347,9 @@ def create_workbench_app() -> gr.Blocks:
             print("⚠️  Authentication disabled")
 
     print("=" * 80)
+    # Settings navigation
+    settings_btn.click(fn=None, js="window.location.href = '/settings'")
+
     print("🎯 GRADIO APP CREATED SUCCESSFULLY")
     print("🎯 Event handlers wired to handle_message")
     print("=" * 80)

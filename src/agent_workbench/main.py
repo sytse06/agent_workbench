@@ -216,6 +216,41 @@ async def offline_page() -> FileResponse:
     return FileResponse(offline_path, media_type="text/html")
 
 
+@app.get("/settings")
+async def settings_page_route():
+    """
+    Serve settings page with 4-tab interface.
+
+    Shows Account, Models, Company (SEO coach), and Advanced tabs.
+    Navigation point from chat interface via settings button.
+    """
+    from .ui.mode_factory import ModeFactory
+
+    try:
+        factory = ModeFactory()
+
+        # Create settings interface
+        settings_interface = factory.create_interface("settings")
+
+        # Note: This returns the Gradio interface which will be mounted
+        # The actual rendering happens through Gradio's internal routing
+        return settings_interface
+
+    except Exception as e:
+        logger.error(f"Failed to create settings page: {e}")
+        # Return minimal error interface
+        import gradio as gr
+
+        error_msg = str(e)
+        error_interface = gr.Interface(
+            fn=lambda: f"Error loading settings: {error_msg}",
+            inputs=[],
+            outputs=gr.Textbox(label="Error"),
+            title="Settings - Error",
+        )
+        return error_interface
+
+
 # Authentication Configuration
 # AUTH_MODE determines authentication behavior:
 # - "disabled" (default): No authentication
