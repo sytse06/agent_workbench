@@ -73,9 +73,12 @@ def create_settings_page(
 
         # Header with back button
         with gr.Row(elem_classes=["settings-header"]):
-            back_btn = gr.Button("← Back to Chat", size="sm", scale=1)
-            gr.Markdown("# ⚙️ Settings", scale=3)
-            gr.HTML("", scale=1)  # Spacer
+            with gr.Column(scale=1):
+                back_btn = gr.Button("← Back to Chat", size="sm")
+            with gr.Column(scale=3):
+                gr.Markdown("# ⚙️ Settings")
+            with gr.Column(scale=1):
+                gr.HTML("")  # Spacer
 
         # Status message (shared across tabs)
         status_message = gr.HTML(value="", visible=True)

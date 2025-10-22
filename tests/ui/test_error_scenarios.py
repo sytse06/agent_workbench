@@ -1,6 +1,6 @@
 # Error scenario tests
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -75,7 +75,7 @@ async def test_invalid_response_format():
 
         mock_response = Mock()
         mock_response.json.side_effect = Exception("Invalid JSON")
-        mock_response.raise_for_status.return_value = None
+        mock_response.raise_for_status = MagicMock(return_value=None)
         mock_response.status_code = 200
         mock_response.headers = {}
         mock_post.return_value = mock_response

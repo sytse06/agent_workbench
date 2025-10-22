@@ -1,6 +1,6 @@
 # Tests for state consistency in UI
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -29,7 +29,7 @@ async def test_no_state_drift():
             "execution_successful": True,
             "metadata": {},
         }
-        mock_post_response.raise_for_status.return_value = None
+        mock_post_response.raise_for_status = MagicMock(return_value=None)
         mock_post_response.status_code = 200
         mock_post_response.headers = {}
         mock_post.return_value = mock_post_response
@@ -50,7 +50,7 @@ async def test_no_state_drift():
                 },
             ]
         }
-        mock_get_response.raise_for_status.return_value = None
+        mock_get_response.raise_for_status = MagicMock(return_value=None)
         mock_get_response.status_code = 200
         mock_get_response.headers = {}
         mock_get.return_value = mock_get_response

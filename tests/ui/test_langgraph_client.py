@@ -1,6 +1,6 @@
 # Tests for LangGraph client integration
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -24,7 +24,7 @@ async def test_client_send_message():
             "execution_successful": True,
             "metadata": {},
         }
-        mock_response.raise_for_status.return_value = None
+        mock_response.raise_for_status = MagicMock(return_value=None)
         mock_response.status_code = 200
         mock_response.headers = {}
         mock_post.return_value = mock_response
@@ -60,7 +60,7 @@ async def test_client_get_chat_history():
                 {"content": "Hi there!", "role": "assistant"},
             ]
         }
-        mock_response.raise_for_status.return_value = None
+        mock_response.raise_for_status = MagicMock(return_value=None)
         mock_response.status_code = 200
         mock_response.headers = {}
         mock_get.return_value = mock_response
