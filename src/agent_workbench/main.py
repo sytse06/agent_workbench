@@ -109,61 +109,52 @@ async def lifespan(app: FastAPI):
     # These will be accessed directly by Gradio handlers
     print("✅ FastAPI lifespan services initialized")
 
-    # Mount FastAPI-Gradio interface during startup
+    # Create and mount Gradio interfaces
+    # Note: We store references to prevent garbage collection
+    print("🎯 Creating Gradio interfaces...")
+
+    # Create settings interface
     try:
-        print("🎯 Mounting FastAPI-Gradio interface...")
-        gradio_interface = create_fastapi_mounted_gradio_interface()
-
-        # Apply queue for responsiveness
-        gradio_interface.queue()
-
-        # CRITICAL: Run startup events to initialize event handlers (Gradio 5.x)
-        # In Gradio 4.x, this method doesn't exist but .queue() is sufficient
-        # In Gradio 5.x, this is required for buttons to respond
-        if hasattr(gradio_interface, "run_startup_events"):
-            print("🎯 Running startup events (Gradio 5.x)")
-            gradio_interface.run_startup_events()
-        else:
-            print(
-                "⚠️ run_startup_events() not available (Gradio 4.x), relying on .queue()"
-            )
-
-        # Mount settings page BEFORE main interface
-        # Order matters: specific paths must be mounted before catch-all "/"
-        print("🎯 Mounting settings interface at /settings-app...")
-
         from .ui.mode_factory import ModeFactory
 
         factory = ModeFactory()
-        settings_interface = factory.create_interface("settings")
-        settings_interface.queue()
-        if hasattr(settings_interface, "run_startup_events"):
-            settings_interface.run_startup_events()
-
-        # Mount settings at /settings-app (specific path, must be before /)
-        app.mount("/settings-app", settings_interface.app, name="settings")
-        print("✅ Settings interface mounted at /settings-app")
-
-        # Mount main interface at root LAST (catch-all, must be last)
-        app.mount("/", gradio_interface.app, name="gradio")
-        print("✅ FastAPI-mounted Gradio interface with database persistence")
-
+        app.state.settings_interface = factory.create_interface("settings")
+        app.state.settings_interface.queue()
+        if hasattr(app.state.settings_interface, "run_startup_events"):
+            app.state.settings_interface.run_startup_events()
+        print("✅ Settings interface created")
     except Exception as e:
-        # Fallback to API-only mode
-        error_msg = f"Failed to mount FastAPI-Gradio interface: {e}"
-        print(f"❌ {error_msg}")
+        print(f"❌ Failed to create settings interface: {e}")
         import traceback
 
-        print(f"🎯 Traceback: {traceback.format_exc()}")
-        print("⚠️ Starting in API-only mode")
+        print(traceback.format_exc())
+        app.state.settings_interface = None
 
-        @app.get("/api/interface-error")
-        async def get_interface_error():
-            return {
-                "error": "Interface not available",
-                "message": error_msg,
-                "mode": "api_only",
-            }
+    # Create main interface
+    try:
+        app.state.gradio_interface = create_fastapi_mounted_gradio_interface()
+        app.state.gradio_interface.queue()
+        if hasattr(app.state.gradio_interface, "run_startup_events"):
+            app.state.gradio_interface.run_startup_events()
+        print("✅ Main interface created")
+    except Exception as e:
+        print(f"❌ Failed to create main interface: {e}")
+        import traceback
+
+        print(traceback.format_exc())
+        app.state.gradio_interface = None
+
+    # Mount interfaces at explicit paths
+    # This avoids the catch-all "/" problem
+    if app.state.settings_interface:
+        print("🎯 Mounting settings interface at /settings...")
+        app.mount("/settings", app.state.settings_interface.app, name="settings")
+        print("✅ Settings interface mounted at /settings")
+
+    if app.state.gradio_interface:
+        print("🎯 Mounting main interface at /app...")
+        app.mount("/app", app.state.gradio_interface.app, name="gradio")
+        print("✅ Main interface mounted at /app")
 
     yield
 
@@ -185,6 +176,14 @@ BASE_DIR = Path(__file__).resolve().parent
 
 # Mount static files BEFORE Gradio mount (critical order)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+
+# ============================================================================
+# Gradio Interface Mounting (via startup event)
+# IMPORTANT: Mounting must happen after all functions are defined
+# ============================================================================
+
+# Interfaces will be created and mounted in startup event below
 
 
 # PWA Routes - must be registered before Gradio mount
@@ -234,17 +233,17 @@ async def offline_page() -> FileResponse:
     return FileResponse(offline_path, media_type="text/html")
 
 
-@app.get("/settings")
-async def settings_page_redirect():
+@app.get("/")
+async def root_redirect():
     """
-    Redirect to settings page.
+    Redirect root to main app.
 
-    The settings page is mounted at /settings-app via Gradio.
-    This redirect ensures users can access it via the /settings URL.
+    The main interface is mounted at /app.
+    This provides a clean entry point for users.
     """
     from fastapi.responses import RedirectResponse
 
-    return RedirectResponse(url="/settings-app")
+    return RedirectResponse(url="/app")
 
 
 # Authentication Configuration

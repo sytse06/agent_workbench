@@ -304,7 +304,7 @@ def create_settings_page(
         # ============================================================
 
         # Back to chat navigation
-        back_btn.click(fn=None, js="window.location.href = '/'")
+        back_btn.click(fn=None, js="window.location.href = '/app'")
 
         # Account tab handlers
         def handle_theme_save(theme: str) -> str:
@@ -326,7 +326,7 @@ def create_settings_page(
             logout_btn.click(
                 fn=handle_logout,
                 outputs=[status_message],
-                js="setTimeout(() => window.location.href = '/', 2000)",
+                js="setTimeout(() => window.location.href = '/app', 2000)",
             )
 
         save_theme_btn.click(
