@@ -199,17 +199,114 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 
 # PWA Routes - must be registered before Gradio mount
 @app.get("/manifest.json")
-async def pwa_manifest() -> FileResponse:
+async def pwa_manifest():
     """
-    Serve PWA manifest file.
+    Serve dynamically generated PWA manifest.
 
+    Adapts URLs based on environment (HF Spaces vs local/Docker).
     Returns manifest.json with proper MIME type for PWA installation.
     """
-    manifest_path = BASE_DIR / "static" / "manifest.json"
-    return FileResponse(
-        manifest_path,
+    from fastapi.responses import JSONResponse
+
+    # Detect environment
+    is_hf_spaces = os.getenv("SPACE_ID") is not None
+    app_mode = os.getenv("APP_MODE", "workbench")
+
+    # Set URLs based on environment
+    start_url = "/" if is_hf_spaces else "/app"
+    settings_url = "/" if is_hf_spaces else "/settings"  # Settings in main interface for HF
+    new_chat_url = f"{start_url}?new=true"
+    history_url = f"{start_url}?history=true"
+
+    # Set theme based on mode
+    theme_colors = {
+        "workbench": "#3b82f6",  # Blue
+        "seo_coach": "#10b981",  # Green
+    }
+    theme_color = theme_colors.get(app_mode, "#3b82f6")
+
+    # Set names based on mode
+    names = {
+        "workbench": {
+            "name": "Agent Workbench",
+            "short_name": "AgentWB",
+            "description": "AI-powered workbench for technical users"
+        },
+        "seo_coach": {
+            "name": "SEO Coach",
+            "short_name": "SEO-Coach",
+            "description": "AI-powered SEO coaching voor Nederlandse bedrijven"
+        }
+    }
+    app_names = names.get(app_mode, names["workbench"])
+
+    manifest = {
+        "name": app_names["name"],
+        "short_name": app_names["short_name"],
+        "description": app_names["description"],
+        "start_url": start_url,
+        "scope": "/",
+        "display": "standalone",
+        "background_color": "#ffffff",
+        "theme_color": theme_color,
+        "orientation": "portrait-primary",
+        "categories": ["business", "productivity", "developer-tools"],
+        "icons": [
+            {"src": "/static/icons/icon-72.png", "sizes": "72x72", "type": "image/png", "purpose": "any"},
+            {"src": "/static/icons/icon-96.png", "sizes": "96x96", "type": "image/png", "purpose": "any"},
+            {"src": "/static/icons/icon-128.png", "sizes": "128x128", "type": "image/png", "purpose": "any"},
+            {"src": "/static/icons/icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any"},
+            {"src": "/static/icons/icon-152.png", "sizes": "152x152", "type": "image/png", "purpose": "any"},
+            {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/static/icons/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any"},
+            {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/static/icons/apple-touch-icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any"}
+        ],
+        "shortcuts": [
+            {
+                "name": "New Chat",
+                "short_name": "New Chat",
+                "description": "Start a new conversation",
+                "url": new_chat_url,
+                "icons": [{"src": "/static/icons/shortcut-chat.png", "sizes": "96x96", "type": "image/png"}]
+            },
+            {
+                "name": "Settings" if not is_hf_spaces else "Home",
+                "short_name": "Settings" if not is_hf_spaces else "Home",
+                "description": "Open application settings" if not is_hf_spaces else "Go to home",
+                "url": settings_url,
+                "icons": [{"src": "/static/icons/shortcut-settings.png", "sizes": "96x96", "type": "image/png"}]
+            },
+            {
+                "name": "History",
+                "short_name": "History",
+                "description": "View conversation history",
+                "url": history_url,
+                "icons": [{"src": "/static/icons/shortcut-history.png", "sizes": "96x96", "type": "image/png"}]
+            }
+        ],
+        "share_target": {
+            "action": "/share",
+            "method": "POST",
+            "enctype": "multipart/form-data",
+            "params": {
+                "title": "title",
+                "text": "text",
+                "url": "url",
+                "files": [
+                    {
+                        "name": "documents",
+                        "accept": ["text/*", "application/pdf", ".md", ".txt", "image/*"]
+                    }
+                ]
+            }
+        }
+    }
+
+    return JSONResponse(
+        content=manifest,
         media_type="application/manifest+json",
-        headers={"Cache-Control": "public, max-age=3600"},  # Cache for 1 hour
+        headers={"Cache-Control": "public, max-age=3600"}
     )
 
 
