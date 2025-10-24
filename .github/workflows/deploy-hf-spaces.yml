@@ -41,7 +41,8 @@ jobs:
           cp pyproject.toml hf-deploy-workbench/
           cp -r alembic/ hf-deploy-workbench/alembic/
           cp alembic.ini hf-deploy-workbench/
-          cp -r config/ hf-deploy-workbench/config/
+          # Note: config/ is not tracked in git (contains secrets)
+          # Spaces will use environment variables instead
 
           # Generate requirements.txt from pyproject.toml
           cd hf-deploy-workbench
@@ -87,7 +88,8 @@ jobs:
           cp pyproject.toml hf-deploy-seo/
           cp -r alembic/ hf-deploy-seo/alembic/
           cp alembic.ini hf-deploy-seo/
-          cp -r config/ hf-deploy-seo/config/
+          # Note: config/ is not tracked in git (contains secrets)
+          # Spaces will use environment variables instead
 
           # Generate requirements.txt from pyproject.toml
           cd hf-deploy-seo
