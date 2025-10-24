@@ -4,7 +4,7 @@ Integration tests for SEO Coach Interface - UI-002 SEO Coach Interface.
 Tests end-to-end workflows, HTTP integration, and consolidated service calls.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -168,7 +168,7 @@ class TestSEOCoachIntegration:
 
             # Mock consolidated service response
             mock_response = AsyncMock()
-            mock_response.raise_for_status.return_value = None
+            mock_response.raise_for_status = MagicMock(return_value=None)
             mock_client.post.return_value = mock_response
 
             # Mock conversation history response
@@ -184,7 +184,7 @@ class TestSEOCoachIntegration:
                     },
                 ]
             }
-            mock_history_response.raise_for_status.return_value = None
+            mock_history_response.raise_for_status = MagicMock(return_value=None)
             mock_client.get.return_value = mock_history_response
 
             msg = "Wat zijn goede zoekwoorden voor mijn restaurant?"
@@ -423,12 +423,12 @@ class TestConsolidatedServiceIntegration:
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
             mock_response = AsyncMock()
-            mock_response.raise_for_status.return_value = None
+            mock_response.raise_for_status = MagicMock(return_value=None)
             mock_client.post.return_value = mock_response
 
             mock_history_response = AsyncMock()
             mock_history_response.json.return_value = {"conversation_history": []}
-            mock_history_response.raise_for_status.return_value = None
+            mock_history_response.raise_for_status = MagicMock(return_value=None)
             mock_client.get.return_value = mock_history_response
 
             await _handle_coaching_message(

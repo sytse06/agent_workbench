@@ -31,6 +31,8 @@ def create_seo_coach_app() -> gr.Blocks:
         title="AI SEO Coach - Nederlandse Bedrijven",
         theme=gr.themes.Soft(),
         css="""
+        @import url('/static/assets/css/fonts.css');
+
         .business-panel { background: #f8f9fa; padding: 20px; border-radius: 8px; }
         .coaching-panel { min-height: 500px; }
         .success { color: #155724; background: #d4edda; padding: 10px;
@@ -42,9 +44,14 @@ def create_seo_coach_app() -> gr.Blocks:
         """,
     ) as interface:
 
-        # Header
-        gr.Markdown("# 🚀 AI SEO Coach voor Nederlandse Bedrijven")
-        gr.Markdown("*Verbeter je website ranking met persoonlijke AI coaching*")
+        # Header with settings button
+        with gr.Row():
+            with gr.Column(scale=4):
+                gr.Markdown("# 🚀 AI SEO Coach voor Nederlandse Bedrijven")
+                gr.Markdown(
+                    "*Verbeter je website ranking met persoonlijke AI coaching*"
+                )
+            settings_btn = gr.Button("⚙️ Instellingen", size="sm", scale=1)
 
         # State management (minimal, following UI-001 patterns)
         conversation_id = gr.State(str(uuid.uuid4()))
@@ -165,8 +172,11 @@ def create_seo_coach_app() -> gr.Blocks:
         # Add authentication handler (on_load)
         # NOTE: Temporarily disabled until Phase 2.1 login UI is implemented
         # See: docs/architecture/decisions/UI-004-pwa-app-user-settings.md
-        # When enabled, requires application-level auth (LoginButton), not Space-level OAuth
-        auth_mode = os.getenv("AUTH_MODE", "disabled")  # "disabled", "development", or "oauth"
+        # When enabled, requires application-level auth (LoginButton),
+        # not Space-level OAuth
+        auth_mode = os.getenv(
+            "AUTH_MODE", "disabled"
+        )  # "disabled", "development", or "oauth"
         enable_auth = auth_mode in ["development", "oauth"]
 
         # TEMP: Force disable until login UI exists (Phase 2.1)
@@ -249,6 +259,9 @@ def create_seo_coach_app() -> gr.Blocks:
             print("✅ [SEO Coach] on_load authentication handler wired")
         else:
             print("⚠️  [SEO Coach] Authentication disabled")
+
+        # Settings navigation
+        settings_btn.click(fn=None, js="window.location.href = '/settings'")
 
     return interface
 

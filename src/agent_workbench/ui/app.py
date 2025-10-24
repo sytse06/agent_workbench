@@ -38,8 +38,18 @@ def create_workbench_app() -> gr.Blocks:
     title = f"Agent Workbench - {active_mode.title()} Mode"
     print(f"🎯 Active mode: {active_mode}")
 
-    with gr.Blocks(title=title) as app:
-        gr.Markdown(f"# 🛠️ Agent Workbench - {active_mode.title()} Mode")
+    # Load custom CSS with Ubuntu font
+    custom_css = """
+        @import url('/static/assets/css/fonts.css');
+    """
+
+    with gr.Blocks(title=title, css=custom_css) as app:
+        # Header with settings button
+        with gr.Row():
+            with gr.Column(scale=4):
+                gr.Markdown(f"# 🛠️ Agent Workbench - {active_mode.title()} Mode")
+            with gr.Column(scale=1):
+                settings_btn = gr.Button("⚙️ Settings", size="sm")
 
         conversation_id = gr.State(str(uuid.uuid4()))
 
@@ -250,8 +260,11 @@ def create_workbench_app() -> gr.Blocks:
         # Add authentication handler (on_load)
         # NOTE: Temporarily disabled until Phase 2.1 login UI is implemented
         # See: docs/architecture/decisions/UI-004-pwa-app-user-settings.md
-        # When enabled, requires application-level auth (LoginButton), not Space-level OAuth
-        auth_mode = os.getenv("AUTH_MODE", "disabled")  # "disabled", "development", or "oauth"
+        # When enabled, requires application-level auth (LoginButton),
+        # not Space-level OAuth
+        auth_mode = os.getenv(
+            "AUTH_MODE", "disabled"
+        )  # "disabled", "development", or "oauth"
         enable_auth = auth_mode in ["development", "oauth"]
 
         # TEMP: Force disable until login UI exists (Phase 2.1)
@@ -334,6 +347,9 @@ def create_workbench_app() -> gr.Blocks:
             print("✅ on_load authentication handler wired")
         else:
             print("⚠️  Authentication disabled")
+
+        # Settings navigation
+        settings_btn.click(fn=None, js="window.location.href = '/settings'")
 
     print("=" * 80)
     print("🎯 GRADIO APP CREATED SUCCESSFULLY")

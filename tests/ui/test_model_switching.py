@@ -1,6 +1,6 @@
 # Model switching tests
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -57,7 +57,7 @@ async def test_model_configuration_changes():
             "execution_successful": True,
             "metadata": {},
         }
-        mock_response.raise_for_status.return_value = None
+        mock_response.raise_for_status = MagicMock(return_value=None)
         mock_response.status_code = 200
         mock_response.headers = {}
         mock_post.return_value = mock_response

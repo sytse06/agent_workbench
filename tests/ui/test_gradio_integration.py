@@ -1,6 +1,6 @@
 # Unit tests for Gradio UI integration
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -36,7 +36,7 @@ async def test_message_handling():
             "execution_successful": True,
             "metadata": {},
         }
-        mock_response.raise_for_status.return_value = None
+        mock_response.raise_for_status = MagicMock(return_value=None)
         mock_post.return_value = mock_response
 
         result = await client.send_message(

@@ -1,6 +1,6 @@
 # End-to-end chat flow tests
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -32,7 +32,7 @@ async def test_end_to_end_chat_flow():
             "reply": "Hello! How can I assist you today?",
             "conversation_id": "test-flow-id",
         }
-        mock_response.raise_for_status.return_value = None
+        mock_response.raise_for_status = MagicMock(return_value=None)
         mock_response.status_code = 200
         mock_response.headers = {}
         mock_post.return_value = mock_response
@@ -44,7 +44,7 @@ async def test_end_to_end_chat_flow():
                 {"content": "Hello! How can I assist you today?", "role": "assistant"},
             ]
         }
-        mock_get_response.raise_for_status.return_value = None
+        mock_get_response.raise_for_status = MagicMock(return_value=None)
         mock_get_response.status_code = 200
         mock_get_response.headers = {}
         mock_get.return_value = mock_get_response
@@ -86,7 +86,7 @@ async def test_empty_message_handling():
             "reply": "",
             "conversation_id": "test-empty-id",
         }
-        mock_response.raise_for_status.return_value = None
+        mock_response.raise_for_status = MagicMock(return_value=None)
         mock_response.status_code = 200
         mock_response.headers = {}
         mock_post.return_value = mock_response

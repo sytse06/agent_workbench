@@ -1,6 +1,6 @@
 """Tests for UI-001 Consolidated Service Integration"""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -24,7 +24,7 @@ async def test_simple_langgraph_client_consolidated_send():
         "execution_successful": True,
         "metadata": {"provider_used": "openrouter"},
     }
-    mock_response.raise_for_status.return_value = None
+    mock_response.raise_for_status = MagicMock(return_value=None)
     mock_response.status_code = 200
     mock_response.headers = {}
 
@@ -83,7 +83,7 @@ async def test_simple_langgraph_client_get_history():
             {"role": "assistant", "content": "Hi there!"},
         ]
     }
-    mock_response.raise_for_status.return_value = None
+    mock_response.raise_for_status = MagicMock(return_value=None)
     mock_response.status_code = 200
     mock_response.headers = {}
 
@@ -176,7 +176,7 @@ async def test_model_config_enhancement():
         "execution_successful": True,
         "metadata": {},
     }
-    mock_response.raise_for_status.return_value = None
+    mock_response.raise_for_status = MagicMock(return_value=None)
     mock_response.status_code = 200
     mock_response.headers = {}
 
