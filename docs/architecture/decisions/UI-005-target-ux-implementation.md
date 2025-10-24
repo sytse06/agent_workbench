@@ -90,6 +90,180 @@ The current implementation (UI-004) delivers a functional PWA with settings page
 
 ## Architectural Decisions
 
+### 0. Development Tooling: Chrome DevTools MCP Integration
+
+**Purpose**: Accelerate design creation and CSS iteration using browser automation
+
+**Chrome DevTools MCP** provides real-time browser inspection and manipulation, enabling rapid UI development:
+
+**Key Capabilities**:
+- **Live Page Inspection**: Take snapshots of rendered Gradio interface
+- **CSS Injection**: Test CSS changes in real-time without reloading
+- **Element Inspection**: Identify Gradio-generated selectors and structure
+- **Screenshot Comparison**: Capture current state vs target designs
+- **Network Analysis**: Debug asset loading (fonts, icons, CSS)
+- **Responsive Testing**: Test breakpoints by resizing viewport
+
+**Development Workflow**:
+
+1. **Initial Inspection Phase**:
+```python
+# Start app locally
+# Open in browser via Chrome DevTools MCP
+
+# Take snapshot of current UI
+mcp__chrome_devtools__take_snapshot(verbose=True)
+# → Identifies all Gradio elements, classes, and structure
+
+# Screenshot current state
+mcp__chrome_devtools__take_screenshot()
+# → Compare with target design screenshots
+```
+
+2. **CSS Iteration Phase**:
+```python
+# Test CSS changes live without restarting app
+mcp__chrome_devtools__evaluate_script(
+    function="""
+    () => {
+        const style = document.createElement('style');
+        style.textContent = `
+            .gradio-checkbox input[type="checkbox"] {
+                appearance: none;
+                width: 51px;
+                height: 31px;
+                background: #E9E9EA;
+                border-radius: 16px;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    """
+)
+# → See iOS toggle instantly without saving files
+```
+
+3. **Element Selection Phase**:
+```python
+# Find exact selectors for Gradio components
+mcp__chrome_devtools__take_snapshot(verbose=True)
+# → Returns UIDs for clicking, hovering, filling
+
+# Test interactions
+mcp__chrome_devtools__click(uid="button-123")
+mcp__chrome_devtools__fill(uid="input-456", value="Test")
+```
+
+4. **Responsive Testing Phase**:
+```python
+# Test mobile breakpoint
+mcp__chrome_devtools__resize_page(width=375, height=667)
+mcp__chrome_devtools__take_screenshot()
+
+# Test tablet breakpoint
+mcp__chrome_devtools__resize_page(width=768, height=1024)
+mcp__chrome_devtools__take_screenshot()
+
+# Test desktop
+mcp__chrome_devtools__resize_page(width=1440, height=900)
+mcp__chrome_devtools__take_screenshot()
+```
+
+5. **Font & Asset Verification**:
+```python
+# List network requests to verify assets loaded
+mcp__chrome_devtools__list_network_requests(
+    resourceTypes=["font", "image", "stylesheet"]
+)
+# → Check Ubuntu fonts loaded
+# → Check icons loaded correctly
+
+# Inspect specific request
+mcp__chrome_devtools__get_network_request(reqid=123)
+# → See response headers, status codes
+```
+
+**Integration Points**:
+
+**CSS Development** (`static/assets/css/`):
+- Test iOS toggle styles live
+- Verify Ubuntu font rendering
+- Debug responsive breakpoints
+- Test theme variables
+- Iterate on chat input bar layout
+
+**Component Development** (`ui/components/`):
+- Verify dynamic logo fade behavior
+- Test sidebar slide animation
+- Debug model selector positioning
+- Check connectivity icon updates
+
+**Theme Development** (`themes/`):
+- Test Gradio theme variables live
+- Verify color palette across themes
+- Check contrast ratios
+- Test auto theme with OS preference
+
+**Benefits**:
+
+1. **Rapid Iteration**: Test CSS without restarting app (saves 30-60s per iteration)
+2. **Visual Debugging**: See exact Gradio-generated HTML/CSS structure
+3. **Cross-Browser Testing**: Test in Chrome, then verify in other browsers
+4. **Screenshot Comparison**: Capture and compare against target designs
+5. **Responsive Verification**: Test all breakpoints quickly
+6. **Asset Debugging**: Verify fonts, icons, CSS files load correctly
+
+**Example Usage Pattern**:
+
+```python
+# 1. Start development session
+# Terminal 1: APP_MODE=seo_coach make start-app-verbose
+# Terminal 2: Open Chrome via MCP
+
+# 2. Take baseline screenshot
+mcp__chrome_devtools__navigate_page(url="http://localhost:8000/app")
+mcp__chrome_devtools__take_screenshot(filePath="/tmp/current-app.png")
+
+# 3. Compare with target
+# Open /design/screenshots/Example_main_screen.png
+# Identify differences (font, colors, layout, spacing)
+
+# 4. Iterate on CSS
+# Test changes via evaluate_script
+# When satisfied, save to ollama-chat.css
+
+# 5. Verify settings page
+mcp__chrome_devtools__navigate_page(url="http://localhost:8000/settings")
+mcp__chrome_devtools__take_snapshot(verbose=True)
+# → Identify tab structure to remove
+
+# 6. Test iOS toggles
+# Find checkbox elements from snapshot
+mcp__chrome_devtools__click(uid="checkbox-debug-mode")
+mcp__chrome_devtools__take_screenshot()
+# → Verify toggle animation works
+
+# 7. Responsive testing
+for width, height in [(375, 667), (768, 1024), (1440, 900)]:
+    mcp__chrome_devtools__resize_page(width=width, height=height)
+    mcp__chrome_devtools__take_screenshot(
+        filePath=f"/tmp/app-{width}x{height}.png"
+    )
+```
+
+**Time Savings Estimate**:
+- **Without MCP**: 5-10 iterations/hour (restart app each time)
+- **With MCP**: 20-30 iterations/hour (live CSS injection)
+- **Development Speed**: 3-4x faster for CSS/styling work
+
+**Tools Used**:
+- `mcp__chrome_devtools__take_snapshot()` - Element inspection
+- `mcp__chrome_devtools__take_screenshot()` - Visual comparison
+- `mcp__chrome_devtools__evaluate_script()` - Live CSS injection
+- `mcp__chrome_devtools__resize_page()` - Responsive testing
+- `mcp__chrome_devtools__list_network_requests()` - Asset debugging
+- `mcp__chrome_devtools__navigate_page()` - Page navigation
+
 ### 1. Main Interface Architecture: Ollama Pattern
 
 **Design Philosophy**: Minimal, content-focused, floating chatbox
