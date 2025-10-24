@@ -65,11 +65,26 @@ export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
 
 # Verify authentication
 log_info "Verifying HF authentication..."
-if ! hf auth whoami > /dev/null 2>&1; then
+# Try both old and new CLI commands
+if huggingface-cli whoami > /dev/null 2>&1; then
+    log_success "HF authentication verified"
+elif hf auth whoami > /dev/null 2>&1; then
+    log_success "HF authentication verified"
+else
     log_error "HF authentication failed. Check your token."
-    exit 1
+    log_info "Trying to login with token..."
+    # Attempt to login with token from environment
+    if [ -n "$HF_TOKEN" ]; then
+        if huggingface-cli login --token "$HF_TOKEN" > /dev/null 2>&1; then
+            log_success "Successfully logged in with token"
+        else
+            log_error "Failed to login with token"
+            exit 1
+        fi
+    else
+        exit 1
+    fi
 fi
-log_success "HF authentication verified"
 
 # Function to deploy a single Space
 deploy_space() {
