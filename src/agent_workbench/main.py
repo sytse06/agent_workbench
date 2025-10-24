@@ -244,23 +244,20 @@ async def offline_page() -> FileResponse:
     return FileResponse(offline_path, media_type="text/html")
 
 
-@app.get("/")
-async def root_redirect():
-    """
-    Redirect root to main app (local/Docker only).
+# Root redirect - only register if NOT in HuggingFace Spaces
+# In HF Spaces, Gradio is mounted at "/" and should handle the root path
+if not os.getenv("SPACE_ID"):
+    @app.get("/")
+    async def root_redirect():
+        """
+        Redirect root to main app (local/Docker only).
 
-    In HuggingFace Spaces, Gradio is mounted at "/" so this won't be called.
-    In local/Docker, the main interface is mounted at /app.
-    """
-    from fastapi.responses import RedirectResponse
+        This route is NOT registered in HuggingFace Spaces where Gradio
+        is mounted at the root path.
+        """
+        from fastapi.responses import RedirectResponse
 
-    # Only redirect if not in HF Spaces (where Gradio is at root)
-    is_hf_spaces = os.getenv("SPACE_ID") is not None
-    if not is_hf_spaces:
         return RedirectResponse(url="/app")
-
-    # In HF Spaces, this should never be reached (Gradio mounted at /)
-    return {"message": "Agent Workbench", "mode": os.getenv("APP_MODE", "workbench")}
 
 
 # Authentication Configuration
