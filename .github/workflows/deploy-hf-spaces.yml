@@ -47,24 +47,7 @@ jobs:
           cd hf-deploy-workbench
 
           # Extract dependencies from pyproject.toml using Python
-          python3 -c "
-import toml
-import sys
-
-# Read pyproject.toml
-with open('pyproject.toml', 'r') as f:
-    data = toml.load(f)
-
-# Write requirements.txt
-with open('requirements.txt', 'w') as f:
-    f.write('# Generated from pyproject.toml for HuggingFace Spaces\n')
-
-    # Main dependencies
-    for dep in data['project']['dependencies']:
-        f.write(dep + '\n')
-
-print('✅ Generated requirements.txt from pyproject.toml')
-"
+          python3 -c 'import toml; data = toml.load(open("pyproject.toml")); open("requirements.txt", "w").write("# Generated from pyproject.toml\n" + "\n".join(data["project"]["dependencies"]))'
 
           # Create Space if it doesn't exist, then deploy
           export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
@@ -110,27 +93,7 @@ print('✅ Generated requirements.txt from pyproject.toml')
           cd hf-deploy-seo
 
           # Extract dependencies from pyproject.toml using Python
-          python3 -c "
-import toml
-import sys
-
-# Read pyproject.toml
-with open('pyproject.toml', 'r') as f:
-    data = toml.load(f)
-
-# Write requirements.txt
-with open('requirements.txt', 'w') as f:
-    f.write('# Generated from pyproject.toml for HuggingFace Spaces\n')
-
-    # Main dependencies
-    for dep in data['project']['dependencies']:
-        f.write(dep + '\n')
-
-    # Add SEO-specific dependencies
-    f.write('firecrawl-py>=0.0.8\n')
-
-print('✅ Generated requirements.txt from pyproject.toml')
-"
+          python3 -c 'import toml; data = toml.load(open("pyproject.toml")); open("requirements.txt", "w").write("# Generated from pyproject.toml\n" + "\n".join(data["project"]["dependencies"]) + "\nfirecrawl-py>=0.0.8\n")'
 
           # Create Space if it doesn't exist, then deploy
           export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
