@@ -145,16 +145,27 @@ async def lifespan(app: FastAPI):
         app.state.gradio_interface = None
 
     # Mount interfaces at explicit paths
-    # This avoids the catch-all "/" problem
-    if app.state.settings_interface:
-        print("🎯 Mounting settings interface at /settings...")
-        app.mount("/settings", app.state.settings_interface.app, name="settings")
-        print("✅ Settings interface mounted at /settings")
+    # HuggingFace Spaces requires Gradio at root "/" for proper iframe integration
+    is_hf_spaces = os.getenv("SPACE_ID") is not None
 
-    if app.state.gradio_interface:
-        print("🎯 Mounting main interface at /app...")
-        app.mount("/app", app.state.gradio_interface.app, name="gradio")
-        print("✅ Main interface mounted at /app")
+    if is_hf_spaces:
+        # HuggingFace Spaces: Mount Gradio at root "/"
+        print("🎯 HuggingFace Spaces detected: Mounting Gradio at /...")
+        if app.state.gradio_interface:
+            app.mount("/", app.state.gradio_interface.app, name="gradio")
+            print("✅ Main interface mounted at / (HF Spaces)")
+        # Note: Settings interface not mounted in HF Spaces (single-interface mode)
+    else:
+        # Local/Docker: Mount at explicit paths with root redirect
+        if app.state.settings_interface:
+            print("🎯 Mounting settings interface at /settings...")
+            app.mount("/settings", app.state.settings_interface.app, name="settings")
+            print("✅ Settings interface mounted at /settings")
+
+        if app.state.gradio_interface:
+            print("🎯 Mounting main interface at /app...")
+            app.mount("/app", app.state.gradio_interface.app, name="gradio")
+            print("✅ Main interface mounted at /app")
 
     yield
 
@@ -236,14 +247,20 @@ async def offline_page() -> FileResponse:
 @app.get("/")
 async def root_redirect():
     """
-    Redirect root to main app.
+    Redirect root to main app (local/Docker only).
 
-    The main interface is mounted at /app.
-    This provides a clean entry point for users.
+    In HuggingFace Spaces, Gradio is mounted at "/" so this won't be called.
+    In local/Docker, the main interface is mounted at /app.
     """
     from fastapi.responses import RedirectResponse
 
-    return RedirectResponse(url="/app")
+    # Only redirect if not in HF Spaces (where Gradio is at root)
+    is_hf_spaces = os.getenv("SPACE_ID") is not None
+    if not is_hf_spaces:
+        return RedirectResponse(url="/app")
+
+    # In HF Spaces, this should never be reached (Gradio mounted at /)
+    return {"message": "Agent Workbench", "mode": os.getenv("APP_MODE", "workbench")}
 
 
 # Authentication Configuration
