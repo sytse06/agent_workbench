@@ -46,13 +46,12 @@ The current implementation (UI-004) delivers a functional PWA with settings page
 
 ### What's Included:
 
-**Main Chat Interface (`/app`)**:
+**Main Chat Interface (`/`)**:
 - Floating centered chatbox with dynamic logo behavior
-- Integrated chat input bar with:
-  - Model selector (inline, bottom-right)
-  - Web search toggle (globe icon, left)
-  - File upload drag-and-drop
+- Minimal chat input bar with:
+  - Message input (full width)
   - Submit button (arrow, changes to processing icon)
+  - ⚠️ Model selector moved to settings page
 - Left sidebar chat history (slide-in panel)
 - Settings gear icon (top-right)
 - Connectivity status indicator (cloud icon, top-right)
@@ -317,39 +316,37 @@ for width, height in [(375, 667), (768, 1024), (1440, 900)]:
 
 ### 2. Chat Input Bar Architecture
 
-**Integrated Controls** (single row, bottom of interface):
+**Minimal Controls** (single row, bottom of interface):
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ [🌐] Type your message here...        [gpt-4] [↑]       │
+│ Type your message here...                         [↑]    │
 └──────────────────────────────────────────────────────────┘
-     ↑                                      ↑      ↑
-  Web toggle                           Model   Submit
+                                                      ↑
+                                                  Submit
 ```
 
-**Components**:
-1. **Web Search Toggle** (left):
-   - Icon: 🌐 (globe icon from design)
-   - Functionality: Toggle web search for current query
-   - State: Checkable button (enabled/disabled)
-   - UI-only in Phase 2.1 (actual search in Phase 2.5)
+**⚠️ ARCHITECTURAL DECISION: Model selector moved to settings page**
+- See `UI-005-settings-page.md` for model control implementation
+- See `UI-005-chat-page.md` for chat interface details
+- Minimal chat experience prioritizes focus on conversation
 
-2. **Message Input** (center):
+**Components**:
+1. **Message Input** (center):
    - Gradio `gr.Textbox()`
    - Placeholder: "Type a message..."
    - File drag-and-drop support (show filename above input)
    - Multi-line support (expands on Enter)
+   - Full width (no inline controls)
 
-3. **Model Selector** (right, inline):
-   - Display: Model name only (e.g., "gpt-4", "claude-sonnet-4-5")
-   - UI: Minimal dropdown (no label)
-   - Loads from user settings
-   - Updates settings on change
-
-4. **Submit Button** (far right):
+2. **Submit Button** (far right):
    - Icon: `arrow_up_in_circle_icon.png` (pale when empty, black when typed)
    - Processing: Changes to `processing_icon.png` during response
    - Disabled state: Greyed out after submit until response complete
+
+**Optional Enhancements** (deferred to future phases):
+- **Web Search Toggle**: Globe icon (left) - UI-only in Phase 2.5
+- **Quick Model Switcher**: Overlay dropdown (if user feedback requires it)
 
 **CSS Layout**:
 ```css
@@ -365,17 +362,8 @@ for width, height in [(375, 667), (768, 1024), (1440, 900)]:
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-.web-toggle {
-    flex: 0 0 auto;
-}
-
 .message-input {
     flex: 1;
-}
-
-.model-selector {
-    flex: 0 0 auto;
-    min-width: 120px;
 }
 
 .submit-button {
@@ -1094,18 +1082,18 @@ def create_ollama_settings_page(
 
 # CREATE: ui/components/chat_input_bar.py
 def create_chat_input_bar(
-    user_id: str,
-    default_model: Optional[str] = None
+    user_id: str
 ) -> Tuple[gr.components]:
     """
-    Create integrated chat input bar with web toggle, input, model selector, submit.
+    Create minimal chat input bar with message input and submit button.
+
+    ⚠️ Model selector moved to settings page (see UI-005-settings-page.md)
 
     Args:
         user_id: Current user UUID
-        default_model: Default model from user settings
 
     Returns:
-        Tuple of (web_toggle, message_input, model_selector, submit_btn)
+        Tuple of (message_input, submit_btn)
     """
 
 # CREATE: ui/components/chat_history_sidebar.py
@@ -1215,19 +1203,19 @@ def test_ollama_chat_interface_renders():
     # Verify Ubuntu theme applied
 
 def test_chat_input_bar_components():
-    """Test integrated input bar has all components."""
+    """Test minimal input bar has message input and submit button."""
     from ui.components.chat_input_bar import create_chat_input_bar
 
-    web_toggle, input_box, model_selector, submit_btn = create_chat_input_bar(
-        user_id="test-user",
-        default_model="gpt-4"
+    input_box, submit_btn = create_chat_input_bar(
+        user_id="test-user"
     )
 
-    # Verify all components created
-    assert web_toggle is not None
+    # Verify components created
     assert input_box is not None
-    assert model_selector is not None
     assert submit_btn is not None
+
+    # Model selector moved to settings page
+    # See test_ollama_settings_single_scroll() for model control tests
 
 def test_sidebar_toggle_visibility():
     """Test chat history sidebar toggles correctly."""
@@ -1422,8 +1410,8 @@ async def test_connectivity_status_updates(db, authenticated_user):
 - [ ] Logo fades during processing, processing icon appears
 - [ ] Status bubble shows agent actions with icons
 - [ ] Answer streams token-by-token in separate bubble
-- [ ] Chat input bar has all components (web toggle, input, model, submit)
-- [ ] Model selector inline bottom-right, shows model name only
+- [ ] Chat input bar has message input and submit button (minimal)
+- [ ] Model selector NOT in chat input (moved to settings page)
 - [ ] Submit button changes to processing icon during response
 - [ ] Sidebar toggle opens/closes chat history from left
 - [ ] New chat button clears chatbox, shows logo
@@ -1439,7 +1427,7 @@ async def test_connectivity_status_updates(db, authenticated_user):
 - [ ] Company section visible in SEO coach mode only
 - [ ] Advanced section with iOS-style toggles
 - [ ] Toggles animate smoothly (slide left/right)
-- [ ] Back button returns to /app
+- [ ] Back button returns to / (root chat page)
 - [ ] Ubuntu font applied throughout
 - [ ] Responsive on mobile (full width, scrollable)
 
@@ -1469,7 +1457,7 @@ async def test_connectivity_status_updates(db, authenticated_user):
 
 - [ ] **Ollama-Style Main Interface**: Floating chatbox, centered logo, integrated input bar
 - [ ] **Dynamic Logo**: Fades during processing, returns on new chat
-- [ ] **Chat Input Bar**: Web toggle, input, model selector, submit (all inline)
+- [ ] **Chat Input Bar**: Minimal input and submit button (model selector moved to settings)
 - [ ] **Left Sidebar**: Slides in from left, shows conversation history
 - [ ] **Single-Scroll Settings**: Vertical layout (not tabs), user profile at top
 - [ ] **iOS-Style Toggles**: Animated switches (not checkboxes) in settings
@@ -1482,7 +1470,7 @@ async def test_connectivity_status_updates(db, authenticated_user):
 - [ ] **65%+ test coverage** for UI-005 components
 - [ ] **Manual checklist 100% complete**
 - [ ] **Visual match**: 95% similarity to design screenshots
-- [ ] **Navigation**: All routes work (/app, /settings, sidebar, back buttons)
+- [ ] **Navigation**: All routes work (/, /settings, sidebar, back buttons)
 
 ## Migration Notes
 
