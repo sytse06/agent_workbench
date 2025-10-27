@@ -15,11 +15,13 @@
 ### Current Problems
 
 **Settings Page Broken in HF Spaces:**
+
 - Settings mounted at `/settings` as separate Gradio app
 - HF Spaces expects single app at root `/`
 - Result: Settings inaccessible in production
 
 **Complex Mounting Logic:**
+
 ```python
 # Current: Environment-specific mounting
 if is_hf_spaces:
@@ -30,6 +32,7 @@ else:
 ```
 
 **Scattered UI Code:**
+
 ```
 ui/
 ├── mode_factory.py           # Registry pattern
@@ -40,6 +43,7 @@ ui/
 ```
 
 **Two Separate Apps Doing Same Thing:**
+
 - `create_workbench_app()` - Chat interface for technical users
 - `create_seo_coach_app()` - Chat interface for business users
 - Same structure, different branding = code duplication
@@ -61,6 +65,7 @@ From [Gradio Multipage Apps Guide](https://www.gradio.app/guides/multipage-apps)
 > `Blocks.route()` gives every logical "page" a URL (/, /settings, etc.) and a separate `<gradio-app>` instance. The user can bookmark or share a link to any page, exactly like a normal web page.
 
 **Benefits:**
+
 1. **Native Gradio Feature** - Documented, supported, proven
 2. **Real URLs** - Bookmarkable, shareable pages
 3. **Shared Runtime** - Single queue, single backend
@@ -474,6 +479,7 @@ ui/
 ```
 
 **Actions:**
+
 1. Create `ui/pages/` directory
 2. Create `ui/pages/chat.py` with unified chat interface
 3. Create `ui/pages/settings.py` with unified settings interface
@@ -501,6 +507,7 @@ if __name__ == "__main__":
 ```
 
 **Test:**
+
 ```bash
 # Terminal 1: Run old app
 APP_MODE=workbench make start-app  # Port 8000
@@ -520,16 +527,17 @@ APP_MODE=seo_coach uv run python test_multipage_app.py
 
 **Test Matrix:**
 
-| Environment | Mode | Route / | Route /settings | Navigation | State |
-|-------------|------|---------|-----------------|------------|-------|
-| Local | workbench | ✅ | ✅ | ✅ | ✅ |
-| Local | seo_coach | ✅ | ✅ | ✅ | ✅ |
-| Docker | workbench | ✅ | ✅ | ✅ | ✅ |
-| Docker | seo_coach | ✅ | ✅ | ✅ | ✅ |
-| HF Spaces | workbench | ✅ | ✅ | ✅ | ✅ |
-| HF Spaces | seo_coach | ✅ | ✅ | ✅ | ✅ |
+| Environment | Mode      | Route / | Route /settings | Navigation | State |
+| ----------- | --------- | ------- | --------------- | ---------- | ----- |
+| Local       | workbench | ✅       | ✅               | ✅          | ✅     |
+| Local       | seo_coach | ✅       | ✅               | ✅          | ✅     |
+| Docker      | workbench | ✅       | ✅               | ✅          | ✅     |
+| Docker      | seo_coach | ✅       | ✅               | ✅          | ✅     |
+| HF Spaces   | workbench | ✅       | ✅               | ✅          | ✅     |
+| HF Spaces   | seo_coach | ✅       | ✅               | ✅          | ✅     |
 
 **Checklist:**
+
 - [ ] Chat page loads at `/`
 - [ ] Settings page loads at `/settings`
 - [ ] Navigation Chat → Settings works
@@ -547,28 +555,32 @@ APP_MODE=seo_coach uv run python test_multipage_app.py
 Once all tests pass:
 
 1. **Rename files:**
+   
    ```bash
    # Backup old files
    git mv ui/mode_factory.py ui/mode_factory_old.py
    git mv ui/app.py ui/app_old.py
    git mv ui/seo_coach_app.py ui/seo_coach_app_old.py
    git mv ui/settings_page.py ui/settings_page_old.py
-
+   
    # Activate new files
    git mv ui/mode_factory_v2.py ui/mode_factory.py
    ```
 
 2. **Update main.py:**
+   
    ```python
    # No changes needed! Already uses mode_factory.create_app()
    ```
 
 3. **Test again:**
+   
    ```bash
    make start-app  # Should use new structure
    ```
 
 4. **Deploy to staging:**
+   
    ```bash
    git checkout develop
    git merge feature/UI-005-multi-page-app
@@ -576,6 +588,7 @@ Once all tests pass:
    ```
 
 5. **Deploy to production:**
+   
    ```bash
    git checkout main
    git merge develop
@@ -583,6 +596,7 @@ Once all tests pass:
    ```
 
 6. **Delete old files:**
+   
    ```bash
    git rm ui/mode_factory_old.py
    git rm ui/app_old.py
@@ -596,12 +610,14 @@ Once all tests pass:
 ### Backwards Compatibility
 
 **No breaking changes:**
+
 - Database schema unchanged
 - API endpoints unchanged
 - Environment variables unchanged
 - User settings preserved
 
 **Seamless transition:**
+
 - Users won't notice the change
 - URLs remain the same
 - Functionality identical
@@ -624,30 +640,36 @@ make start-app
 ### Immediate Benefits
 
 1. **Settings Work in HF Spaces** ✅
+   
    - Native Gradio routing works everywhere
    - No environment detection needed
 
 2. **Cleaner Code** ✅
+   
    - 3 files instead of 5+
    - Single source of truth for each page
    - No code duplication between modes
 
 3. **Better URLs** ✅
+   
    - `/` - Chat page (bookmarkable)
    - `/settings` - Settings page (bookmarkable)
    - Real web pages, not mounted sub-apps
 
 4. **Easier Testing** ✅
+   
    - Each page can be tested independently
    - No complex mounting logic to test
 
 5. **Simpler Deployment** ✅
+   
    - Same code path for all environments
    - No conditional logic
 
 ### Future Benefits (Phase 2+)
 
 1. **Agent Mode Registration** ✅
+   
    ```python
    register_agent_mode("research_agent", {
        "title": "Research Assistant",
@@ -658,10 +680,12 @@ make start-app
    ```
 
 2. **Tool-Specific UIs** ✅
+   
    - Different tool palettes per mode
    - Conditional tool rendering based on config
 
 3. **MCP Server Management** ✅
+   
    - Per-mode MCP server configuration
    - Dynamic tool loading
 
@@ -698,6 +722,7 @@ make start-app
 **Limitation**: Can't directly trigger updates on Chat page from Settings page
 
 **Solution**: Reload page after saving settings
+
 ```python
 save_btn.click(
     fn=save_settings,
@@ -712,6 +737,7 @@ save_btn.click(
 **Challenge**: User ID and session state need to persist across routes
 
 **Solution**: Use gr.State() at demo level
+
 ```python
 with gr.Blocks() as demo:
     user_id_state = gr.State()  # Shared across routes
@@ -735,18 +761,21 @@ with gr.Blocks() as demo:
 
 ## Future Enhancements (Post UI-005)
 
-**UI-006: Ollama-Inspired Visual Design**
+**UI-005-target-ux-implementation: Ollama-Inspired Visual Design**
+
 - Build on this foundation
 - Apply beautiful UI to working routes
 - Chrome DevTools MCP for rapid CSS iteration
 
 **Phase 2: Agent Modes**
+
 - Research agent mode
 - Coding agent mode
 - Custom agent configurations
 - Tool palette per mode
 
 **Phase 3: Advanced Features**
+
 - Real-time collaboration
 - Shared workspaces
 - Multi-user chat rooms
