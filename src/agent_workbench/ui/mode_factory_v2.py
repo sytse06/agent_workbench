@@ -147,6 +147,8 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
         - ALL components must be defined (use visible= to hide)
         - Shared state defined at demo level, passed to render functions
         - Single queue() call happens in main.py, not here
+
+    Phase 2: Now includes settings_state for sharing config between pages
     """
 
     # Create Blocks instance
@@ -158,12 +160,13 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
         # Shared state - accessible across all routes
         user_state = gr.State(None)  # User session/auth data
         conversation_state = gr.State([])  # Current conversation messages
+        settings_state = gr.State({})  # User settings (model config, etc.)
 
-        chat.render(config, user_state, conversation_state)
+        chat.render(config, user_state, conversation_state, settings_state)
 
     # Route 2: Settings page
     with demo.route("Settings", "settings"):
         # Reuse same state instances (Gradio handles state sharing)
-        settings.render(config, user_state)
+        settings.render(config, user_state, settings_state)
 
     return demo
