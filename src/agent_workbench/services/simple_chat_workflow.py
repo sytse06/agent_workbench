@@ -119,11 +119,11 @@ class SimpleChatWorkflow:
                 conversation_id=None,  # No conversation persistence
             )
 
-            logger.info(f"✅ Response generated: {response.reply[:50]}...")
+            logger.info(f"✅ Response generated: {response.message[:50]}...")
 
             return {
                 **state,
-                "assistant_response": response.reply,
+                "assistant_response": response.message,
                 "execution_successful": True,
                 "error_message": None,
             }

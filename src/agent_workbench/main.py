@@ -113,59 +113,26 @@ async def lifespan(app: FastAPI):
     # Note: We store references to prevent garbage collection
     print("🎯 Creating Gradio interfaces...")
 
-    # Create settings interface
-    try:
-        from .ui.mode_factory import ModeFactory
-
-        factory = ModeFactory()
-        app.state.settings_interface = factory.create_interface("settings")
-        app.state.settings_interface.queue()
-        if hasattr(app.state.settings_interface, "run_startup_events"):
-            app.state.settings_interface.run_startup_events()
-        print("✅ Settings interface created")
-    except Exception as e:
-        print(f"❌ Failed to create settings interface: {e}")
-        import traceback
-
-        print(traceback.format_exc())
-        app.state.settings_interface = None
-
-    # Create main interface
+    # Create single Gradio interface with routes (UI-005)
     try:
         app.state.gradio_interface = create_fastapi_mounted_gradio_interface()
         app.state.gradio_interface.queue()
         if hasattr(app.state.gradio_interface, "run_startup_events"):
             app.state.gradio_interface.run_startup_events()
-        print("✅ Main interface created")
+        print("✅ Gradio interface created with multipage routing")
     except Exception as e:
-        print(f"❌ Failed to create main interface: {e}")
+        print(f"❌ Failed to create Gradio interface: {e}")
         import traceback
 
         print(traceback.format_exc())
         app.state.gradio_interface = None
 
-    # Mount interfaces at explicit paths
-    # HuggingFace Spaces requires Gradio at root "/" for proper iframe integration
-    is_hf_spaces = os.getenv("SPACE_ID") is not None
-
-    if is_hf_spaces:
-        # HuggingFace Spaces: Mount Gradio at root "/"
-        print("🎯 HuggingFace Spaces detected: Mounting Gradio at /...")
-        if app.state.gradio_interface:
-            app.mount("/", app.state.gradio_interface.app, name="gradio")
-            print("✅ Main interface mounted at / (HF Spaces)")
-        # Note: Settings interface not mounted in HF Spaces (single-interface mode)
-    else:
-        # Local/Docker: Mount at explicit paths with root redirect
-        if app.state.settings_interface:
-            print("🎯 Mounting settings interface at /settings...")
-            app.mount("/settings", app.state.settings_interface.app, name="settings")
-            print("✅ Settings interface mounted at /settings")
-
-        if app.state.gradio_interface:
-            print("🎯 Mounting main interface at /app...")
-            app.mount("/app", app.state.gradio_interface.app, name="gradio")
-            print("✅ Main interface mounted at /app")
+    # Mount interface at root path
+    # UI-005: Single Gradio app with internal routes (/ and /settings)
+    if app.state.gradio_interface:
+        print("🎯 Mounting Gradio interface at root /...")
+        app.mount("/", app.state.gradio_interface.app, name="gradio")
+        print("✅ Gradio interface mounted at / with routes: / (chat) and /settings")
 
     yield
 
@@ -212,11 +179,11 @@ async def pwa_manifest():
     is_hf_spaces = os.getenv("SPACE_ID") is not None
     app_mode = os.getenv("APP_MODE", "workbench")
 
-    # Set URLs based on environment
-    start_url = "/" if is_hf_spaces else "/app"
-    settings_url = "/" if is_hf_spaces else "/settings"  # Settings in main interface for HF
-    new_chat_url = f"{start_url}?new=true"
-    history_url = f"{start_url}?history=true"
+    # Set URLs - UI-005: Root route at / for all environments
+    start_url = "/"
+    settings_url = "/settings"
+    new_chat_url = "/?new=true"
+    history_url = "/?history=true"
 
     # Set theme based on mode
     theme_colors = {
@@ -230,13 +197,13 @@ async def pwa_manifest():
         "workbench": {
             "name": "Agent Workbench",
             "short_name": "AgentWB",
-            "description": "AI-powered workbench for technical users"
+            "description": "AI-powered workbench for technical users",
         },
         "seo_coach": {
             "name": "SEO Coach",
             "short_name": "SEO-Coach",
-            "description": "AI-powered SEO coaching voor Nederlandse bedrijven"
-        }
+            "description": "AI-powered SEO coaching voor Nederlandse bedrijven",
+        },
     }
     app_names = names.get(app_mode, names["workbench"])
 
@@ -252,15 +219,60 @@ async def pwa_manifest():
         "orientation": "portrait-primary",
         "categories": ["business", "productivity", "developer-tools"],
         "icons": [
-            {"src": "/static/icons/icon-72.png", "sizes": "72x72", "type": "image/png", "purpose": "any"},
-            {"src": "/static/icons/icon-96.png", "sizes": "96x96", "type": "image/png", "purpose": "any"},
-            {"src": "/static/icons/icon-128.png", "sizes": "128x128", "type": "image/png", "purpose": "any"},
-            {"src": "/static/icons/icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any"},
-            {"src": "/static/icons/icon-152.png", "sizes": "152x152", "type": "image/png", "purpose": "any"},
-            {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-            {"src": "/static/icons/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any"},
-            {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
-            {"src": "/static/icons/apple-touch-icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any"}
+            {
+                "src": "/static/icons/icon-72.png",
+                "sizes": "72x72",
+                "type": "image/png",
+                "purpose": "any",
+            },
+            {
+                "src": "/static/icons/icon-96.png",
+                "sizes": "96x96",
+                "type": "image/png",
+                "purpose": "any",
+            },
+            {
+                "src": "/static/icons/icon-128.png",
+                "sizes": "128x128",
+                "type": "image/png",
+                "purpose": "any",
+            },
+            {
+                "src": "/static/icons/icon-144.png",
+                "sizes": "144x144",
+                "type": "image/png",
+                "purpose": "any",
+            },
+            {
+                "src": "/static/icons/icon-152.png",
+                "sizes": "152x152",
+                "type": "image/png",
+                "purpose": "any",
+            },
+            {
+                "src": "/static/icons/icon-192.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any maskable",
+            },
+            {
+                "src": "/static/icons/icon-384.png",
+                "sizes": "384x384",
+                "type": "image/png",
+                "purpose": "any",
+            },
+            {
+                "src": "/static/icons/icon-512.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any maskable",
+            },
+            {
+                "src": "/static/icons/apple-touch-icon.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any",
+            },
         ],
         "shortcuts": [
             {
@@ -268,22 +280,42 @@ async def pwa_manifest():
                 "short_name": "New Chat",
                 "description": "Start a new conversation",
                 "url": new_chat_url,
-                "icons": [{"src": "/static/icons/shortcut-chat.png", "sizes": "96x96", "type": "image/png"}]
+                "icons": [
+                    {
+                        "src": "/static/icons/shortcut-chat.png",
+                        "sizes": "96x96",
+                        "type": "image/png",
+                    }
+                ],
             },
             {
                 "name": "Settings" if not is_hf_spaces else "Home",
                 "short_name": "Settings" if not is_hf_spaces else "Home",
-                "description": "Open application settings" if not is_hf_spaces else "Go to home",
+                "description": (
+                    "Open application settings" if not is_hf_spaces else "Go to home"
+                ),
                 "url": settings_url,
-                "icons": [{"src": "/static/icons/shortcut-settings.png", "sizes": "96x96", "type": "image/png"}]
+                "icons": [
+                    {
+                        "src": "/static/icons/shortcut-settings.png",
+                        "sizes": "96x96",
+                        "type": "image/png",
+                    }
+                ],
             },
             {
                 "name": "History",
                 "short_name": "History",
                 "description": "View conversation history",
                 "url": history_url,
-                "icons": [{"src": "/static/icons/shortcut-history.png", "sizes": "96x96", "type": "image/png"}]
-            }
+                "icons": [
+                    {
+                        "src": "/static/icons/shortcut-history.png",
+                        "sizes": "96x96",
+                        "type": "image/png",
+                    }
+                ],
+            },
         ],
         "share_target": {
             "action": "/share",
@@ -296,17 +328,23 @@ async def pwa_manifest():
                 "files": [
                     {
                         "name": "documents",
-                        "accept": ["text/*", "application/pdf", ".md", ".txt", "image/*"]
+                        "accept": [
+                            "text/*",
+                            "application/pdf",
+                            ".md",
+                            ".txt",
+                            "image/*",
+                        ],
                     }
-                ]
-            }
-        }
+                ],
+            },
+        },
     }
 
     return JSONResponse(
         content=manifest,
         media_type="application/manifest+json",
-        headers={"Cache-Control": "public, max-age=3600"}
+        headers={"Cache-Control": "public, max-age=3600"},
     )
 
 
@@ -341,20 +379,8 @@ async def offline_page() -> FileResponse:
     return FileResponse(offline_path, media_type="text/html")
 
 
-# Root redirect - only register if NOT in HuggingFace Spaces
-# In HF Spaces, Gradio is mounted at "/" and should handle the root path
-if not os.getenv("SPACE_ID"):
-    @app.get("/")
-    async def root_redirect():
-        """
-        Redirect root to main app (local/Docker only).
-
-        This route is NOT registered in HuggingFace Spaces where Gradio
-        is mounted at the root path.
-        """
-        from fastapi.responses import RedirectResponse
-
-        return RedirectResponse(url="/app")
+# Root redirect removed - UI-005: Gradio mounted at "/" with internal routing
+# Gradio handles root path with routes: / (chat) and /settings
 
 
 # Authentication Configuration
@@ -515,21 +541,20 @@ async def health_check():
 
 
 def create_fastapi_mounted_gradio_interface():
-    """Create FastAPI-mounted Gradio interface using ModeFactory.
+    """Create FastAPI-mounted Gradio interface using Mode Factory V2.
 
-    Uses the proper UI implementations from ui/mode_factory.py with full
-    event handlers. Applies authentication if enabled.
+    UI-005: Creates single Gradio app with internal routing (/ and /settings).
+    Uses mode_factory_v2 for configuration-driven multipage routing.
     """
     import os
 
-    from .ui.mode_factory import ModeFactory
+    from .ui.mode_factory_v2 import create_app
 
     mode = os.getenv("APP_MODE", "workbench")
-    print(f"🎯 Creating Gradio interface for mode: {mode}")
+    print(f"🎯 Creating Gradio interface with multipage routing for mode: {mode}")
 
-    # Use ModeFactory to create proper interface with event handlers
-    factory = ModeFactory()
-    interface = factory.create_interface(mode=mode)
+    # Create single interface with routes
+    interface = create_app()
 
     # Apply Gradio OAuth if authentication is enabled
     # Note: For HuggingFace Spaces, OAuth is handled automatically via Space settings
@@ -543,7 +568,7 @@ def create_fastapi_mounted_gradio_interface():
     else:
         print("⚠️  Authentication disabled")
 
-    print(f"✅ Created {mode} interface with event handlers")
+    print(f"✅ Created {mode} interface with routes: / (chat) and /settings")
     return interface
 
 
