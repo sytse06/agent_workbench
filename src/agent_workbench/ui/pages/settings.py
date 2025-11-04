@@ -323,6 +323,7 @@ def render(
                     choices=model_choices,
                     value=model_choices[0] if model_choices else None,
                     interactive=True,
+                    allow_custom_value=True,  # Allow previously saved models
                     elem_id="settings_model_dropdown",
                 )
 
@@ -367,6 +368,7 @@ def render(
                 model_dropdown = gr.Dropdown(
                     choices=model_choices,
                     value=model_choices[0] if model_choices else None,
+                    allow_custom_value=True,  # Allow previously saved models
                     visible=False,
                 )
                 temperature_slider = gr.Slider(
