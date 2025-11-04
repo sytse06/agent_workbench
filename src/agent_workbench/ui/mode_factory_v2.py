@@ -8,6 +8,7 @@ Pattern:
 No code duplication - single builder, different configurations.
 """
 
+import logging
 import os
 from typing import Any, Dict
 
@@ -15,6 +16,8 @@ import gradio as gr
 
 from .pages import chat, settings
 from .styles import SHARED_CSS
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> gr.Blocks:
@@ -71,10 +74,16 @@ def create_workbench_app() -> gr.Blocks:
         # Feature flags
         "allow_model_selection": True,  # Show model controls in settings
         "show_company_section": False,  # Hide business-specific fields
+        "show_conv_browser": os.getenv("SHOW_CONV_BROWSER", "true").lower()
+        == "true",  # Show conversation sidebar
         # Default model config
         "available_providers": ["openai", "anthropic", "groq"],
         "default_provider": "openai",
-        "available_models": ["gpt-4-turbo", "claude-3-5-sonnet", "llama-3-70b"],
+        "available_models": [
+            "gpt-4-turbo",
+            "claude-3-5-sonnet",
+            "llama-3-70b",
+        ],
         "default_model": "gpt-4-turbo",
     }
 
@@ -119,6 +128,8 @@ def create_seo_app() -> gr.Blocks:
         # Feature flags
         "allow_model_selection": False,  # Lock model in settings
         "show_company_section": True,  # Show business fields
+        "show_conv_browser": os.getenv("SHOW_CONV_BROWSER", "false").lower()
+        == "true",  # Hide conversation sidebar in SEO coach
         # Default model config (locked to best model)
         "available_providers": ["openai"],
         "default_provider": "openai",
@@ -154,19 +165,87 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
     # Create Blocks instance
     demo = gr.Blocks(title=config["title"], theme=config["theme"], css=SHARED_CSS)
 
-    # Define routes OUTSIDE the Blocks context
-    # Route 1: Chat page (root) - use None for root path
-    with demo.route("Chat", None):
-        # Shared state - accessible across all routes
+    # Define shared state BEFORE routes so all routes can access them
+    with demo:
         user_state = gr.State(None)  # User session/auth data
         conversation_state = gr.State([])  # Current conversation messages
-        settings_state = gr.State({})  # User settings (model config, etc.)
 
+        # Settings state - persisted via gr.BrowserState for guest users
+        # Database persistence remains primary for authenticated users
+        settings_state = gr.State({})  # Session state (resets on page refresh)
+
+    # Route 1: Chat page (default, shown at root "/" path)
+    with demo:
         chat.render(config, user_state, conversation_state, settings_state)
 
-    # Route 2: Settings page
-    with demo.route("Settings", "settings"):
-        # Reuse same state instances (Gradio handles state sharing)
-        settings.render(config, user_state, settings_state)
+    # Route 2: Settings page with BrowserState auto-load
+    with demo.route("Settings", "settings") as settings_route:
+        # Capture components returned from settings.render()
+        (
+            model_dropdown,
+            temperature_slider,
+            max_tokens_slider,
+            theme_radio,
+            context_name,
+            context_url,
+            context_description,
+            settings_storage,  # BrowserState component
+        ) = settings.render(config, user_state, settings_state)
+
+        # Auto-load settings from BrowserState on page load
+        # This is the elegant Gradio way - no JavaScript workarounds needed!
+        @settings_route.load(
+            inputs=[settings_storage],
+            outputs=[
+                model_dropdown,
+                temperature_slider,
+                max_tokens_slider,
+                theme_radio,
+                context_name,
+                context_url,
+                context_description,
+            ],
+        )
+        def load_settings_from_browser(stored_settings: dict):
+            """
+            Load settings from BrowserState (localStorage) for guest users.
+
+            For authenticated users, database persistence is primary.
+            This only activates when no user is logged in.
+            """
+            if not stored_settings:
+                # Return defaults if nothing in localStorage
+                return [
+                    "openrouter: gpt-5-mini",  # model_dropdown
+                    0.7,  # temperature
+                    2000,  # max_tokens
+                    "Auto",  # theme
+                    "",  # context_name
+                    "",  # context_url
+                    "",  # context_description
+                ]
+
+            # Extract model config
+            model_config = stored_settings.get("model_config", {})
+            provider = model_config.get("provider", "openrouter")
+            model = model_config.get("model", "gpt-5-mini")
+            model_display = f"{provider}: {model}"
+
+            # Extract appearance
+            appearance = stored_settings.get("appearance", {})
+            theme = appearance.get("theme", "Auto")
+
+            # Extract context
+            context = stored_settings.get("context", {})
+
+            return [
+                model_display,  # ✅ Works for dropdowns!
+                model_config.get("temperature", 0.7),
+                model_config.get("max_tokens", 2000),
+                theme,
+                context.get("name", ""),
+                context.get("url", ""),
+                context.get("description", ""),
+            ]
 
     return demo

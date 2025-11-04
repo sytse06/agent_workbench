@@ -244,7 +244,16 @@ async def handle_settings_load(user_state: Optional[Dict[str, Any]]) -> Dict[str
 
 def render(
     config: Dict[str, Any], user_state: gr.State, settings_state: gr.State
-) -> None:
+) -> Tuple[
+    gr.Dropdown,
+    gr.Slider,
+    gr.Slider,
+    gr.Radio,
+    gr.Textbox,
+    gr.Textbox,
+    gr.Textbox,
+    gr.BrowserState,
+]:
     """
     Render settings interface.
 
@@ -282,6 +291,13 @@ def render(
     success_msg = gr.Markdown("", visible=False)
     error_msg = gr.Markdown("", visible=False)
 
+    # BrowserState for localStorage persistence (guest users only)
+    # Database persistence remains primary for authenticated users
+    settings_storage = gr.BrowserState(
+        default_value={},  # Empty dict as default
+        storage_key="agent_workbench_settings",
+    )
+
     # Tabs for different settings sections
     with gr.Tabs():
         # Account Tab
@@ -307,6 +323,7 @@ def render(
                     choices=model_choices,
                     value=model_choices[0] if model_choices else None,
                     interactive=True,
+                    elem_id="settings_model_dropdown",
                 )
 
                 # Temperature slider
@@ -318,6 +335,7 @@ def render(
                     step=0.1,
                     interactive=True,
                     info="Controls randomness (0=focused, 2=creative)",
+                    elem_id="settings_temperature_slider",
                 )
 
                 # Max tokens slider
@@ -329,6 +347,7 @@ def render(
                     step=100,
                     interactive=True,
                     info="Maximum response length",
+                    elem_id="settings_max_tokens_slider",
                 )
             else:
                 # SEO coach mode - show locked model info
@@ -421,11 +440,22 @@ def render(
         save_btn = gr.Button("💾 Save Settings", variant="primary")
         reset_btn = gr.Button("🔄 Reset to Defaults")
 
+    # Debug: LocalStorage status display
+    with gr.Accordion("🔍 Debug: LocalStorage Status", open=False):
+        debug_output = gr.Textbox(
+            label="LocalStorage Contents",
+            lines=10,
+            interactive=False,
+        )
+        with gr.Row():
+            check_storage_btn = gr.Button("Check LocalStorage")
+            load_from_storage_btn = gr.Button("Manual Load from LocalStorage")
+
     # Event: Navigate back to chat
     back_btn.click(fn=None, js="() => { window.location.href = '/'; }")
 
     # Event: Save settings
-    def save_settings_wrapper(
+    async def save_settings_wrapper(
         user_st: Optional[Dict[str, Any]],
         model_sel: str,
         temp: float,
@@ -434,10 +464,8 @@ def render(
         name: str,
         url: str,
         desc: str,
-    ) -> Tuple[str, str, str, str, Dict[str, Any]]:
+    ) -> Tuple[Any, Any, Dict[str, Any]]:
         """Wrapper to handle async save and update settings state."""
-        import asyncio
-
         # Extract provider and model from selection
         if model_sel in model_map:
             provider = model_map[model_sel]["provider"]
@@ -447,10 +475,8 @@ def render(
             model = "openai/gpt-4o-mini"
 
         # Call async save handler
-        success, error = asyncio.run(
-            handle_settings_save(
-                user_st, provider, model, temp, tokens, theme, name, url, desc
-            )
+        success, error = await handle_settings_save(
+            user_st, provider, model, temp, tokens, theme, name, url, desc
         )
 
         # Build updated settings state
@@ -469,12 +495,21 @@ def render(
             },
         }
 
-        # Return messages with visibility and updated state
+        # Return gr.update() objects for messages with visibility
         if success:
-            return success, "", "visible", "hidden", updated_settings
+            return (
+                gr.update(value=success, visible=True),  # success_msg
+                gr.update(value="", visible=False),  # error_msg
+                updated_settings,  # settings_state
+            )
         else:
-            return "", error, "hidden", "visible", updated_settings
+            return (
+                gr.update(value="", visible=False),  # success_msg
+                gr.update(value=error, visible=True),  # error_msg
+                updated_settings,  # settings_state
+            )
 
+    # Save button click event - now writes to BrowserState for guests
     save_btn.click(
         fn=save_settings_wrapper,
         inputs=[
@@ -488,12 +523,18 @@ def render(
             context_description,
         ],
         outputs=[
-            success_msg,
-            error_msg,
-            success_msg,
-            error_msg,
-            settings_state,
+            success_msg,  # gr.update() with value and visible
+            error_msg,  # gr.update() with value and visible
+            settings_state,  # updated settings dict
         ],
+    ).then(
+        # For guest users: persist to BrowserState (localStorage)
+        # For authenticated users: returns empty dict (DB persistence is primary)
+        fn=lambda settings, user: (
+            settings if (not user or not user.get("user_id")) else {}
+        ),
+        inputs=[settings_state, user_state],
+        outputs=[settings_storage],  # BrowserState auto-syncs to localStorage
     )
 
     # Event: Reset to defaults
@@ -520,4 +561,157 @@ def render(
             context_url,
             context_description,
         ],
+    )
+
+    # Event: Load settings when settings page is rendered
+    def load_settings_into_form(
+        settings: Optional[Dict[str, Any]],
+    ) -> Tuple[Optional[str], float, int, str, str, str, str]:
+        """
+        Load settings from settings_state into form fields.
+
+        Args:
+            settings: Settings state dictionary
+
+        Returns:
+            Tuple of form field values
+        """
+        if not settings:
+            # Return defaults if no settings
+            return (
+                model_choices[0] if model_choices else None,
+                0.7,
+                2000,
+                "Auto",
+                "",
+                "",
+                "",
+            )
+
+        # Extract model config
+        model_config = settings.get("model_config", {})
+        provider = str(model_config.get("provider", "openrouter"))
+        model_name = str(model_config.get("model", "openai/gpt-4o-mini"))
+        temperature = float(model_config.get("temperature", 0.7))
+        max_tokens = int(model_config.get("max_tokens", 2000))
+
+        # Find matching display name for provider+model
+        selected_model: Optional[str] = model_choices[0] if model_choices else None
+        for display_name, info in model_map.items():
+            if info["provider"] == provider and info["model"] == model_name:
+                selected_model = display_name
+                break
+
+        # Extract appearance
+        appearance = settings.get("appearance", {})
+        theme = str(appearance.get("theme", "Auto"))
+
+        # Extract context
+        context = settings.get("context", {})
+        name = str(context.get("name", ""))
+        url = str(context.get("url", ""))
+        description = str(context.get("description", ""))
+
+        return (selected_model, temperature, max_tokens, theme, name, url, description)
+
+    # Hybrid localStorage approach:
+    # 1. Save button updates gr.State (settings_state) and database if authenticated
+    # 2. Save button.then() writes settings_state to localStorage via JavaScript
+    # 3. Page load reads localStorage via JavaScript and populates form directly
+    #
+    # Note: We use .then() instead of .change() because Gradio doesn't fire
+    # .change() events when Python functions update outputs
+
+    # Debug: Check localStorage button
+    check_storage_btn.click(
+        fn=None,
+        js="""
+        function() {
+            const item = localStorage.getItem('agent_workbench_settings');
+            if (!item) {
+                return 'LocalStorage is EMPTY - no settings found!';
+            }
+            try {
+                const data = JSON.parse(item);
+                return JSON.stringify(data, null, 2);
+            } catch (error) {
+                return `Error parsing localStorage: ${error.message}`;
+            }
+        }
+        """,
+        outputs=[debug_output],
+    )
+
+    # Debug: Manual load from localStorage
+    load_from_storage_btn.click(
+        fn=None,
+        js="""
+        function() {
+            console.log('[Debug] Manual load triggered');
+            const item = localStorage.getItem('agent_workbench_settings');
+            if (!item) {
+                console.log('[Debug] No settings in localStorage');
+                return [
+                    'openrouter: gpt-5-mini',
+                    0.7,
+                    2000,
+                    'Auto',
+                    '',
+                    '',
+                    ''
+                ];
+            }
+
+            const data = JSON.parse(item);
+            const settings = data.settings || {};
+            console.log('[Debug] Loaded settings:', settings);
+
+            const modelConfig = settings.model_config || {};
+            const provider = modelConfig.provider || 'openrouter';
+            const model = modelConfig.model || 'gpt-5-mini';
+            const temperature = modelConfig.temperature || 0.7;
+            const maxTokens = modelConfig.max_tokens || 2000;
+
+            const appearance = settings.appearance || {};
+            const theme = appearance.theme || 'Auto';
+
+            const context = settings.context || {};
+            const contextName = context.name || '';
+            const contextUrl = context.url || '';
+            const contextDesc = context.description || '';
+
+            const modelDisplay = `${provider}: ${model}`;
+
+            return [
+                modelDisplay,
+                temperature,
+                maxTokens,
+                theme,
+                contextName,
+                contextUrl,
+                contextDesc
+            ];
+        }
+        """,
+        outputs=[
+            model_dropdown,
+            temperature_slider,
+            max_tokens_slider,
+            theme_radio,
+            context_name,
+            context_url,
+            context_description,
+        ],
+    )
+
+    # Return form components + BrowserState for demo.load() in mode_factory
+    return (
+        model_dropdown,
+        temperature_slider,
+        max_tokens_slider,
+        theme_radio,
+        context_name,
+        context_url,
+        context_description,
+        settings_storage,  # BrowserState for auto-load on page load
     )

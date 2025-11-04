@@ -48,6 +48,7 @@ help:
 	@echo "    make start-app                  - Start workbench (default)"
 	@echo "    make start-app-debug            - Start with debug logging"
 	@echo "    make start-app-verbose          - Start with maximum debug"
+	@echo "    make stop-app                   - Stop running application"
 	@echo ""
 	@echo "  SEO Coach (Dutch Business Mode):"
 	@echo "    APP_MODE=seo_coach make start-app         - Start SEO Coach"
@@ -275,6 +276,16 @@ start-app-verbose:
 	@echo "  🧪 Health Check: http://localhost:8000/api/v1/health"
 	@echo ""
 	@APP_ENV=$(or $(ENV),development) APP_MODE=$(APP_MODE) FASTAPI_DEBUG=1 LOG_LEVEL=DEBUG SQLALCHEMY_ECHO=1 CORS_DEBUG=1 uv run python -m agent_workbench
+
+# Stop running application
+stop-app:
+	@echo -e "$(BLUE)🛑 Stopping Agent Workbench...$(NC)"
+	@echo -e "$(CYAN)Killing processes on port 8000...$(NC)"
+	@lsof -ti:8000 | xargs kill -9 2>/dev/null && echo -e "$(GREEN)✅ Port 8000 freed$(NC)" || echo -e "$(YELLOW)⚠️  No process found on port 8000$(NC)"
+	@echo -e "$(CYAN)Killing uvicorn processes...$(NC)"
+	@pkill -f "uvicorn" 2>/dev/null && echo -e "$(GREEN)✅ Uvicorn processes killed$(NC)" || echo -e "$(YELLOW)⚠️  No uvicorn processes found$(NC)"
+	@pkill -f "agent_workbench" 2>/dev/null && echo -e "$(GREEN)✅ Agent workbench processes killed$(NC)" || echo -e "$(YELLOW)⚠️  No agent_workbench processes found$(NC)"
+	@echo -e "$(GREEN)🎯 Application stopped$(NC)"
 
 # New: Test debug setup without starting full app
 test-debug-setup:

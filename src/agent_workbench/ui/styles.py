@@ -6,6 +6,14 @@ NOT via CSS. This ensures both modes have identical styling with only theme vari
 """
 
 SHARED_CSS = """
+/* Hide Gradio's default route navigation bar (but NOT settings tabs) */
+.gradio-container > nav,
+.gradio-container > .tabs,
+nav a[href^="/?"],
+.header-links {
+    display: none !important;
+}
+
 /* Chat page styles */
 .chatbot-container {
     border-radius: 8px;
