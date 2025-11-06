@@ -48,6 +48,64 @@ nav a[href^="/?"],
     padding: 0.5rem;
 }
 
+/* Conversation dropdown styling */
+#conv-dropdown {
+    margin-bottom: 0.5rem;
+}
+
+#conv-dropdown label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+    color: var(--body-text-color);
+}
+
+#conv-dropdown .wrap {
+    border-radius: 6px;
+    border: 1px solid var(--border-color-primary);
+    transition: all 0.2s ease-in-out;
+}
+
+#conv-dropdown .wrap:hover {
+    border-color: var(--border-color-accent);
+}
+
+#conv-dropdown .wrap:focus-within {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+#conv-dropdown input {
+    font-size: 0.9rem;
+    padding: 0.5rem;
+}
+
+#conv-dropdown .dropdown-container {
+    max-height: 300px;
+    overflow-y: auto;
+    border-radius: 4px;
+}
+
+#conv-dropdown .dropdown-item {
+    padding: 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    border-bottom: 1px solid var(--border-color-primary);
+}
+
+#conv-dropdown .dropdown-item:hover {
+    background-color: var(--background-fill-secondary);
+}
+
+#conv-dropdown .dropdown-item:last-child {
+    border-bottom: none;
+}
+
+#conv-dropdown .dropdown-item.selected {
+    background-color: var(--color-accent-soft);
+    font-weight: 500;
+}
+
 /* Responsive layout */
 @media (max-width: 768px) {
     .chatbot-container {
@@ -56,6 +114,14 @@ nav a[href^="/?"],
 
     .input-row {
         flex-direction: column;
+    }
+
+    #conv-dropdown .dropdown-container {
+        max-height: 200px;
+    }
+
+    #conv-dropdown .dropdown-item {
+        padding: 0.5rem;
     }
 }
 """
