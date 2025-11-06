@@ -77,12 +77,13 @@ def create_workbench_app() -> gr.Blocks:
         "show_conv_browser": os.getenv("SHOW_CONV_BROWSER", "true").lower()
         == "true",  # Show conversation sidebar
         # Default model config
-        "available_providers": ["openai", "anthropic", "groq"],
-        "default_provider": "openai",
+        "available_providers": ["openrouter", "google"],
+        "default_provider": "openrouter",
         "available_models": [
-            "gpt-4-turbo",
-            "claude-3-5-sonnet",
-            "llama-3-70b",
+            "gpt-5-mini",
+            "qwen3-30b-a3b",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash-lite",
         ],
         "default_model": "gpt-4-turbo",
     }
@@ -131,10 +132,10 @@ def create_seo_app() -> gr.Blocks:
         "show_conv_browser": os.getenv("SHOW_CONV_BROWSER", "false").lower()
         == "true",  # Hide conversation sidebar in SEO coach
         # Default model config (locked to best model)
-        "available_providers": ["openai"],
-        "default_provider": "openai",
-        "available_models": ["gpt-4-turbo"],
-        "default_model": "gpt-4-turbo",
+        "available_providers": ["openrouter"],
+        "default_provider": "openrouter",
+        "available_models": ["qwen3-30b-a3b"],
+        "default_model": "qwen3-30b-a3b",
     }
 
     return build_gradio_app(config)
@@ -176,7 +177,27 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
 
     # Route 1: Chat page (default, shown at root "/" path)
     with demo:
-        chat.render(config, user_state, conversation_state, settings_state)
+        # Capture BrowserState and dropdown returned from chat page
+        conversations_list_storage, conv_dropdown = chat.render(
+            config, user_state, conversation_state, settings_state
+        )
+
+        # Auto-load conversation history into dropdown from BrowserState on page load
+        # (only for guest users - authenticated users use database)
+        if conversations_list_storage and conv_dropdown:
+
+            @demo.load(
+                inputs=[user_state, conversations_list_storage], outputs=[conv_dropdown]
+            )
+            def load_conversations_from_browser(user_state_val, stored_conversations):
+                """
+                Load conversation history from BrowserState (localStorage).
+
+                For guest users only - authenticated users use database.
+                """
+                from .pages.chat import populate_dropdown
+
+                return populate_dropdown(user_state_val, stored_conversations or [])
 
     # Route 2: Settings page with BrowserState auto-load
     with demo.route("Settings", "settings") as settings_route:
@@ -217,8 +238,8 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
                 # Return defaults if nothing in localStorage
                 return [
                     "openrouter: gpt-5-mini",  # model_dropdown
-                    0.7,  # temperature
-                    2000,  # max_tokens
+                    0.2,  # temperature
+                    1000,  # max_tokens
                     "Auto",  # theme
                     "",  # context_name
                     "",  # context_url
@@ -240,8 +261,8 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
 
             return [
                 model_display,  # ✅ Works for dropdowns!
-                model_config.get("temperature", 0.7),
-                model_config.get("max_tokens", 2000),
+                model_config.get("temperature", 0.2),
+                model_config.get("max_tokens", 1000),
                 theme,
                 context.get("name", ""),
                 context.get("url", ""),

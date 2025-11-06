@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import gradio as gr
 import requests  # type: ignore[import-untyped]
 
-from ..components.sidebar import get_sidebar_css, render_sidebar
+from ..components.sidebar import render_sidebar
 
 
 def render(
@@ -51,7 +51,6 @@ def render(
 
     # Render sidebar if enabled
     new_chat_btn = None
-    conv_list_html = None
     sidebar_visible = None
     collapse_btn = None
     conv_dropdown = None
@@ -59,10 +58,9 @@ def render(
     if config.get("show_conv_browser", False):
         (
             sidebar_visible,
-            conv_list_html,
+            conv_dropdown,
             new_chat_btn,
             collapse_btn,
-            conv_dropdown,
             clear_storage_btn,
         ) = render_sidebar(config, user_state)
 
@@ -157,31 +155,30 @@ def render(
             )
 
             # Phase 3: Wire up sidebar if enabled
-            if config.get("show_conv_browser", False) and conv_list_html:
-                # Update HTML list AND dropdown AFTER conversation list is updated
+            if config.get("show_conv_browser", False) and conv_dropdown:
+                # Update dropdown AFTER conversation list is updated
                 send_chain.then(
-                    fn=populate_dropdown_and_list,
+                    fn=populate_dropdown,
                     inputs=[user_state, conversations_list_storage],
-                    outputs=[conv_dropdown, conv_list_html],
+                    outputs=[conv_dropdown],
                 )
 
                 submit_chain.then(
-                    fn=populate_dropdown_and_list,
+                    fn=populate_dropdown,
                     inputs=[user_state, conversations_list_storage],
-                    outputs=[conv_dropdown, conv_list_html],
+                    outputs=[conv_dropdown],
                 )
 
-                # Wire dropdown.change to load conversation when clicked
-                if conv_dropdown:
-                    conv_dropdown.change(
-                        fn=load_selected_conversation,
-                        inputs=[
-                            conv_dropdown,
-                            user_state,
-                            conversations_list_storage,
-                        ],
-                        outputs=[chatbot, conversation_state],
-                    )
+                # Wire dropdown.change to load conversation when selected
+                conv_dropdown.change(
+                    fn=load_selected_conversation,
+                    inputs=[
+                        conv_dropdown,
+                        user_state,
+                        conversations_list_storage,
+                    ],
+                    outputs=[chatbot, conversation_state],
+                )
 
                 # New Chat button - clear chatbot and conversation state
                 if new_chat_btn:
@@ -190,62 +187,20 @@ def render(
                         outputs=[chatbot, conversation_state],
                     )
 
-    # Return BrowserState and HTML list for page load event in mode_factory
+    # Return BrowserState and dropdown for page load event in mode_factory
     # This enables conversation list population on page refresh
     if config.get("show_conv_browser", False):
-        return conversations_list_storage, conv_list_html
+        return conversations_list_storage, conv_dropdown
     else:
         return None, None
 
 
-def generate_conversation_list_html(conversations: List[Dict[str, Any]]) -> str:
-    """
-    Generate clickable HTML list from conversations.
-
-    Args:
-        conversations: List of conversation metadata dicts with 'id' field
-
-    Returns:
-        HTML string with CSS and JavaScript
-
-    Note:
-        Uses data-id attribute for robust ID-based matching (prevents title collisions)
-    """
-    if not conversations:
-        return "<div class='conv-list empty'>" "No conversations yet</div>"
-
-    # Get CSS from sidebar component
-    css = get_sidebar_css()
-
-    # Generate list items
-    items = []
-    for conv in conversations:
-        conv_id = conv.get("id", "")
-        title = conv.get("title", "Untitled")[:40]
-        date = conv.get("updated_at", "")[:10]
-        preview = conv.get("preview", "")[:60]
-
-        items.append(
-            f"""
-        <div class="conv-item" data-id="{conv_id}">
-            <div class="conv-title">{title}</div>
-            <div class="conv-meta">{date}</div>
-            <div class="conv-preview">{preview}...</div>
-        </div>
-        """
-        )
-
-    # Note: JavaScript is handled by persistent script in sidebar.py
-    # using event delegation, so we only return CSS and HTML here
-    return css + "<div class='conv-list'>" + "".join(items) + "</div>"
-
-
-def populate_dropdown_and_list(
+def populate_dropdown(
     user_state: Optional[Dict[str, Any]],
     browser_state: List[Dict[str, Any]],
-) -> Tuple[gr.update, str]:
+) -> gr.update:
     """
-    Populate both dropdown AND HTML list from conversations.
+    Populate dropdown from conversations.
 
     Hybrid: API for auth users, BrowserState for guests.
 
@@ -254,7 +209,7 @@ def populate_dropdown_and_list(
         browser_state: Conversations from BrowserState (guests)
 
     Returns:
-        Tuple of (dropdown_update, html_string)
+        Gradio update dict with dropdown choices
 
     Note:
         Dropdown choices use (label, value) format where:
@@ -266,22 +221,19 @@ def populate_dropdown_and_list(
     # For guest users: Read from BrowserState
     if not user_state or not user_state.get("user_id"):
         for conv in browser_state or []:
-            conv_id = conv.get("id", "")
+            conv_id = str(conv.get("id", ""))  # Convert to string for Gradio
             title = conv.get("title", "Untitled")[:40]
             date = conv.get("updated_at", "")[:10]
             label = f"{title} ({date})"
             # Choices format: (label, value) where value is the ID
             choices.append((label, conv_id))
-        print(f"[populate_dropdown_and_list] Guest: {len(choices)} convs")
+        print(f"[populate_dropdown] Guest: {len(choices)} conversations")
     else:
         # For authenticated users: Fetch from API
         # TODO: Implement when needed
-        print("[populate_dropdown_and_list] Auth: API not implemented")
+        print("[populate_dropdown] Auth: API not implemented")
 
-    # Generate HTML list
-    html = generate_conversation_list_html(browser_state or [])
-
-    return gr.update(choices=choices), html
+    return gr.update(choices=choices)
 
 
 def load_selected_conversation(
@@ -324,11 +276,11 @@ def load_selected_conversation(
             f"searching in {conv_count} conversations"
         )
         for idx, conv in enumerate(browser_state or []):
-            conv_id = conv.get("id", "")
+            conv_id = str(conv.get("id", ""))  # Convert to string for comparison
             conv_title = conv.get("title", "Untitled")[:40]
             print(f"  - Conv {idx}: id='{conv_id}', title='{conv_title}'")
-            # Match by exact ID
-            if conv_id == selected_id:
+            # Match by exact ID (both as strings)
+            if conv_id == str(selected_id):
                 messages = conv.get("messages", [])
                 msg_count = len(messages)
                 print(
@@ -337,7 +289,7 @@ def load_selected_conversation(
                 )
                 return messages, messages
         print("[load_selected_conversation] Not found in localStorage")
-        ids = [c.get("id", "") for c in (browser_state or [])]
+        ids = [str(c.get("id", "")) for c in (browser_state or [])]
         print(f"  - Available IDs: {ids}")
         return [], []
 
