@@ -9,16 +9,13 @@ Identical structure for workbench and SEO coach modes - differences
 controlled by config labels.
 """
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import gradio as gr
 import requests  # type: ignore[import-untyped]
 
-from ..components.sidebar import (
-    create_sidebar_css,
-    create_sidebar_javascript,
-    render_sidebar,
-)
+from ..components.sidebar import get_sidebar_css, render_sidebar
 
 
 def render(
@@ -26,7 +23,7 @@ def render(
     user_state: gr.State,
     conversation_state: gr.State,
     settings_state: gr.State,
-) -> None:
+) -> Tuple[Optional[gr.BrowserState], Optional[gr.Dropdown]]:
     """
     Render chat interface with optional sidebar.
 
@@ -39,26 +36,40 @@ def render(
     Phase 3: Added conversation history sidebar (feature-flagged)
     """
 
-    # Sidebar state and trigger (for loading conversations)
-    load_conv_trigger = gr.State(None)
+    # BrowserState for localStorage persistence (guest users only)
+    # Database persistence remains primary for authenticated users
+    conversation_storage = gr.BrowserState(
+        default_value={},  # Empty dict as default
+        storage_key="agent_workbench_conversation",
+    )
+
+    # BrowserState for conversations list (sidebar)
+    conversations_list_storage = gr.BrowserState(
+        default_value=[],  # List of conversation metadata
+        storage_key="agent_workbench_conversations_list",
+    )
 
     # Render sidebar if enabled
-    sidebar_visible = None
+    new_chat_btn = None
     conv_list_html = None
+    sidebar_visible = None
+    collapse_btn = None
+    conv_dropdown = None
+    clear_storage_btn = None
     if config.get("show_conv_browser", False):
-        sidebar_visible, conv_list_html, new_chat_btn, collapse_btn = render_sidebar(
-            config, user_state
-        )
+        (
+            sidebar_visible,
+            conv_list_html,
+            new_chat_btn,
+            collapse_btn,
+            conv_dropdown,
+            clear_storage_btn,
+        ) = render_sidebar(config, user_state)
 
     # Main layout
     with gr.Row():
-        # Sidebar wrapper (if enabled)
-        if config.get("show_conv_browser", False):
-            with gr.Column(visible=sidebar_visible, scale=2):
-                pass  # Sidebar already rendered by render_sidebar
-
         # Main chat area
-        with gr.Column(scale=8 if config.get("show_conv_browser") else 12):
+        with gr.Column(scale=12):
             # Header with settings button
             with gr.Row():
                 gr.Markdown(f"# {config['title']}")
@@ -90,50 +101,332 @@ def render(
             )
 
             # Event: Send message
-            send.click(
-                fn=handle_chat_message,
-                inputs=[msg, chatbot, user_state, settings_state],
-                outputs=[chatbot, msg, conversation_state],
+            send_chain = (
+                send.click(
+                    fn=handle_chat_message,
+                    inputs=[msg, chatbot, user_state, settings_state],
+                    outputs=[chatbot, msg, conversation_state],
+                )
+                .then(
+                    # For guest users: persist to BrowserState (localStorage)
+                    # For authenticated users: returns empty dict (DB is primary)
+                    fn=lambda conv, user: (
+                        conv if (not user or not user.get("user_id")) else {}
+                    ),
+                    inputs=[conversation_state, user_state],
+                    outputs=[conversation_storage],  # BrowserState auto-syncs
+                )
+                .then(
+                    # Update conversations list for sidebar
+                    fn=update_conversations_list,
+                    inputs=[
+                        conversation_state,
+                        conversations_list_storage,
+                        user_state,
+                    ],
+                    outputs=[conversations_list_storage],  # Auto-syncs
+                )
             )
 
             # Event: Submit message (Enter key)
-            msg.submit(
-                fn=handle_chat_message,
-                inputs=[msg, chatbot, user_state, settings_state],
-                outputs=[chatbot, msg, conversation_state],
+            submit_chain = (
+                msg.submit(
+                    fn=handle_chat_message,
+                    inputs=[msg, chatbot, user_state, settings_state],
+                    outputs=[chatbot, msg, conversation_state],
+                )
+                .then(
+                    # For guest users: persist to BrowserState (localStorage)
+                    # For authenticated users: returns empty dict (DB is primary)
+                    fn=lambda conv, user: (
+                        conv if (not user or not user.get("user_id")) else {}
+                    ),
+                    inputs=[conversation_state, user_state],
+                    outputs=[conversation_storage],  # BrowserState auto-syncs
+                )
+                .then(
+                    # Update conversations list for sidebar
+                    fn=update_conversations_list,
+                    inputs=[
+                        conversation_state,
+                        conversations_list_storage,
+                        user_state,
+                    ],
+                    outputs=[conversations_list_storage],  # Auto-syncs
+                )
             )
 
-            # Phase 3: Wire conversation loading
-            if config.get("show_conv_browser", False):
-                # Hidden state for conversation loading trigger
-                load_conv_trigger.change(
-                    fn=load_conversation_into_chat,
-                    inputs=[load_conv_trigger],
-                    outputs=[chatbot, conversation_state],
+            # Phase 3: Wire up sidebar if enabled
+            if config.get("show_conv_browser", False) and conv_list_html:
+                # Update HTML list AND dropdown AFTER conversation list is updated
+                send_chain.then(
+                    fn=populate_dropdown_and_list,
+                    inputs=[user_state, conversations_list_storage],
+                    outputs=[conv_dropdown, conv_list_html],
                 )
 
-    # Inject sidebar JavaScript and CSS (if enabled)
+                submit_chain.then(
+                    fn=populate_dropdown_and_list,
+                    inputs=[user_state, conversations_list_storage],
+                    outputs=[conv_dropdown, conv_list_html],
+                )
+
+                # Wire dropdown.change to load conversation when clicked
+                if conv_dropdown:
+                    conv_dropdown.change(
+                        fn=load_selected_conversation,
+                        inputs=[
+                            conv_dropdown,
+                            user_state,
+                            conversations_list_storage,
+                        ],
+                        outputs=[chatbot, conversation_state],
+                    )
+
+                # New Chat button - clear chatbot and conversation state
+                if new_chat_btn:
+                    new_chat_btn.click(
+                        fn=lambda: ([], []),
+                        outputs=[chatbot, conversation_state],
+                    )
+
+    # Return BrowserState and HTML list for page load event in mode_factory
+    # This enables conversation list population on page refresh
     if config.get("show_conv_browser", False):
-        gr.HTML(create_sidebar_javascript())
-        gr.HTML(create_sidebar_css())
+        return conversations_list_storage, conv_list_html
+    else:
+        return None, None
 
-        # Wire toggle button logic (hybrid approach)
-        if collapse_btn:
-            collapse_btn.click(
-                fn=lambda v: not v,
-                inputs=[sidebar_visible],
-                outputs=[sidebar_visible],
-            )
 
-            collapse_btn.click(
-                fn=None,
-                js="""
-                    const sb = document.querySelector('.gr-sidebar');
-                    sb.classList.toggle('gr-sidebar-collapsed');
-                    sb.setAttribute('aria-hidden',
-                        sb.classList.contains('gr-sidebar-collapsed'));
-                """,
-            )
+def generate_conversation_list_html(conversations: List[Dict[str, Any]]) -> str:
+    """
+    Generate clickable HTML list from conversations.
+
+    Args:
+        conversations: List of conversation metadata dicts with 'id' field
+
+    Returns:
+        HTML string with CSS and JavaScript
+
+    Note:
+        Uses data-id attribute for robust ID-based matching (prevents title collisions)
+    """
+    if not conversations:
+        return "<div class='conv-list empty'>" "No conversations yet</div>"
+
+    # Get CSS from sidebar component
+    css = get_sidebar_css()
+
+    # Generate list items
+    items = []
+    for conv in conversations:
+        conv_id = conv.get("id", "")
+        title = conv.get("title", "Untitled")[:40]
+        date = conv.get("updated_at", "")[:10]
+        preview = conv.get("preview", "")[:60]
+
+        items.append(
+            f"""
+        <div class="conv-item" data-id="{conv_id}">
+            <div class="conv-title">{title}</div>
+            <div class="conv-meta">{date}</div>
+            <div class="conv-preview">{preview}...</div>
+        </div>
+        """
+        )
+
+    # Note: JavaScript is handled by persistent script in sidebar.py
+    # using event delegation, so we only return CSS and HTML here
+    return css + "<div class='conv-list'>" + "".join(items) + "</div>"
+
+
+def populate_dropdown_and_list(
+    user_state: Optional[Dict[str, Any]],
+    browser_state: List[Dict[str, Any]],
+) -> Tuple[gr.update, str]:
+    """
+    Populate both dropdown AND HTML list from conversations.
+
+    Hybrid: API for auth users, BrowserState for guests.
+
+    Args:
+        user_state: User session data
+        browser_state: Conversations from BrowserState (guests)
+
+    Returns:
+        Tuple of (dropdown_update, html_string)
+
+    Note:
+        Dropdown choices use (label, value) format where:
+        - label: Display text shown to user (title + date)
+        - value: Conversation ID used for matching
+    """
+    choices = []
+
+    # For guest users: Read from BrowserState
+    if not user_state or not user_state.get("user_id"):
+        for conv in browser_state or []:
+            conv_id = conv.get("id", "")
+            title = conv.get("title", "Untitled")[:40]
+            date = conv.get("updated_at", "")[:10]
+            label = f"{title} ({date})"
+            # Choices format: (label, value) where value is the ID
+            choices.append((label, conv_id))
+        print(f"[populate_dropdown_and_list] Guest: {len(choices)} convs")
+    else:
+        # For authenticated users: Fetch from API
+        # TODO: Implement when needed
+        print("[populate_dropdown_and_list] Auth: API not implemented")
+
+    # Generate HTML list
+    html = generate_conversation_list_html(browser_state or [])
+
+    return gr.update(choices=choices), html
+
+
+def load_selected_conversation(
+    selected_id: Optional[str],
+    user_state: Optional[Dict[str, Any]],
+    browser_state: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, str]], List[Dict[str, str]]]:
+    """
+    Load selected conversation from dropdown by ID.
+
+    Hybrid: API for authenticated users, BrowserState for guests.
+
+    Args:
+        selected_id: Selected conversation ID from dropdown value
+        user_state: User session data
+        browser_state: Conversations list from BrowserState (guests)
+
+    Returns:
+        Tuple of (chatbot_messages, conversation_state)
+
+    Note:
+        Uses exact ID matching for robustness (prevents title collisions)
+    """
+    print("[load_selected_conversation] CALLED!")
+    print(f"  - selected_id: {selected_id}")
+    print(f"  - user_state: {user_state}")
+    print(f"  - browser_state length: {len(browser_state) if browser_state else 0}")
+
+    if not selected_id:
+        print("[load_selected_conversation] No ID selected, returning empty")
+        return [], []
+
+    print(f"[load_selected_conversation] Loading conversation ID: {selected_id}")
+
+    # For guest users: Load from BrowserState
+    if not user_state or not user_state.get("user_id"):
+        conv_count = len(browser_state or [])
+        print(
+            f"[load_selected_conversation] Guest user, "
+            f"searching in {conv_count} conversations"
+        )
+        for idx, conv in enumerate(browser_state or []):
+            conv_id = conv.get("id", "")
+            conv_title = conv.get("title", "Untitled")[:40]
+            print(f"  - Conv {idx}: id='{conv_id}', title='{conv_title}'")
+            # Match by exact ID
+            if conv_id == selected_id:
+                messages = conv.get("messages", [])
+                msg_count = len(messages)
+                print(
+                    f"[load_selected_conversation] Found! "
+                    f"Loading {msg_count} messages"
+                )
+                return messages, messages
+        print("[load_selected_conversation] Not found in localStorage")
+        ids = [c.get("id", "") for c in (browser_state or [])]
+        print(f"  - Available IDs: {ids}")
+        return [], []
+
+    # For authenticated users: Fetch from API
+    # TODO: Implement API fetching when needed
+    print("[load_selected_conversation] API fetching not yet implemented")
+    return [], []
+
+
+def update_conversations_list(
+    conv_state: List[Dict[str, str]],
+    conv_list: List[Dict[str, Any]],
+    user_state: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Update conversations list with current conversation metadata.
+
+    For guest users only - authenticated users use database.
+
+    Args:
+        conv_state: Current conversation messages
+        conv_list: Existing conversations list from localStorage
+        user_state: User session data
+
+    Returns:
+        Updated conversations list (for guests) or empty list (for auth users)
+    """
+    # Debug logging
+    print("[update_conversations_list] Called with:")
+    print(f"  - conv_state length: {len(conv_state) if conv_state else 0}")
+    print(f"  - conv_list length: {len(conv_list) if conv_list else 0}")
+    print(f"  - user_state: {user_state}")
+
+    # Authenticated users use database - return empty list
+    if user_state and user_state.get("user_id"):
+        print("[update_conversations_list] Auth user - returning empty")
+        return []
+
+    # Guest users: update localStorage list
+    if not conv_state or len(conv_state) == 0:
+        print("[update_conversations_list] Empty conv_state - returning existing")
+        return conv_list if conv_list else []
+
+    # Extract first user message as title
+    first_user_msg = next(
+        (msg["content"] for msg in conv_state if msg.get("role") == "user"),
+        "Untitled",
+    )
+    title = first_user_msg[:50]
+
+    # Generate stable conversation ID from FIRST message only
+    # This ensures the ID stays the same as conversation grows
+    conv_id = str(abs(hash(first_user_msg)))
+    timestamp = datetime.now().isoformat()
+
+    # Debug: Print extracted info
+    print("[update_conversations_list] Extracted:")
+    print(f"  - first_user_msg: '{first_user_msg}'")
+    print(f"  - generated ID: {conv_id}")
+    print(f"  - existing IDs in list: {[c.get('id') for c in (conv_list or [])]}")
+
+    # Get last message for preview
+    preview = ""
+    if len(conv_state) > 0:
+        preview = conv_state[-1].get("content", "")[:100]
+
+    # Remove existing entry with same ID
+    updated_list = [c for c in (conv_list or []) if c.get("id") != conv_id]
+
+    # Add new entry at the beginning
+    new_entry = {
+        "id": conv_id,
+        "title": title,
+        "updated_at": timestamp,
+        "preview": preview,
+        "messages": conv_state,
+    }
+    updated_list.insert(0, new_entry)
+
+    # Keep only last 20 conversations
+    result = updated_list[:20]
+
+    # Debug logging
+    print("[update_conversations_list] Created new entry:")
+    print(f"  - id: {conv_id}")
+    print(f"  - title: {title}")
+    print(f"  - Returning list with {len(result)} conversations")
+
+    return result
 
 
 def load_conversation_into_chat(
@@ -193,13 +486,13 @@ def handle_chat_message(
     if settings and "model_config" in settings:
         model_config = settings["model_config"]
         provider = model_config.get("provider", "openrouter")
-        model_name = model_config.get("model", "openai/gpt-4o-mini")
+        model_name = model_config.get("model", "openai/gpt-5-mini")
         temperature = model_config.get("temperature", 0.7)
         max_tokens = model_config.get("max_tokens", 2000)
     else:
         # Fallback to defaults
         provider = "openrouter"
-        model_name = "openai/gpt-4o-mini"
+        model_name = "openai/gpt-5-mini"
         temperature = 0.7
         max_tokens = 2000
 
