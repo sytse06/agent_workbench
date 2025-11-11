@@ -9,7 +9,7 @@ Identical structure for workbench and SEO coach modes - differences
 controlled by config labels.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import gradio as gr
@@ -200,7 +200,7 @@ def populate_list(
     browser_state: List[Dict[str, Any]],
 ) -> gr.update:
     """
-    Populate Dataset list from conversations.
+    Populate Dataset list from conversations with date categorization.
 
     Hybrid: API for auth users, BrowserState for guests.
 
@@ -212,21 +212,60 @@ def populate_list(
         Gradio update dict with Dataset samples
 
     Note:
-        Dataset samples use [[item1], [item2], ...] format where:
-        - Each item is a list containing the display text (title + date)
-        - Index is used for selection (not ID matching)
+        Dataset samples use [[item1], [item2], ...] format with:
+        - Category headers marked with "📅 " prefix (non-clickable)
+        - Conversation titles (no date suffix)
+        - Categories: Today, This Week, Older
     """
     samples = []
 
     # For guest users: Read from BrowserState
     if not user_state or not user_state.get("user_id"):
+        # Categorize conversations by date
+        today = datetime.now().date()
+        week_ago = today - timedelta(days=7)
+
+        today_convs = []
+        this_week_convs = []
+        older_convs = []
+
         for conv in browser_state or []:
             title = conv.get("title", "Untitled")[:40]
-            date = conv.get("updated_at", "")[:10]
-            label = f"{title} ({date})"
-            # Dataset samples format: [[label], ...]
-            samples.append([label])
-        print(f"[populate_list] Guest: {len(samples)} conversations")
+            date_str = conv.get("updated_at", "")
+
+            # Parse date
+            try:
+                conv_date = datetime.fromisoformat(date_str).date()
+            except (ValueError, AttributeError):
+                conv_date = None
+
+            # Categorize by date
+            if conv_date == today:
+                today_convs.append([title])
+            elif conv_date and conv_date >= week_ago:
+                this_week_convs.append([title])
+            else:
+                older_convs.append([title])
+
+        # Build samples with category headers
+        if today_convs:
+            samples.append(["📅 Today"])
+            samples.extend(today_convs)
+
+        if this_week_convs:
+            samples.append(["📅 This Week"])
+            samples.extend(this_week_convs)
+
+        if older_convs:
+            samples.append(["📅 Older"])
+            samples.extend(older_convs)
+
+        conv_count = len(today_convs) + len(this_week_convs) + len(older_convs)
+        print(
+            f"[populate_list] Guest: {conv_count} conversations "
+            f"(Today: {len(today_convs)}, Week: {len(this_week_convs)}, "
+            f"Older: {len(older_convs)})"
+        )
     else:
         # For authenticated users: Fetch from API
         # TODO: Implement when needed
@@ -241,12 +280,12 @@ def load_selected_conversation(
     browser_state: List[Dict[str, Any]],
 ) -> Tuple[List[Dict[str, str]], List[Dict[str, str]]]:
     """
-    Load selected conversation from Dataset list by index.
+    Load selected conversation from Dataset list by title matching.
 
     Hybrid: API for authenticated users, BrowserState for guests.
 
     Args:
-        evt: SelectData event containing .index of clicked item
+        evt: SelectData event containing .index and .value of clicked item
         user_state: User session data
         browser_state: Conversations list from BrowserState (guests)
 
@@ -254,30 +293,41 @@ def load_selected_conversation(
         Tuple of (chatbot_messages, conversation_state)
 
     Note:
-        Uses direct index access for O(1) lookup (no ID matching needed)
+        Category headers (starting with "📅") are ignored.
+        Conversations are matched by title to handle categorized list.
     """
-    selected_index = evt.index
+    # Extract clicked text from SelectData
+    selected_value = evt.value
+    if isinstance(selected_value, list) and len(selected_value) > 0:
+        clicked_text = str(selected_value[0])
+    else:
+        clicked_text = str(selected_value) if selected_value else ""
 
     print("[load_selected_conversation] CALLED!")
-    print(f"  - selected_index: {selected_index}")
+    print(f"  - clicked_text: '{clicked_text}'")
     print(f"  - user_state: {user_state}")
     print(f"  - browser_state length: {len(browser_state) if browser_state else 0}")
 
-    # For guest users: Load from BrowserState by index
+    # Ignore category header clicks
+    if clicked_text.startswith("📅"):
+        print("[load_selected_conversation] Header clicked, ignoring")
+        return [], []
+
+    # For guest users: Load from BrowserState by title match
     if not user_state or not user_state.get("user_id"):
-        if browser_state and 0 <= selected_index < len(browser_state):
-            conv = browser_state[selected_index]
-            messages = conv.get("messages", [])
+        for conv in browser_state or []:
             conv_title = conv.get("title", "Untitled")[:40]
-            msg_count = len(messages)
-            print(
-                f"[load_selected_conversation] Loading index {selected_index}: "
-                f"'{conv_title}' with {msg_count} messages"
-            )
-            return messages, messages
-        else:
-            print(f"[load_selected_conversation] Index {selected_index} out of range")
-            return [], []
+            if conv_title == clicked_text:
+                messages = conv.get("messages", [])
+                msg_count = len(messages)
+                print(
+                    f"[load_selected_conversation] Found conversation: "
+                    f"'{conv_title}' with {msg_count} messages"
+                )
+                return messages, messages
+
+        print(f"[load_selected_conversation] No match found for '{clicked_text}'")
+        return [], []
 
     # For authenticated users: Fetch from API
     # TODO: Implement API fetching when needed

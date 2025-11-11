@@ -93,6 +93,10 @@ nav a[href^="/?"],
     font-weight: 500;
 }
 
+/* Category header rows - visual styling only */
+/* Headers are identified by 📅 emoji in text content */
+/* Note: Non-clickable behavior handled in load_selected_conversation */
+
 /* Responsive layout */
 @media (max-width: 768px) {
     .chatbot-container {
