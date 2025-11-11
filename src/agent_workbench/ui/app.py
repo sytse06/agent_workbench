@@ -38,10 +38,8 @@ def create_workbench_app() -> gr.Blocks:
     title = f"Agent Workbench - {active_mode.title()} Mode"
     print(f"🎯 Active mode: {active_mode}")
 
-    # Load custom CSS with Ubuntu font
-    custom_css = """
-        @import url('/static/assets/css/fonts.css');
-    """
+    # Load unified CSS (main.css includes fonts + shared styles)
+    custom_css = "@import url('/static/assets/css/main.css');"
 
     with gr.Blocks(title=title, css=custom_css) as app:
         # Header with settings button

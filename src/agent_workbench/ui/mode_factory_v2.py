@@ -15,7 +15,6 @@ from typing import Any, Dict
 import gradio as gr
 
 from .pages import chat, settings
-from .styles import SHARED_CSS
 
 logger = logging.getLogger(__name__)
 
@@ -163,8 +162,13 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
     Phase 2: Now includes settings_state for sharing config between pages
     """
 
-    # Create Blocks instance
-    demo = gr.Blocks(title=config["title"], theme=config["theme"], css=SHARED_CSS)
+    # Create Blocks instance with unified CSS
+    # main.css imports fonts.css + shared.css (all core styles)
+    demo = gr.Blocks(
+        title=config["title"],
+        theme=config["theme"],
+        css="@import url('/static/assets/css/main.css');",
+    )
 
     # Define shared state BEFORE routes so all routes can access them
     with demo:
