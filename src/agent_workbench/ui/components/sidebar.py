@@ -2,7 +2,7 @@
 Conversation history sidebar component.
 
 Features:
-- Native Gradio dropdown for conversation selection
+- Native Gradio Dataset list for conversation selection
 - Hybrid data source (API for auth users, BrowserState for guests)
 - Feature-flagged via SHOW_CONV_BROWSER environment variable
 """
@@ -14,20 +14,20 @@ import gradio as gr
 
 def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
     Optional[gr.State],
-    Optional[gr.Dropdown],
+    Optional[gr.Dataset],
     Optional[gr.Button],
     Optional[gr.Button],
     Optional[gr.Button],
 ]:
     """
-    Render conversation history sidebar with native Gradio dropdown.
+    Render conversation history sidebar with native Gradio Dataset list.
 
     Args:
         config: Mode configuration with feature flags
         user_state: User session state
 
     Returns:
-        Tuple of (sidebar_visible, conv_dropdown, new_chat_btn,
+        Tuple of (sidebar_visible, conv_list, new_chat_btn,
                  collapse_btn, clear_storage_btn)
 
     Feature Flag:
@@ -52,13 +52,16 @@ def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
             )
             clear_storage_btn = gr.Button("🗑️", size="sm", scale=1)
 
-        # Native Gradio dropdown for conversation selection
-        conv_dropdown = gr.Dropdown(
-            label="Select conversation",
-            choices=[],
-            value=None,
-            interactive=True,
-            elem_id="conv-dropdown",
+        # Native Gradio Dataset list for conversation selection
+        conv_list = gr.Dataset(
+            components=[gr.Textbox(visible=False)],
+            samples=[],
+            label="Recent Chats",
+            show_label=False,
+            layout="table",
+            type="index",
+            elem_id="conv-list",
+            samples_per_page=20,
         )
 
         # Collapse button
@@ -79,7 +82,7 @@ def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
 
     return (
         sidebar_visible,
-        conv_dropdown,
+        conv_list,
         new_chat_btn,
         collapse_btn,
         clear_storage_btn,

@@ -35,13 +35,13 @@ class TestSidebarComponent:
         # Elements should exist
         (
             sidebar_visible,
-            conv_dropdown,
+            conv_list,
             new_chat_btn,
             collapse_btn,
             clear_storage_btn,
         ) = result
         assert sidebar_visible is not None
-        assert conv_dropdown is not None
+        assert conv_list is not None
         assert new_chat_btn is not None
         assert collapse_btn is not None
         assert clear_storage_btn is not None

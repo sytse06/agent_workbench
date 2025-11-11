@@ -53,12 +53,12 @@ def render(
     new_chat_btn = None
     sidebar_visible = None
     collapse_btn = None
-    conv_dropdown = None
+    conv_list = None
     clear_storage_btn = None
     if config.get("show_conv_browser", False):
         (
             sidebar_visible,
-            conv_dropdown,
+            conv_list,
             new_chat_btn,
             collapse_btn,
             clear_storage_btn,
@@ -155,25 +155,25 @@ def render(
             )
 
             # Phase 3: Wire up sidebar if enabled
-            if config.get("show_conv_browser", False) and conv_dropdown:
-                # Update dropdown AFTER conversation list is updated
+            if config.get("show_conv_browser", False) and conv_list:
+                # Update Dataset list AFTER conversation list is updated
                 send_chain.then(
-                    fn=populate_dropdown,
+                    fn=populate_list,
                     inputs=[user_state, conversations_list_storage],
-                    outputs=[conv_dropdown],
+                    outputs=[conv_list],
                 )
 
                 submit_chain.then(
-                    fn=populate_dropdown,
+                    fn=populate_list,
                     inputs=[user_state, conversations_list_storage],
-                    outputs=[conv_dropdown],
+                    outputs=[conv_list],
                 )
 
-                # Wire dropdown.change to load conversation when selected
-                conv_dropdown.change(
+                # Wire Dataset.select to load conversation when clicked
+                # NOTE: gr.SelectData passed automatically, not in inputs!
+                conv_list.select(
                     fn=load_selected_conversation,
                     inputs=[
-                        conv_dropdown,
                         user_state,
                         conversations_list_storage,
                     ],
@@ -187,20 +187,20 @@ def render(
                         outputs=[chatbot, conversation_state],
                     )
 
-    # Return BrowserState and dropdown for page load event in mode_factory
+    # Return BrowserState and Dataset list for page load event in mode_factory
     # This enables conversation list population on page refresh
     if config.get("show_conv_browser", False):
-        return conversations_list_storage, conv_dropdown
+        return conversations_list_storage, conv_list
     else:
         return None, None
 
 
-def populate_dropdown(
+def populate_list(
     user_state: Optional[Dict[str, Any]],
     browser_state: List[Dict[str, Any]],
 ) -> gr.update:
     """
-    Populate dropdown from conversations.
+    Populate Dataset list from conversations.
 
     Hybrid: API for auth users, BrowserState for guests.
 
@@ -209,45 +209,44 @@ def populate_dropdown(
         browser_state: Conversations from BrowserState (guests)
 
     Returns:
-        Gradio update dict with dropdown choices
+        Gradio update dict with Dataset samples
 
     Note:
-        Dropdown choices use (label, value) format where:
-        - label: Display text shown to user (title + date)
-        - value: Conversation ID used for matching
+        Dataset samples use [[item1], [item2], ...] format where:
+        - Each item is a list containing the display text (title + date)
+        - Index is used for selection (not ID matching)
     """
-    choices = []
+    samples = []
 
     # For guest users: Read from BrowserState
     if not user_state or not user_state.get("user_id"):
         for conv in browser_state or []:
-            conv_id = str(conv.get("id", ""))  # Convert to string for Gradio
             title = conv.get("title", "Untitled")[:40]
             date = conv.get("updated_at", "")[:10]
             label = f"{title} ({date})"
-            # Choices format: (label, value) where value is the ID
-            choices.append((label, conv_id))
-        print(f"[populate_dropdown] Guest: {len(choices)} conversations")
+            # Dataset samples format: [[label], ...]
+            samples.append([label])
+        print(f"[populate_list] Guest: {len(samples)} conversations")
     else:
         # For authenticated users: Fetch from API
         # TODO: Implement when needed
-        print("[populate_dropdown] Auth: API not implemented")
+        print("[populate_list] Auth: API not implemented")
 
-    return gr.update(choices=choices)
+    return gr.update(samples=samples)
 
 
 def load_selected_conversation(
-    selected_id: Optional[str],
+    evt: gr.SelectData,
     user_state: Optional[Dict[str, Any]],
     browser_state: List[Dict[str, Any]],
 ) -> Tuple[List[Dict[str, str]], List[Dict[str, str]]]:
     """
-    Load selected conversation from dropdown by ID.
+    Load selected conversation from Dataset list by index.
 
     Hybrid: API for authenticated users, BrowserState for guests.
 
     Args:
-        selected_id: Selected conversation ID from dropdown value
+        evt: SelectData event containing .index of clicked item
         user_state: User session data
         browser_state: Conversations list from BrowserState (guests)
 
@@ -255,43 +254,30 @@ def load_selected_conversation(
         Tuple of (chatbot_messages, conversation_state)
 
     Note:
-        Uses exact ID matching for robustness (prevents title collisions)
+        Uses direct index access for O(1) lookup (no ID matching needed)
     """
+    selected_index = evt.index
+
     print("[load_selected_conversation] CALLED!")
-    print(f"  - selected_id: {selected_id}")
+    print(f"  - selected_index: {selected_index}")
     print(f"  - user_state: {user_state}")
     print(f"  - browser_state length: {len(browser_state) if browser_state else 0}")
 
-    if not selected_id:
-        print("[load_selected_conversation] No ID selected, returning empty")
-        return [], []
-
-    print(f"[load_selected_conversation] Loading conversation ID: {selected_id}")
-
-    # For guest users: Load from BrowserState
+    # For guest users: Load from BrowserState by index
     if not user_state or not user_state.get("user_id"):
-        conv_count = len(browser_state or [])
-        print(
-            f"[load_selected_conversation] Guest user, "
-            f"searching in {conv_count} conversations"
-        )
-        for idx, conv in enumerate(browser_state or []):
-            conv_id = str(conv.get("id", ""))  # Convert to string for comparison
+        if browser_state and 0 <= selected_index < len(browser_state):
+            conv = browser_state[selected_index]
+            messages = conv.get("messages", [])
             conv_title = conv.get("title", "Untitled")[:40]
-            print(f"  - Conv {idx}: id='{conv_id}', title='{conv_title}'")
-            # Match by exact ID (both as strings)
-            if conv_id == str(selected_id):
-                messages = conv.get("messages", [])
-                msg_count = len(messages)
-                print(
-                    f"[load_selected_conversation] Found! "
-                    f"Loading {msg_count} messages"
-                )
-                return messages, messages
-        print("[load_selected_conversation] Not found in localStorage")
-        ids = [str(c.get("id", "")) for c in (browser_state or [])]
-        print(f"  - Available IDs: {ids}")
-        return [], []
+            msg_count = len(messages)
+            print(
+                f"[load_selected_conversation] Loading index {selected_index}: "
+                f"'{conv_title}' with {msg_count} messages"
+            )
+            return messages, messages
+        else:
+            print(f"[load_selected_conversation] Index {selected_index} out of range")
+            return [], []
 
     # For authenticated users: Fetch from API
     # TODO: Implement API fetching when needed

@@ -32,13 +32,13 @@ class TestSidebarComponent:
         # Elements should exist
         (
             sidebar_visible,
-            conv_dropdown,
+            conv_list,
             new_chat_btn,
             collapse_btn,
             clear_storage_btn,
         ) = result
         assert sidebar_visible is not None
-        assert conv_dropdown is not None
+        assert conv_list is not None
         assert new_chat_btn is not None
         assert collapse_btn is not None
         assert clear_storage_btn is not None
@@ -63,8 +63,8 @@ class TestSidebarComponent:
         # Should default to disabled
         assert result == (None, None, None, None, None)
 
-    def test_dropdown_configured_for_dom_presence(self):
-        """Test dropdown is configured to stay in DOM and is visible."""
+    def test_dataset_configured_for_dom_presence(self):
+        """Test Dataset list is configured to stay in DOM and is visible."""
         config = {"show_conv_browser": True}
         user_state = gr.State(None)
 
@@ -72,13 +72,14 @@ class TestSidebarComponent:
         with gr.Blocks():
             result = render_sidebar(config, user_state)
 
-        # Get the dropdown component
-        _, conv_dropdown, _, _, _ = result
+        # Get the Dataset component
+        _, conv_list, _, _, _ = result
 
-        # Dropdown should be visible (no CSS hiding in native approach)
-        assert conv_dropdown is not None
-        assert conv_dropdown.visible is True
-        assert conv_dropdown.elem_id == "conv-dropdown"
+        # Dataset should be visible
+        assert conv_list is not None
+        assert conv_list.visible is True
+        assert conv_list.elem_id == "conv-list"
+        assert isinstance(conv_list, gr.Dataset)
 
 
 class TestSidebarToggleLogic:

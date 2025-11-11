@@ -177,17 +177,17 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
 
     # Route 1: Chat page (default, shown at root "/" path)
     with demo:
-        # Capture BrowserState and dropdown returned from chat page
-        conversations_list_storage, conv_dropdown = chat.render(
+        # Capture BrowserState and Dataset list returned from chat page
+        conversations_list_storage, conv_list = chat.render(
             config, user_state, conversation_state, settings_state
         )
 
-        # Auto-load conversation history into dropdown from BrowserState on page load
-        # (only for guest users - authenticated users use database)
-        if conversations_list_storage and conv_dropdown:
+        # Auto-load conversation history into Dataset list from BrowserState
+        # on page load (only for guest users - auth users use database)
+        if conversations_list_storage and conv_list:
 
             @demo.load(
-                inputs=[user_state, conversations_list_storage], outputs=[conv_dropdown]
+                inputs=[user_state, conversations_list_storage], outputs=[conv_list]
             )
             def load_conversations_from_browser(user_state_val, stored_conversations):
                 """
@@ -195,9 +195,9 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
 
                 For guest users only - authenticated users use database.
                 """
-                from .pages.chat import populate_dropdown
+                from .pages.chat import populate_list
 
-                return populate_dropdown(user_state_val, stored_conversations or [])
+                return populate_list(user_state_val, stored_conversations or [])
 
     # Route 2: Settings page with BrowserState auto-load
     with demo.route("Settings", "settings") as settings_route:
