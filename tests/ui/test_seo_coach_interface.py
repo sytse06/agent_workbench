@@ -343,13 +343,12 @@ class TestSEOCoachApp:
         """Test that SEO coach app has CSS styling"""
         try:
             app = create_seo_coach_app()
-            # Check for custom CSS classes
+            # Check for CSS imports (CSS moved to external files)
             assert hasattr(app, "css")
             css_content = str(app.css) if app.css else ""
-            # Should contain styling for panels and status displays
-            expected_classes = ["business-panel", "coaching-panel", "success", "error"]
-            for css_class in expected_classes:
-                assert css_class in css_content, f"Missing CSS class: {css_class}"
+            # Should contain imports for main CSS and SEO coach-specific CSS
+            assert "main.css" in css_content, "Missing main.css import"
+            assert "seo-coach.css" in css_content, "Missing seo-coach.css import"
         except AttributeError as e:
             if "Cannot call click outside of a gradio.Blocks context" in str(e):
                 pytest.skip("Gradio context not available in test environment")

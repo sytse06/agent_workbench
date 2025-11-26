@@ -10,6 +10,7 @@ No code duplication - single builder, different configurations.
 
 import logging
 import os
+from pathlib import Path
 from typing import Any, Dict
 
 import gradio as gr
@@ -164,10 +165,41 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
 
     # Create Blocks instance with unified CSS
     # main.css imports fonts.css + shared.css (all core styles)
+    # Critical CSS inlined to bypass browser caching issues
+
+    # Tell Gradio to serve the static directory as static files
+    # This allows gr.Button(icon="...") to serve icons without permission checks
+    # Ref: https://www.gradio.app/docs/gradio/set_static_paths
+    static_dir = Path(__file__).resolve().parent.parent / "static"
+    gr.set_static_paths(paths=[str(static_dir)])
+
+    # Load custom CSS directly - @import doesn't work in Gradio's inline styles
+    # Must load tokens.css first for CSS variables, then styles.css
+    css_dir = static_dir / "assets" / "css"
+    tokens_css = (css_dir / "tokens.css").read_text() if (css_dir / "tokens.css").exists() else ""
+    styles_css = (css_dir / "styles.css").read_text() if (css_dir / "styles.css").exists() else ""
+
+    # Remove @import statements from styles.css since we're loading tokens.css separately
+    styles_css = "\n".join(line for line in styles_css.split("\n") if not line.strip().startswith("@import"))
+
     demo = gr.Blocks(
         title=config["title"],
         theme=config["theme"],
-        css="@import url('/static/assets/css/main.css');",
+        css=f"""
+        /* Google Fonts loaded via FastAPI middleware (main.py:inject_google_fonts)
+           Gradio's Constructable Stylesheets don't support @import for external URLs */
+
+        /* Design tokens (CSS variables) */
+        {tokens_css}
+
+        /* Custom component styles */
+        {styles_css}
+
+        /* Critical fix: prevent input bar wrapping (Phase 4.3) */
+        .agent-workbench-input-bar {{
+            flex-wrap: nowrap !important;
+        }}
+        """,
     )
 
     # Define shared state BEFORE routes so all routes can access them
@@ -186,9 +218,17 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
             config, user_state, conversation_state, settings_state
         )
 
+        # DEBUG: Check what chat.render() returned
+        print("[DEBUG mode_factory_v2] After chat.render():")
+        print(f"  conversations_list_storage: {conversations_list_storage}")
+        print(f"  conv_list: {conv_list}")
+        print(f"  Type conversations_list_storage: {type(conversations_list_storage)}")
+        print(f"  Type conv_list: {type(conv_list)}")
+
         # Auto-load conversation history into Dataset list from BrowserState
         # on page load (only for guest users - auth users use database)
         if conversations_list_storage and conv_list:
+            print("[DEBUG mode_factory_v2] IF condition passed - setting up load event")
 
             @demo.load(
                 inputs=[user_state, conversations_list_storage], outputs=[conv_list]
@@ -199,9 +239,160 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
 
                 For guest users only - authenticated users use database.
                 """
+                print("[DEBUG mode_factory_v2] load_conversations_from_browser CALLED!")
+                print(f"  user_state_val: {user_state_val}")
+                print(
+                    f"  stored_conversations length: {len(stored_conversations or [])}"
+                )
+
                 from .pages.chat import populate_list
 
-                return populate_list(user_state_val, stored_conversations or [])
+                result = populate_list(user_state_val, stored_conversations or [])
+                print(f"[DEBUG mode_factory_v2] populate_list returned: {result}")
+                return result
+
+        else:
+            print(
+                "[DEBUG mode_factory_v2] IF condition FAILED - " "load event NOT set up"
+            )
+            storage_is_none = conversations_list_storage is None
+            print(f"  conversations_list_storage is None: {storage_is_none}")
+            print(f"  conv_list is None: {conv_list is None}")
+
+        # Phase 4.2: Logo/chatbot visibility toggle + icon bar functionality
+        # Toggle visibility based on message count (Ollama design pattern)
+        # Handle sidebar toggle, new chat, and settings icon clicks
+        demo.load(
+            fn=None,
+            js="""
+            function() {
+                // Wait for Gradio to fully render
+                setTimeout(() => {
+                    const chatbot = document.querySelector('.agent-workbench-messages');
+                    const logo = document.querySelector('.agent-workbench-logo');
+
+                    if (!chatbot || !logo) return;
+
+                    // Check if chatbot has real messages
+                    const msgSelectors = [
+                        '[data-testid*="message"]',
+                        '.message',
+                        '[role="user"]',
+                        '[role="assistant"]'
+                    ].join(', ');
+                    const messageElements = chatbot.querySelectorAll(
+                        msgSelectors
+                    );
+                    const hasMessages = messageElements.length > 0;
+                    const textContent = chatbot.textContent.trim();
+                    const hasRealContent = (
+                        textContent.length > 10 &&
+                        textContent !== 'Chatbot'
+                    );
+
+                    if (hasMessages || hasRealContent) {
+                        // Has messages: Hide logo, show chatbot
+                        logo.style.display = 'none';
+                        chatbot.style.display = 'block';
+                    } else {
+                        // No messages: Show logo, hide chatbot
+                        logo.style.display = 'flex';
+                        chatbot.style.display = 'none';
+                    }
+
+                    // Watch for changes to chatbot (new messages)
+                    const observer = new MutationObserver(() => {
+                        const msgs = chatbot.querySelectorAll(
+                            msgSelectors
+                        );
+                        const hasNewMessages = msgs.length > 0;
+
+                        if (hasNewMessages) {
+                            logo.style.display = 'none';
+                            chatbot.style.display = 'block';
+                        } else {
+                            logo.style.display = 'flex';
+                            chatbot.style.display = 'none';
+                        }
+                    });
+
+                    observer.observe(chatbot, {
+                        childList: true,
+                        subtree: true,
+                        characterData: true
+                    });
+
+                    // Phase 4.2: Icon bar functionality
+                    // Sidebar toggle button
+                    const sidebarToggleBtn = document.getElementById(
+                        'sidebar-toggle-btn'
+                    );
+                    const sidebarParent = document.querySelector(
+                        '.sidebar-parent'
+                    );
+                    const sidebar = document.querySelector(
+                        '.sidebar.svelte-1hez9vf'
+                    );
+                    const topBarNewChatBtn = document.getElementById(
+                        'new-chat-container'
+                    );
+                    let sidebarOpen = false;
+
+                    if (sidebarToggleBtn && sidebar && sidebarParent) {
+                        sidebarToggleBtn.addEventListener('click', () => {
+                            sidebarOpen = !sidebarOpen;
+
+                            if (sidebarOpen) {
+                                // Open sidebar using CSS classes
+                                sidebarParent.classList.add('sidebar-open');
+                                sidebar.classList.add('sidebar-open');
+
+                                // Hide top bar new chat button (it's now in sidebar)
+                                if (topBarNewChatBtn) {
+                                    topBarNewChatBtn.style.display = 'none';
+                                }
+                            } else {
+                                // Close sidebar using CSS classes
+                                sidebarParent.classList.remove('sidebar-open');
+                                sidebar.classList.remove('sidebar-open');
+
+                                // Show top bar new chat button
+                                if (topBarNewChatBtn) {
+                                    topBarNewChatBtn.style.display = 'block';
+                                }
+                            }
+                        });
+                    }
+
+                    // Settings icon click
+                    const settingsIcon = document.getElementById('settings-icon');
+                    if (settingsIcon) {
+                        settingsIcon.addEventListener('click', () => {
+                            window.location.href = '/settings';
+                        });
+                    }
+
+                    // Top bar new chat button click (when sidebar closed)
+                    const newChatBtn = document.getElementById(
+                        'new-chat-btn'
+                    );
+                    if (newChatBtn) {
+                        newChatBtn.addEventListener('click', () => {
+                            // Trigger sidebar new chat button
+                            const sidebarNewChatBtn = (
+                                document.querySelector(
+                                    '.sidebar-new-chat-btn'
+                                )
+                            );
+                            if (sidebarNewChatBtn) {
+                                sidebarNewChatBtn.click();
+                            }
+                        });
+                    }
+                }, 500);
+            }
+            """,
+        )
 
     # Route 2: Settings page with BrowserState auto-load
     with demo.route("Settings", "settings") as settings_route:

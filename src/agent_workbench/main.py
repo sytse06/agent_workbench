@@ -152,6 +152,63 @@ app = FastAPI(
 # Get base directory for static files
 BASE_DIR = Path(__file__).resolve().parent
 
+
+# ============================================================================
+# Google Fonts Injection Middleware
+# ============================================================================
+# Workaround for Gradio's Constructable Stylesheets limitation
+# Injects Google Fonts link into HTML responses
+@app.middleware("http")
+async def inject_google_fonts(request, call_next):
+    """Inject Google Fonts into HTML responses."""
+    response = await call_next(request)
+
+    # Only inject into HTML responses
+    if (
+        response.headers.get("content-type", "").startswith("text/html")
+        and response.status_code == 200
+    ):
+        # Read response body
+        body = b""
+        async for chunk in response.body_iterator:
+            body += chunk
+
+        # Inject Google Fonts link before </head>
+        google_fonts_url = (
+            "https://fonts.googleapis.com/css2?"
+            "family=Lora:ital,wght@0,400..700;1,400..700&"
+            "family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;"
+            "1,300;1,400;1,500;1,700&display=swap"
+        )
+        google_fonts_link = f"""
+    <!-- Google Fonts: Ubuntu (headers) + Lora (body text) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="{google_fonts_url}" rel="stylesheet">
+</head>""".encode(
+            "utf-8"
+        )
+
+        # Replace </head> with fonts + </head>
+        modified_body = body.replace(b"</head>", google_fonts_link)
+
+        # Return modified response with updated headers
+        from fastapi.responses import Response
+
+        # Copy headers but remove Content-Length (will be recalculated)
+        headers = dict(response.headers)
+        headers.pop("content-length", None)
+
+        return Response(
+            content=modified_body,
+            status_code=response.status_code,
+            headers=headers,
+            media_type=response.media_type,
+        )
+
+    return response
+
+
 # Mount static files BEFORE Gradio mount (critical order)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 

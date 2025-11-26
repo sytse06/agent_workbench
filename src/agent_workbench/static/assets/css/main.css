@@ -1,42 +1,11 @@
-/**
+/*
  * Agent Workbench - Main CSS Entry Point
  *
- * This is the master CSS coordinator that imports all core styles.
- * Individual pages can supplement this with mode-specific CSS as needed.
+ * Simplified architecture:
+ * - tokens.css: Design system (variables only)
+ * - styles.css: All component styles
  *
- * CSS Architecture:
- * - fonts.css:    Ubuntu font family (@font-face declarations)
- * - shared.css:   Cross-mode styles (navigation, layout, components)
- * - settings.css: Settings page specific (loaded separately)
- * - seo-coach.css: SEO Coach mode specific (loaded separately)
- *
- * Usage:
- * - Workbench Mode:  main.css only
- * - SEO Coach Mode:  main.css + seo-coach.css
- * - Settings Page:   main.css + settings.css
- *
- * This eliminates duplicate font imports and centralizes core styling.
+ * Mode-specific CSS (settings.css, seo-coach.css) loaded separately.
  */
 
-/* ============================================
-   FONTS - Ubuntu Font Family
-   ============================================ */
-@import url('fonts.css');
-
-/* ============================================
-   CORE SHARED STYLES
-   ============================================ */
-@import url('shared.css');
-
-/* ============================================
-   MODE-SPECIFIC STYLES
-   ============================================
-
-   Mode-specific CSS (settings.css, seo-coach.css) is loaded
-   separately in the respective Python files via:
-
-   css="@import url('/static/assets/css/main.css');
-        @import url('/static/assets/css/[mode].css');"
-
-   This keeps the main.css lean and allows conditional loading.
-*/
+@import url('styles.css');

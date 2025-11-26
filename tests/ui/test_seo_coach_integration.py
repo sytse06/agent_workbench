@@ -375,13 +375,12 @@ class TestSEOCoachAppIntegration:
             assert len(app.blocks) > 0
             # Verify Dutch title
             assert app.title == "AI SEO Coach - Nederlandse Bedrijven"
-            # Verify CSS styling
+            # Verify CSS styling - now uses external CSS files
             assert hasattr(app, "css")
             css_content = str(app.css)
-            assert "business-panel" in css_content
-            assert "coaching-panel" in css_content
-            assert "success" in css_content
-            assert "error" in css_content
+            # Check that CSS imports are present (CSS moved to external files)
+            assert "seo-coach.css" in css_content
+            assert "main.css" in css_content
         except AttributeError as e:
             if "Cannot call click outside of a gradio.Blocks context" in str(e):
                 pytest.skip("Gradio context not available in test environment")

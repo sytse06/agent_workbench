@@ -43,7 +43,7 @@ class TestSidebarComponent:
         assert sidebar_visible is not None
         assert conv_list is not None
         assert new_chat_btn is not None
-        assert collapse_btn is not None
+        assert collapse_btn is None  # Phase 4.2: Removed collapse button
         assert clear_storage_btn is not None
 
     def test_sidebar_hidden_when_disabled(self):
@@ -84,7 +84,7 @@ class TestSidebarToggleLogic:
         assert isinstance(sidebar_visible, gr.State)
 
     def test_sidebar_visible_state_default_true(self):
-        """Test sidebar visible state defaults to True."""
+        """Test sidebar visible state defaults to False (closed)."""
         config = {"show_conv_browser": True}
         user_state = gr.State(None)
 
@@ -92,8 +92,8 @@ class TestSidebarToggleLogic:
         with gr.Blocks():
             sidebar_visible, _, _, _, _ = render_sidebar(config, user_state)
 
-        # Initial state should be True (visible)
-        assert sidebar_visible.value is True
+        # Phase 4.2: Initial state should be False (closed by default)
+        assert sidebar_visible.value is False
 
 
 class TestConversationLoading:

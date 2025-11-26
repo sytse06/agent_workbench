@@ -1,94 +1,206 @@
-/* Ubuntu Font Family - Complete Integration
- * Source: design/assets/Ubuntu/
- * License: Ubuntu Font Licence (see Ubuntu font licence.html)
- */
+/* ============================================
+   GOOGLE FONTS - Dual Font System
+   ============================================
 
-/* Light */
-@font-face {
-  font-family: 'Ubuntu';
-  src: url('/static/assets/fonts/Ubuntu/Ubuntu-Light.ttf') format('truetype');
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;  /* Show fallback font while loading */
-}
+   Ubuntu (sans-serif) - Headers, UI elements
+   Lora (serif)        - Body text, paragraphs
 
-@font-face {
-  font-family: 'Ubuntu';
-  src: url('/static/assets/fonts/Ubuntu/Ubuntu-LightItalic.ttf') format('truetype');
-  font-weight: 300;
-  font-style: italic;
-  font-display: swap;
-}
+   License: Open Font License (Google Fonts)
 
-/* Regular */
-@font-face {
-  font-family: 'Ubuntu';
-  src: url('/static/assets/fonts/Ubuntu/Ubuntu-Regular.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
+   IMPORTANT: Fonts are loaded via inline CSS in mode_factory_v2.py
+   due to Gradio's Constructable Stylesheets limitation.
+   @import rules in externally-loaded CSS files are blocked.
+   ============================================ */
 
-@font-face {
-  font-family: 'Ubuntu';
-  src: url('/static/assets/fonts/Ubuntu/Ubuntu-Italic.ttf') format('truetype');
-  font-weight: 400;
-  font-style: italic;
-  font-display: swap;
-}
+/* Google Fonts loaded inline in mode_factory_v2.py - DO NOT uncomment
+   @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&display=swap');
+*/
 
-/* Medium */
-@font-face {
-  font-family: 'Ubuntu';
-  src: url('/static/assets/fonts/Ubuntu/Ubuntu-Medium.ttf') format('truetype');
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
+/* ============================================
+   CSS VARIABLES - Font Stacks
+   ============================================ */
 
-@font-face {
-  font-family: 'Ubuntu';
-  src: url('/static/assets/fonts/Ubuntu/Ubuntu-MediumItalic.ttf') format('truetype');
-  font-weight: 500;
-  font-style: italic;
-  font-display: swap;
-}
-
-/* Bold */
-@font-face {
-  font-family: 'Ubuntu';
-  src: url('/static/assets/fonts/Ubuntu/Ubuntu-Bold.ttf') format('truetype');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Ubuntu';
-  src: url('/static/assets/fonts/Ubuntu/Ubuntu-BoldItalic.ttf') format('truetype');
-  font-weight: 700;
-  font-style: italic;
-  font-display: swap;
-}
-
-/* Global Font Application
- * Fallback stack: system fonts for better performance and cross-platform consistency
- */
 :root {
-  --font-family-primary: 'Ubuntu', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+  /* Ubuntu for headers and UI */
+  --font-family-headers: 'Ubuntu', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
                          'Helvetica Neue', Arial, sans-serif;
+
+  /* Lora for body text */
+  --font-family-body: 'Lora', Georgia, 'Times New Roman', Times, serif;
+
+  /* Alias for backward compatibility */
+  --font-family-primary: var(--font-family-headers);
 }
 
-/* Apply to all elements */
+/* ============================================
+   GLOBAL FONT APPLICATION
+   ============================================ */
+
+/* Default: Lora for body text */
 * {
-  font-family: var(--font-family-primary);
+  font-family: var(--font-family-body);
 }
 
-/* Specific Gradio component overrides (if needed) */
+/* Ubuntu for all headings */
+h1, h2, h3, h4, h5, h6,
+.heading,
+.header {
+  font-family: var(--font-family-headers);
+}
+
+/* ============================================
+   GRADIO COMPONENT OVERRIDES
+   ============================================ */
+
+/* UI elements use Ubuntu */
 .gradio-container {
-  font-family: var(--font-family-primary) !important;
+  font-family: var(--font-family-body) !important;
 }
 
-.gr-button, .gr-input, .gr-box {
-  font-family: var(--font-family-primary) !important;
+/* Buttons, inputs, and interactive elements use Ubuntu */
+.gr-button,
+.gr-input,
+.gr-box,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-family-headers) !important;
 }
+
+/* ============================================
+   UBUNTU UTILITY CLASSES
+   ============================================ */
+
+.ubuntu-light {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 300;
+  font-style: normal;
+}
+
+.ubuntu-regular {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
+
+.ubuntu-medium {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 500;
+  font-style: normal;
+}
+
+.ubuntu-bold {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 700;
+  font-style: normal;
+}
+
+.ubuntu-light-italic {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 300;
+  font-style: italic;
+}
+
+.ubuntu-regular-italic {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 400;
+  font-style: italic;
+}
+
+.ubuntu-medium-italic {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 500;
+  font-style: italic;
+}
+
+.ubuntu-bold-italic {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 700;
+  font-style: italic;
+}
+
+/* ============================================
+   LORA UTILITY CLASSES
+   ============================================
+
+   Lora is a variable font (400-700 range)
+   Recommended weights for readability:
+   ============================================ */
+
+/* Regular - Default body text */
+.lora-regular {
+  font-family: "Lora", serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* Medium - Subtle emphasis, pull quotes */
+.lora-medium {
+  font-family: "Lora", serif;
+  font-optical-sizing: auto;
+  font-weight: 500;
+  font-style: normal;
+}
+
+/* Semibold - Strong emphasis, lead paragraphs */
+.lora-semibold {
+  font-family: "Lora", serif;
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-style: normal;
+}
+
+/* Bold - Maximum emphasis, rarely used in body */
+.lora-bold {
+  font-family: "Lora", serif;
+  font-optical-sizing: auto;
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* Italic variants */
+.lora-regular-italic {
+  font-family: "Lora", serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: italic;
+}
+
+.lora-medium-italic {
+  font-family: "Lora", serif;
+  font-optical-sizing: auto;
+  font-weight: 500;
+  font-style: italic;
+}
+
+.lora-semibold-italic {
+  font-family: "Lora", serif;
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-style: italic;
+}
+
+.lora-bold-italic {
+  font-family: "Lora", serif;
+  font-optical-sizing: auto;
+  font-weight: 700;
+  font-style: italic;
+}
+
+/* ============================================
+   TYPOGRAPHIC HIERARCHY EXAMPLES
+   ============================================
+
+   Headers (Ubuntu):
+   - h1: 700 (bold) or 500 (medium) for lighter feel
+   - h2: 500 (medium) or 400 (regular)
+   - h3-h6: 400 (regular) or 300 (light)
+
+   Body text (Lora):
+   - Paragraphs: 400 (regular)
+   - Emphasis: 500 (medium) or italic
+   - Strong: 600 (semibold) or 700 (bold)
+   - Quotes: 400 italic or 500 italic
+   ============================================ */

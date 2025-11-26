@@ -17,6 +17,7 @@ const STATIC_ASSETS = [
   '/static/assets/css/main.css',
   '/static/assets/css/fonts.css',
   '/static/assets/css/shared.css',
+  '/static/assets/css/agent-workbench-design.css',
   '/static/assets/css/settings.css',
   '/static/assets/css/seo-coach.css'
 ];

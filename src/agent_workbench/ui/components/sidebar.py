@@ -39,18 +39,21 @@ def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
     if not config.get("show_conv_browser", False):
         return None, None, None, None, None
 
-    # Sidebar visibility state
-    sidebar_visible = gr.State(value=True)
+    # Sidebar visibility state - CLOSED by default (Phase 4.2)
+    sidebar_visible = gr.State(value=False)
 
-    with gr.Sidebar(position="left", elem_id="conv-sidebar-container"):
+    # Note: visible=True so it's in DOM, but hidden via CSS display:none initially
+    with gr.Sidebar(position="left", elem_id="conv-sidebar-container", visible=True):
+        # New Chat button with icon (Phase 4.2: visible when sidebar open)
+        new_chat_btn = gr.Button(
+            "New Chat",
+            icon="/static/icons/svg/add_chat_icon_24.svg",
+            variant="primary",
+            size="sm",
+            elem_classes=["sidebar-new-chat-btn"],
+        )
+
         gr.Markdown("## Recent Chats")
-
-        # Action buttons
-        with gr.Row():
-            new_chat_btn = gr.Button(
-                "➕ New Chat", variant="primary", size="sm", scale=2
-            )
-            clear_storage_btn = gr.Button("🗑️", size="sm", scale=1)
 
         # Native Gradio Dataset list for conversation selection
         conv_list = gr.Dataset(
@@ -64,8 +67,11 @@ def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
             samples_per_page=20,
         )
 
-        # Collapse button
-        collapse_btn = gr.Button("◀", variant="secondary", size="sm", scale=1)
+        # Action buttons at bottom
+        with gr.Row():
+            clear_storage_btn = gr.Button("🗑️ Clear History", size="sm", scale=1)
+
+        # Collapse button removed - sidebar toggle in top bar now handles this
 
     # Clear storage button - clears localStorage
     clear_storage_btn.click(
@@ -84,6 +90,6 @@ def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
         sidebar_visible,
         conv_list,
         new_chat_btn,
-        collapse_btn,
+        None,  # collapse_btn removed - sidebar toggle in top bar now
         clear_storage_btn,
     )
