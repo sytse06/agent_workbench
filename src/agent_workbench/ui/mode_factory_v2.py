@@ -323,45 +323,59 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
                     });
 
                     // Phase 4.2: Icon bar functionality
-                    // Sidebar toggle button
+                    // Sidebar toggle button - using gr.Column with native visibility
                     const sidebarToggleBtn = document.getElementById(
                         'sidebar-toggle-btn'
                     );
-                    const sidebarParent = document.querySelector(
-                        '.sidebar-parent'
-                    );
-                    const sidebar = document.querySelector(
-                        '.sidebar.svelte-1hez9vf'
+                    const sidebarCol = document.getElementById(
+                        'conv-sidebar-container'
                     );
                     const topBarNewChatBtn = document.getElementById(
                         'new-chat-container'
                     );
                     let sidebarOpen = false;
 
-                    if (sidebarToggleBtn && sidebar && sidebarParent) {
+                    console.log('[Sidebar] Toggle button:', sidebarToggleBtn);
+                    console.log('[Sidebar] Column element:', sidebarCol);
+                    console.log('[Sidebar] New chat button:', topBarNewChatBtn);
+
+                    // Initialize: Ensure new chat icon is visible when sidebar is closed
+                    // Use CSS class instead of inline style for better control
+                    if (topBarNewChatBtn) {
+                        topBarNewChatBtn.classList.remove('hidden-when-sidebar-open');
+                        console.log('[Sidebar] Initial state: new chat icon visible');
+                    }
+
+                    if (sidebarToggleBtn && sidebarCol) {
+                        console.log('[Sidebar] Wiring up click handler');
                         sidebarToggleBtn.addEventListener('click', () => {
                             sidebarOpen = !sidebarOpen;
+                            console.log('[Sidebar] Toggle clicked, open:', sidebarOpen);
 
                             if (sidebarOpen) {
-                                // Open sidebar using CSS classes
-                                sidebarParent.classList.add('sidebar-open');
-                                sidebar.classList.add('sidebar-open');
+                                // Show sidebar by removing hidden class
+                                sidebarCol.classList.remove('conv-sidebar-hidden');
+                                console.log('[Sidebar] Showing sidebar');
 
                                 // Hide top bar new chat button (it's now in sidebar)
                                 if (topBarNewChatBtn) {
-                                    topBarNewChatBtn.style.display = 'none';
+                                    topBarNewChatBtn.classList.add('hidden-when-sidebar-open');
+                                    console.log('[Sidebar] Hiding top bar new chat icon');
                                 }
                             } else {
-                                // Close sidebar using CSS classes
-                                sidebarParent.classList.remove('sidebar-open');
-                                sidebar.classList.remove('sidebar-open');
+                                // Hide sidebar by adding hidden class
+                                sidebarCol.classList.add('conv-sidebar-hidden');
+                                console.log('[Sidebar] Hiding sidebar');
 
                                 // Show top bar new chat button
                                 if (topBarNewChatBtn) {
-                                    topBarNewChatBtn.style.display = 'block';
+                                    topBarNewChatBtn.classList.remove('hidden-when-sidebar-open');
+                                    console.log('[Sidebar] Showing top bar new chat icon');
                                 }
                             }
                         });
+                    } else {
+                        console.warn('[Sidebar] Could not find elements - toggle button or sidebar column missing');
                     }
 
                     // Settings icon click

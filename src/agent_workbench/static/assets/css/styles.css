@@ -61,15 +61,46 @@ body {
     background: transparent !important;
 }
 
+/* Ensure logo and icon containers have transparent backgrounds (fixes dark mode) */
+.agent-workbench-logo-container,
+.agent-workbench-logo-container .block,
+.agent-workbench-top-bar,
+.agent-workbench-top-bar .block,
+.agent-workbench-top-bar-left,
+.agent-workbench-top-bar-left .block,
+.agent-workbench-top-bar-right,
+.agent-workbench-top-bar-right .block,
+#sidebar-toggle-container,
+#new-chat-container,
+#settings-icon-container,
+.agent-workbench-top-bar .html-container,
+.agent-workbench-top-bar .prose {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+/* Chat container parent row - center content when sidebar closed */
+#component-14 {
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+}
+
 /* Centered chat container */
 .agent-workbench-chat-container {
     max-width: 800px;
-    margin: 0 auto;
+    margin: 0;  /* No auto margin - centering handled by parent */
     padding: var(--space-4xl) var(--space-xl);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     gap: var(--space-2xl);
+}
+
+/* Hide Gradio's default sidebar toggle button */
+.sidebar .toggle-button,
+button.toggle-button {
+    display: none !important;
 }
 
 /* ============================================
@@ -164,8 +195,9 @@ div.row.agent-workbench-top-bar,
 .agent-workbench-top-bar-left {
     display: flex;
     align-items: center;
-    gap: var(--space-md);
+    gap: 0;  /* Remove gap - spacing controlled by icon buttons */
     justify-content: flex-start;
+    position: relative;  /* Enable absolute positioning for children */
 }
 
 .agent-workbench-top-bar-right {
@@ -173,6 +205,10 @@ div.row.agent-workbench-top-bar,
     align-items: center;
     gap: var(--space-md);
     justify-content: flex-end;
+
+    /* Force full width to ensure icon reaches right edge */
+    width: 100%;
+    flex-grow: 1;
 }
 
 /* Remove Gradio row padding from icon groups to align with container edges */
@@ -182,6 +218,47 @@ div.row.agent-workbench-top-bar-right,
 #component-20 {
     padding: 0 !important;
     margin: 0 !important;
+}
+
+/* Collapse all nested wrappers using inline-block */
+#sidebar-toggle-container,
+#new-chat-container,
+#sidebar-toggle-container > .block,
+#new-chat-container > .block,
+#sidebar-toggle-container > .html-container,
+#new-chat-container > .html-container,
+#sidebar-toggle-container > .html-container > .prose,
+#new-chat-container > .html-container > .prose {
+    display: inline-block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+    border: none !important;
+}
+
+/* Force icon buttons to sit next to each other with controlled spacing */
+.agent-workbench-top-bar-left .agent-workbench-icon-btn {
+    margin-left: 0 !important;
+    margin-right: 20px !important;  /* 20px gap between icons */
+    padding: 0 !important;
+}
+
+/* Remove any remaining spacing from Svelte classes */
+.agent-workbench-top-bar-left .svelte-1xp0cw7,
+.agent-workbench-top-bar-left .svelte-1svsvh2,
+.agent-workbench-top-bar-left .svelte-phx28p,
+.agent-workbench-top-bar-left .svelte-ydeks8 {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Fallback: Absolute positioning for new chat icon */
+#new-chat-container {
+    position: absolute !important;
+    left: 44px !important;  /* 40px icon width + 4px gap */
+    top: 50% !important;
+    transform: translateY(-50%) !important;
 }
 
 /* Remove padding from icon container wrappers */
@@ -203,13 +280,17 @@ div.row.agent-workbench-top-bar-right,
     flex-shrink: 0 !important;
 }
 
-/* Settings icon container - remove all padding/margin */
+/* Settings icon container - force full width expansion through all Gradio wrappers */
 #settings-icon-container,
-#settings-icon-container.block,
+#settings-icon-container > .block,
+#settings-icon-container > .block > .html-container,
 .agent-workbench-top-bar-right .block,
 .agent-workbench-top-bar-right > .block {
-    margin: 0 !important;
+    width: 100% !important;
+    display: flex !important;
+    justify-content: flex-end !important;
     padding: 0 !important;
+    margin: 0 !important;
 }
 
 /* Icon button */
@@ -231,6 +312,13 @@ div.row.agent-workbench-top-bar-right,
 
     padding: 0;
     color: var(--awb-text-secondary);
+}
+
+/* Ensure settings icon has no right margin/padding */
+#settings-icon .agent-workbench-icon-btn,
+.agent-workbench-top-bar-right .agent-workbench-icon-btn {
+    margin-right: 0 !important;
+    padding-right: 0 !important;
 }
 
 .agent-workbench-icon-btn:hover {
@@ -326,29 +414,137 @@ div.row.agent-workbench-top-bar-right,
 }
 
 /* ============================================
-   SIDEBAR
+   SIDEBAR (Ollama Design)
    ============================================ */
 
-.sidebar-parent {
+/* Sidebar container - fixed 250px width (compact, fits New Chat button) */
+#conv-sidebar-container {
+    flex: 0 0 250px !important;
+    min-width: 250px !important;
+    max-width: 250px !important;
+    background: white !important;
+    border-right: 1px solid #e5e7eb !important;
+    padding: 16px !important;
+}
+
+/* Sidebar top bar - mirrors chat top bar height and padding */
+.sidebar-top-bar {
+    min-height: 48px !important;
+    padding: var(--space-md) !important;
+    align-items: center !important;
+}
+
+/* Hide sidebar initially (starts with CSS class conv-sidebar-hidden) */
+#conv-sidebar-container.conv-sidebar-hidden {
     display: none !important;
 }
 
-.sidebar.svelte-1hez9vf {
+/* Hide top bar new chat icon when sidebar is open */
+.hidden-when-sidebar-open {
     display: none !important;
 }
 
+/* New Chat Button - Ollama style (inside sidebar top bar) */
+.sidebar-new-chat-btn {
+    width: 100% !important;
+    background: #f3f4f6 !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 12px 16px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    color: #111827 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    transition: background 0.2s ease !important;
+}
+
+.sidebar-new-chat-btn:hover {
+    background: #e5e7eb !important;
+}
+
+.sidebar-new-chat-btn img {
+    width: 18px !important;
+    height: 18px !important;
+    opacity: 0.7;
+}
+
+/* Recent Chats Heading - Date grouping style */
+#conv-sidebar-container h2 {
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    color: #6b7280 !important;
+    text-transform: uppercase !important;
+    margin: 16px 0 8px 0 !important;
+    padding: 0 !important;
+}
+
+/* Conversation List (gr.Dataset) - Ollama simple list style */
+#conv-list {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+}
+
+#conv-list .wrap {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+}
+
+/* Individual conversation items */
+#conv-list .grid-wrap {
+    gap: 2px !important;
+}
+
+#conv-list button {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 6px !important;
+    padding: 8px 16px !important;
+    text-align: left !important;
+    font-size: 14px !important;
+    color: #333333 !important;
+    transition: background 0.15s ease !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    width: 100% !important;
+}
+
+#conv-list button:hover {
+    background: #f3f4f6 !important;
+}
+
+#conv-list button:active,
+#conv-list button.selected {
+    background: #e5e7eb !important;
+}
+
+/* Clear History Button - Subtle styling */
+#conv-sidebar-container button:has(span:contains("Clear History")) {
+    margin-top: auto;
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+    color: #6b7280 !important;
+    background: transparent !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 6px !important;
+    transition: all 0.15s ease !important;
+}
+
+#conv-sidebar-container button:has(span:contains("Clear History")):hover {
+    background: #f9fafb !important;
+    color: #ef4444 !important;
+    border-color: #fecaca !important;
+}
+
+/* Hide Gradio's default sidebar collapse button */
 .sidebar button[aria-label="Close sidebar"],
 .sidebar .collapse-button,
 button.close-sidebar {
     display: none !important;
-}
-
-.sidebar-parent.sidebar-open {
-    display: flex !important;
-}
-
-.sidebar.svelte-1hez9vf.sidebar-open {
-    display: flex !important;
 }
 
 /* ============================================

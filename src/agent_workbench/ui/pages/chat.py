@@ -77,30 +77,34 @@ def render(
         storage_key="agent_workbench_conversations_list",
     )
 
-    # Render sidebar if enabled
+    # Sidebar component references (initialized outside, rendered inside Row)
     sidebar_visible = None
+    sidebar_col = None
     collapse_btn = None
     conv_list = None
     clear_storage_btn = None
     sidebar_new_chat_btn = None  # New chat button inside sidebar
-    if config.get("show_conv_browser", False):
-        (
-            sidebar_visible,
-            conv_list,
-            sidebar_new_chat_btn,  # Button inside sidebar
-            collapse_btn,
-            clear_storage_btn,
-        ) = render_sidebar(config, user_state)
 
-    # Main layout
+    # Main layout - two-column structure (sidebar + chat)
     with gr.Row():
-        # Main chat area
-        with gr.Column(scale=12, elem_classes=["agent-workbench-chat-container"]):
+        # Sidebar column (hidden by default, slides in from left)
+        if config.get("show_conv_browser", False):
+            (
+                sidebar_visible,
+                sidebar_col,
+                conv_list,
+                sidebar_new_chat_btn,
+                collapse_btn,
+                clear_storage_btn,
+            ) = render_sidebar(config, user_state)
+
+        # Main chat area (scale=4 to allow sidebar push behavior)
+        with gr.Column(scale=4, elem_classes=["agent-workbench-chat-container"]):
             # Top icon bar (now inside chat container for automatic alignment)
             with gr.Row(elem_classes=["agent-workbench-top-bar"]):
-                # Left side: Sidebar toggle + New chat
+                # Left side: Sidebar toggle + New chat icon
                 with gr.Row(elem_classes=["agent-workbench-top-bar-left"]):
-                    # Sidebar toggle button (always visible) - uses SVG sprite
+                    # Sidebar toggle button (always visible)
                     _sidebar_toggle_btn = gr.HTML(  # noqa: F841
                         value=(
                             '<div class="agent-workbench-icon-btn" '
@@ -112,6 +116,7 @@ def render(
                     )
 
                     # New chat button (visible when sidebar closed) - uses SVG sprite
+                    # When sidebar opens, this hides and New Chat appears in sidebar
                     _new_chat_btn = gr.HTML(  # noqa: F841
                         value=(
                             '<div class="agent-workbench-icon-btn" '

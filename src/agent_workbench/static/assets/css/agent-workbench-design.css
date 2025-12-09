@@ -160,7 +160,7 @@ body {
 /* Task 4.2.2: Centered Chat Container */
 .agent-workbench-chat-container {
     max-width: 800px;
-    margin: 0 auto;
+    margin: 0;  /* Removed 'auto' to allow sidebar push behavior */
     padding: var(--space-4xl) var(--space-xl);
     min-height: 100vh;
     display: flex;
@@ -284,28 +284,12 @@ gradio-app nav {
 /* Phase 4.2: Sidebar starts hidden, toggled via JavaScript */
 
 /* Hide Gradio's sidebar on initial load - !important needed to override Gradio */
-.sidebar-parent {
-    display: none !important;
-}
-
-.sidebar.svelte-1hez9vf {
-    display: none !important;
-}
-
+/* Sidebar styling - using gr.Column with native visibility toggling */
 /* Hide the sidebar collapse button (arrow) that Gradio adds */
 .sidebar button[aria-label="Close sidebar"],
 .sidebar .collapse-button,
 button.close-sidebar {
     display: none !important;
-}
-
-/* When sidebar is open (controlled by JS), show it - higher specificity wins */
-.sidebar-parent.sidebar-open {
-    display: flex !important;
-}
-
-.sidebar.svelte-1hez9vf.sidebar-open {
-    display: flex !important;
 }
 
 /* ===== TOP ICON BAR ===== */

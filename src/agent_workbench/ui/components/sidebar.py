@@ -14,6 +14,7 @@ import gradio as gr
 
 def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
     Optional[gr.State],
+    Optional[gr.Column],
     Optional[gr.Dataset],
     Optional[gr.Button],
     Optional[gr.Button],
@@ -27,7 +28,7 @@ def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
         user_state: User session state
 
     Returns:
-        Tuple of (sidebar_visible, conv_list, new_chat_btn,
+        Tuple of (sidebar_visible, sidebar_col, conv_list, new_chat_btn,
                  collapse_btn, clear_storage_btn)
 
     Feature Flag:
@@ -37,14 +38,22 @@ def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
 
     # Check if sidebar should be rendered
     if not config.get("show_conv_browser", False):
-        return None, None, None, None, None
+        return None, None, None, None, None, None
 
     # Sidebar visibility state - CLOSED by default (Phase 4.2)
     sidebar_visible = gr.State(value=False)
 
-    # Note: visible=True so it's in DOM, but hidden via CSS display:none initially
-    with gr.Sidebar(position="left", elem_id="conv-sidebar-container", visible=True):
-        # New Chat button with icon (Phase 4.2: visible when sidebar open)
+    # Using gr.Column for sidebar to enable push behavior (not overlay)
+    # Designer's recommendation: scale=1, min_width=250
+    # Note: visible=True so it's in DOM, we hide it with CSS initially (display:none)
+    with gr.Column(
+        scale=1,
+        min_width=250,
+        elem_id="conv-sidebar-container",
+        visible=True,
+        elem_classes=["conv-sidebar-hidden"],  # CSS class for initial hidden state
+    ) as sidebar_col:
+        # New Chat button with icon
         new_chat_btn = gr.Button(
             "New Chat",
             icon="/static/icons/svg/add_chat_icon_24.svg",
@@ -88,6 +97,7 @@ def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
 
     return (
         sidebar_visible,
+        sidebar_col,  # Return column reference for visibility toggling
         conv_list,
         new_chat_btn,
         None,  # collapse_btn removed - sidebar toggle in top bar now

@@ -10,17 +10,18 @@
 
 1. [The Three-Tier Customization Framework](#the-three-tier-customization-framework)
 2. [State-Dependent UI Components](#state-dependent-ui-components)
-3. [gr.HTML vs gr.Button for Icons](#grhtml-vs-grbutton-for-icons)
-4. [CSS Architecture & Normalization](#css-architecture--normalization)
-5. [Performance & Optimization](#performance--optimization)
-6. [Security Best Practices](#security-best-practices)
-7. [Function Design Best Practices](#function-design-best-practices)
-8. [Testing Patterns](#testing-patterns)
-9. [Clean Code Structure](#clean-code-structure)
-10. [Common Anti-Patterns](#common-anti-patterns)
-11. [Quick Reference](#quick-reference)
-12. [SVG Icons for Web Apps](#svg-icons-for-web-apps)
-13. [Claude Code Chrome DevTools Integration](#claude-code-chrome-devtools-integration)
+3. [Aligning Components with Gradio's Nested Wrappers](#aligning-components-with-gradios-nested-wrappers)
+4. [gr.HTML vs gr.Button for Icons](#grhtml-vs-grbutton-for-icons)
+5. [CSS Architecture & Normalization](#css-architecture--normalization)
+6. [Performance & Optimization](#performance--optimization)
+7. [Security Best Practices](#security-best-practices)
+8. [Function Design Best Practices](#function-design-best-practices)
+9. [Testing Patterns](#testing-patterns)
+10. [Clean Code Structure](#clean-code-structure)
+11. [Common Anti-Patterns](#common-anti-patterns)
+12. [Quick Reference](#quick-reference)
+13. [SVG Icons for Web Apps](#svg-icons-for-web-apps)
+14. [Claude Code Chrome DevTools Integration](#claude-code-chrome-devtools-integration)
 
 ---
 
@@ -288,6 +289,179 @@ def respond_with_processing(message, history):
 - ✅ Want to show intermediate states
 - ✅ Streaming responses
 - ❌ Instant operations (use simple returns)
+
+---
+
+## Aligning Components with Gradio's Nested Wrappers
+
+**Problem:** Gradio wraps every component in multiple nested `div` layers (`.block`, `.html-container`, `.prose`, etc.) that shrink-wrap content by default, preventing edge-aligned layouts.
+
+**Symptom:** When using `justify-content: flex-end` to right-align a component, it stops short of the container's edge despite removing padding and margins.
+
+### The Root Cause
+
+```
+Parent Container (800px)
+  └── gr.Row wrapper (shrink-wraps to content width!)
+      └── gr.HTML wrapper (also shrinks!)
+          └── Your icon (40px)
+              Result: Icon aligned to right edge of wrapper, NOT parent
+```
+
+Even with `justify-content: flex-end`, the icon only aligns to its **immediate parent's edge**, not the ultimate container's edge. If intermediate wrappers shrink-wrap, there's a gap.
+
+### The Solution: Cascading Width & Alignment
+
+Force **every wrapper layer** to expand to 100% width and cascade the alignment down:
+
+```css
+/* 1. Make the group container expand to fill parent */
+.agent-workbench-top-bar-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+
+    /* Force full width expansion */
+    width: 100%;
+    flex-grow: 1;
+}
+
+/* 2. Force all Gradio-generated wrappers to expand */
+#settings-icon-container,
+#settings-icon-container > .block,
+#settings-icon-container > .block > .html-container {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* 3. Ensure the icon itself has no right spacing */
+.agent-workbench-top-bar-right .agent-workbench-icon-btn {
+    margin-right: 0 !important;
+    padding-right: 0 !important;
+}
+```
+
+### Why This Works
+
+**Cascading Full Width:**
+- Each wrapper expands to match its parent's width (100%)
+- `justify-content: flex-end` at each level pushes content rightward
+- The icon reaches the absolute right edge of the top-level container
+
+**Visual Flow:**
+```
+Parent Container (800px, padding: 20px → content: 760px)
+  └── .top-bar-right (760px, flex-end) ← width: 100%
+      └── #settings-icon-container (760px, flex-end) ← width: 100%
+          └── .block (760px, flex-end) ← width: 100%
+              └── Icon (40px, margin-right: 0)
+                  Result: Icon at exactly 760px - 40px = 720px from left
+                          = flush with right edge!
+```
+
+### Real-World Example: Top Bar Icon Alignment
+
+**Context:** Aligning a settings icon with the right edge of a chat input bar, both inside a padded container.
+
+**Python (Gradio):**
+```python
+with gr.Column(elem_classes=["agent-workbench-chat-container"]):
+    # Top bar with left and right icon groups
+    with gr.Row(elem_classes=["agent-workbench-top-bar"]):
+        # Left group
+        with gr.Row(elem_classes=["agent-workbench-top-bar-left"]):
+            sidebar_toggle = gr.Button(icon="/icons/sidebar.svg")
+            new_chat = gr.Button(icon="/icons/new-chat.svg")
+
+        # Right group - needs edge alignment
+        with gr.Row(elem_classes=["agent-workbench-top-bar-right"]):
+            settings = gr.HTML(
+                value='<div class="agent-workbench-icon-btn">...</div>',
+                elem_id="settings-icon-container"
+            )
+```
+
+**CSS (from above solution):**
+```css
+/* Container has padding that defines content boundaries */
+.agent-workbench-chat-container {
+    max-width: 800px;
+    padding: var(--space-4xl) var(--space-xl);  /* 20px horizontal */
+}
+
+/* Top bar matches container width */
+.agent-workbench-top-bar {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Left group aligns to left naturally */
+.agent-workbench-top-bar-left {
+    display: flex;
+    justify-content: flex-start;
+}
+
+/* Right group: apply cascading solution */
+.agent-workbench-top-bar-right {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+    flex-grow: 1;
+}
+
+/* Force all wrappers to expand (the key!) */
+#settings-icon-container,
+#settings-icon-container > .block,
+#settings-icon-container > .block > .html-container {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+```
+
+### When to Use This Pattern
+
+✅ **Use when:**
+- Aligning components to container edges (not just relative positioning)
+- Working with `gr.Row`, `gr.Column` that contain custom HTML
+- Need pixel-perfect alignment across responsive breakpoints
+- Fighting Gradio's default shrink-wrap behavior
+
+❌ **Don't use when:**
+- Simple centering (use `justify-content: center` without width forcing)
+- Left alignment (works naturally without intervention)
+- You control the entire HTML structure (use simpler flexbox)
+
+### Alternative: Negative Margin (Hacky)
+
+If cascading width doesn't work due to other constraints:
+
+```css
+/* Push element right by compensating for gap */
+.component-wrapper {
+    margin-right: -8px;  /* Measure gap in DevTools first */
+}
+```
+
+⚠️ **Warning:** Fragile, breaks on different screen sizes. Use only as last resort.
+
+### Debugging Checklist
+
+When edge alignment fails:
+
+1. **Inspect wrapper hierarchy:** Use DevTools to identify all div layers
+2. **Check computed width:** Each wrapper should show `width: 100%` or full pixel width
+3. **Verify flexbox:** Each layer with `display: flex` needs explicit `width`
+4. **Look for padding/margin:** Even 1px can cause misalignment
+5. **Test responsive:** Check alignment at different viewport widths
+
+**DevTools Tip:** Right-click element → Inspect → Styles tab → Filter for "width", "padding", "margin"
 
 ---
 
