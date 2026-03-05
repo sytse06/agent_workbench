@@ -24,10 +24,7 @@ from .api.database import get_session
 from .api.routes import (
     agent_configs,
     chat_workflow,
-    conversations,
-    files,
     health,
-    messages,
     models,
     share,
     simple_chat,
@@ -526,9 +523,6 @@ app.include_router(simple_chat.router, prefix="/api/v1")
 app.include_router(share.router)
 
 # Other routes
-app.include_router(files.router, prefix="/api/v1")  # File upload/download
-app.include_router(conversations.router)
-app.include_router(messages.router)
 app.include_router(models.router)
 app.include_router(agent_configs.router)
 
