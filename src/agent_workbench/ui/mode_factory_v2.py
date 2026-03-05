@@ -176,11 +176,23 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
     # Load custom CSS directly - @import doesn't work in Gradio's inline styles
     # Must load tokens.css first for CSS variables, then styles.css
     css_dir = static_dir / "assets" / "css"
-    tokens_css = (css_dir / "tokens.css").read_text() if (css_dir / "tokens.css").exists() else ""
-    styles_css = (css_dir / "styles.css").read_text() if (css_dir / "styles.css").exists() else ""
+    tokens_css = (
+        (css_dir / "tokens.css").read_text()
+        if (css_dir / "tokens.css").exists()
+        else ""
+    )
+    styles_css = (
+        (css_dir / "styles.css").read_text()
+        if (css_dir / "styles.css").exists()
+        else ""
+    )
 
     # Remove @import statements from styles.css since we're loading tokens.css separately
-    styles_css = "\n".join(line for line in styles_css.split("\n") if not line.strip().startswith("@import"))
+    styles_css = "\n".join(
+        line
+        for line in styles_css.split("\n")
+        if not line.strip().startswith("@import")
+    )
 
     demo = gr.Blocks(
         title=config["title"],

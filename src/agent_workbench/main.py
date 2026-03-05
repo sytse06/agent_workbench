@@ -185,9 +185,7 @@ async def inject_google_fonts(request, call_next):
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="{google_fonts_url}" rel="stylesheet">
-</head>""".encode(
-            "utf-8"
-        )
+</head>""".encode("utf-8")
 
         # Replace </head> with fonts + </head>
         modified_body = body.replace(b"</head>", google_fonts_link)

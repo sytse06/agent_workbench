@@ -12,9 +12,6 @@ from typing import Any, Dict, Optional, Tuple
 import gradio as gr
 
 
-
-
-
 def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
     Optional[gr.State],
     Optional[gr.Column],
@@ -62,10 +59,10 @@ def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
         gr.HTML(
             value=(
                 '<div class="sidebar-new-chat-visual" '
-                'onclick="document.querySelector(\'.sidebar-new-chat-btn\').click()">'
+                "onclick=\"document.querySelector('.sidebar-new-chat-btn').click()\">"
                 '<svg class="icon"><use href="/static/icons/sprite.svg#new-chat"/></svg>'
-                '<span>New Chat</span>'
-                '</div>'
+                "<span>New Chat</span>"
+                "</div>"
             )
         )
 

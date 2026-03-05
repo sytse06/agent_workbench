@@ -65,24 +65,20 @@ def create_settings_page(
                     gr.Markdown("### 🔐 Authentication")
 
                     if user_id:
-                        gr.HTML(
-                            f"""
+                        gr.HTML(f"""
                             <div class='success'>
                                 ✅ Signed in<br>
                                 <strong>User ID:</strong> {user_id[:8]}...
                             </div>
-                        """
-                        )
+                        """)
                         logout_btn = gr.Button("Sign Out", variant="secondary")
                     else:
-                        gr.HTML(
-                            """
+                        gr.HTML("""
                             <div class='info'>
                                 ℹ️ Not signed in - using anonymous session<br>
                                 <small>Sign in to save settings and history</small>
                             </div>
-                        """
-                        )
+                        """)
                         # TODO: Wire up login/register handlers in Phase 2.2
                         _login_btn = gr.Button("Sign In", variant="primary")
                         _register_btn = gr.Button("Create Account", variant="secondary")
@@ -101,14 +97,12 @@ def create_settings_page(
                 # Data management
                 with gr.Group(elem_classes=["setting-section"]):
                     gr.Markdown("### 📦 Data Management")
-                    gr.HTML(
-                        """
+                    gr.HTML("""
                         <div class='info'>
                             <strong>Export Settings:</strong> Coming in Phase 2.2<br>
                             <strong>Delete Account:</strong> Contact support
                         </div>
-                    """
-                    )
+                    """)
 
             # ============================================================
             # MODELS TAB
@@ -255,13 +249,11 @@ def create_settings_page(
                         info="Advanced web scraping and content extraction",
                     )
 
-                    gr.HTML(
-                        """
+                    gr.HTML("""
                         <div class='warning'>
                             ⚠️ Experimental features may be unstable
                         </div>
-                    """
-                    )
+                    """)
 
                 save_advanced_btn = gr.Button(
                     "Save Advanced Settings", variant="primary"
