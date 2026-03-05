@@ -108,7 +108,9 @@ def render(
                         value=(
                             '<div class="agent-workbench-icon-btn" '
                             'id="sidebar-toggle-btn" aria-label="Toggle Sidebar">'
-                            '<svg class="icon"><use href="/static/icons/sprite.svg#sidebar"/></svg>'
+                            '<svg class="icon">'
+                            '<use href="/static/icons/sprite.svg#sidebar"/>'
+                            "</svg>"
                             "</div>"
                         ),
                         elem_id="sidebar-toggle-container",
@@ -120,7 +122,9 @@ def render(
                         value=(
                             '<div class="agent-workbench-icon-btn" '
                             'id="new-chat-btn" aria-label="New Chat">'
-                            '<svg class="icon"><use href="/static/icons/sprite.svg#new-chat"/></svg>'
+                            '<svg class="icon">'
+                            '<use href="/static/icons/sprite.svg#new-chat"/>'
+                            "</svg>"
                             "</div>"
                         ),
                         elem_id="new-chat-container",
@@ -133,7 +137,9 @@ def render(
                         value=(
                             '<div class="agent-workbench-icon-btn" '
                             'id="settings-icon" aria-label="Settings">'
-                            '<svg class="icon"><use href="/static/icons/sprite.svg#settings"/></svg>'
+                            '<svg class="icon">'
+                            '<use href="/static/icons/sprite.svg#settings"/>'
+                            "</svg>"
                             "</div>"
                         ),
                         elem_id="settings-icon-container",
@@ -179,7 +185,8 @@ def render(
                 )
 
                 # Submit button (Task 4.3.5: three states - disabled/active/processing)
-                # Note: Icon applied via CSS background-image since gr.Button(icon=) doesn't support data URIs
+                # Icon applied via CSS background-image
+                # (gr.Button icon= doesn't support data URIs)
                 submit_btn = gr.Button(
                     value="",
                     interactive=False,  # Start disabled

@@ -187,7 +187,7 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
         else ""
     )
 
-    # Remove @import statements from styles.css since we're loading tokens.css separately
+    # Remove @import statements (tokens.css loaded separately)
     styles_css = "\n".join(
         line
         for line in styles_css.split("\n")
@@ -347,19 +347,34 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
                     );
                     let sidebarOpen = false;
 
-                    console.log('[Sidebar] Toggle button:', sidebarToggleBtn);
-                    console.log('[Sidebar] Column element:', sidebarCol);
-                    console.log('[Sidebar] New chat button:', topBarNewChatBtn);
-                    console.log('[Sidebar] New chat button classes:', topBarNewChatBtn?.className);
+                    console.log('[Sidebar] Toggle:', sidebarToggleBtn);
+                    console.log('[Sidebar] Column:', sidebarCol);
+                    console.log('[Sidebar] NewChat:', topBarNewChatBtn);
+                    console.log(
+                        '[Sidebar] NewChat classes:',
+                        topBarNewChatBtn?.className
+                    );
 
                     // Debug: Check initial sidebar state
-                    console.log('[Sidebar] Initial sidebar classes:', sidebarCol?.className);
-                    console.log('[Sidebar] Has conv-sidebar-hidden class:', sidebarCol?.classList.contains('conv-sidebar-hidden'));
+                    console.log(
+                        '[Sidebar] Classes:', sidebarCol?.className
+                    );
+                    console.log(
+                        '[Sidebar] Hidden:',
+                        sidebarCol?.classList.contains(
+                            'conv-sidebar-hidden'
+                        )
+                    );
 
-                    // Initialize: Ensure new chat icon is visible when sidebar is closed
+                    // Ensure new chat icon visible when sidebar closed
                     if (topBarNewChatBtn) {
-                        topBarNewChatBtn.classList.remove('hidden-when-sidebar-open');
-                        console.log('[Sidebar] Initial state: new chat icon visible, classes:', topBarNewChatBtn.className);
+                        topBarNewChatBtn.classList.remove(
+                            'hidden-when-sidebar-open'
+                        );
+                        console.log(
+                            '[Sidebar] Init: visible,',
+                            topBarNewChatBtn.className
+                        );
                     }
 
                     // Create backdrop element for mobile (click to close)
@@ -418,7 +433,10 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
                     if (sidebarToggleBtn && sidebarCol) {
                         console.log('[Sidebar] Wiring up click handler');
                         sidebarToggleBtn.addEventListener('click', () => {
-                            console.log('[Sidebar] ====== Toggle clicked, open:', sidebarOpen, '======');
+                            console.log(
+                                '[Sidebar] Toggle, open:',
+                                sidebarOpen
+                            );
 
                             if (sidebarOpen) {
                                 closeSidebar();
@@ -427,9 +445,15 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
                             }
                         });
                     } else {
-                        console.warn('[Sidebar] Could not find elements - toggle button or sidebar column missing');
-                        console.warn('[Sidebar] sidebarToggleBtn:', sidebarToggleBtn);
-                        console.warn('[Sidebar] sidebarCol:', sidebarCol);
+                        console.warn(
+                            '[Sidebar] Missing elements'
+                        );
+                        console.warn(
+                            '[Sidebar] toggle:', sidebarToggleBtn
+                        );
+                        console.warn(
+                            '[Sidebar] col:', sidebarCol
+                        );
                     }
 
                     // Settings icon click
@@ -458,63 +482,83 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
                         });
                     }
 
-                    // MOBILE FIX: Remove main element padding on mobile to allow full-width top bar
+                    // MOBILE FIX: Full-width layout
                     if (window.innerWidth <= 768) {
-                        const main = document.querySelector('main.fillable');
+                        const main = document.querySelector(
+                            'main.fillable'
+                        );
                         if (main) {
                             main.style.paddingLeft = '0';
                             main.style.paddingRight = '0';
-                            console.log('[Mobile] Removed main padding for full-width layout');
                         }
 
-                        // MOBILE FIX: Remove padding/margin from component-16 to eliminate left offset
-                        const component16 = document.querySelector('#component-16');
-                        if (component16) {
-                            component16.style.paddingLeft = '0';
-                            component16.style.paddingRight = '0';
-                            component16.style.marginLeft = '0';
-                            component16.style.marginRight = '0';
-                            console.log('[Mobile] Removed component-16 padding/margin');
+                        // Remove padding/margin from component-16
+                        const c16 = document.querySelector(
+                            '#component-16'
+                        );
+                        if (c16) {
+                            c16.style.paddingLeft = '0';
+                            c16.style.paddingRight = '0';
+                            c16.style.marginLeft = '0';
+                            c16.style.marginRight = '0';
                         }
 
-                        // MOBILE FIX: Position top bar at left edge
-                        const topBar = document.querySelector('#component-17');
+                        // Position top bar at left edge
+                        const topBar = document.querySelector(
+                            '#component-17'
+                        );
                         if (topBar) {
                             topBar.style.marginLeft = '0';
                             topBar.style.marginRight = '0';
                             topBar.style.position = 'relative';
                             topBar.style.left = '0';
-                            console.log('[Mobile] Positioned top bar at left edge');
                         }
 
-                        // MOBILE FIX: Constrain settings icon container width
-                        const settingsContainer = document.querySelector('#settings-icon-container');
-                        if (settingsContainer) {
-                            settingsContainer.style.maxWidth = '48px';
-                            settingsContainer.style.width = 'auto';
-                            console.log('[Mobile] Constrained settings icon container width');
+                        // Constrain settings icon width
+                        const sc = document.querySelector(
+                            '#settings-icon-container'
+                        );
+                        if (sc) {
+                            sc.style.maxWidth = '48px';
+                            sc.style.width = 'auto';
                         }
 
-                        // MOBILE FIX: Remove padding from settings icon HTML wrapper
-                        const htmlContainer = document.querySelector('#settings-icon-container .html-container');
-                        if (htmlContainer) {
-                            htmlContainer.style.padding = '0';
+                        // Remove settings icon HTML padding
+                        const hc = document.querySelector(
+                            '#settings-icon-container '
+                            + '.html-container'
+                        );
+                        if (hc) {
+                            hc.style.padding = '0';
                         }
 
-                        // MOBILE FIX: Set input bar padding to 10px on both sides
-                        // Use setTimeout to ensure it applies after Gradio's CSS
+                        // Input bar padding (after Gradio CSS)
                         setTimeout(() => {
-                            const component25 = document.querySelector('#component-25');
-                            const component26 = document.querySelector('#component-26');
-                            if (component25) {
-                                component25.style.setProperty('padding-left', '10px', 'important');
-                                component25.style.setProperty('padding-right', '10px', 'important');
-                                console.log('[Mobile] Set component-25 padding to 10px with !important');
+                            const c25 = document.querySelector(
+                                '#component-25'
+                            );
+                            const c26 = document.querySelector(
+                                '#component-26'
+                            );
+                            if (c25) {
+                                c25.style.setProperty(
+                                    'padding-left', '10px',
+                                    'important'
+                                );
+                                c25.style.setProperty(
+                                    'padding-right', '10px',
+                                    'important'
+                                );
                             }
-                            if (component26) {
-                                component26.style.setProperty('padding-left', '10px', 'important');
-                                component26.style.setProperty('padding-right', '10px', 'important');
-                                console.log('[Mobile] Set component-26 padding to 10px with !important');
+                            if (c26) {
+                                c26.style.setProperty(
+                                    'padding-left', '10px',
+                                    'important'
+                                );
+                                c26.style.setProperty(
+                                    'padding-right', '10px',
+                                    'important'
+                                );
                             }
                         }, 100);
                     }
