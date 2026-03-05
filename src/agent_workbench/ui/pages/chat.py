@@ -40,14 +40,13 @@ def svg_to_data_uri(svg_path: str) -> str:
     svg_file = Path(__file__).parent.parent.parent / "static" / svg_path
     svg_content = svg_file.read_bytes()  # Read as bytes for base64
     # Base64 encode the SVG content (like image data URIs)
-    encoded = base64.b64encode(svg_content).decode('utf-8')
+    encoded = base64.b64encode(svg_content).decode("utf-8")
     return f"data:image/svg+xml;base64,{encoded}"
 
 
 # Load icons as data URIs at module level (replicating Gradio's built-in icon pattern)
 SUBMIT_ICON_DATA_URI = svg_to_data_uri("/static/icons/svg/submit_icon_24.svg")
 PROCESSING_ICON_DATA_URI = svg_to_data_uri("/static/icons/svg/processing_icon_24.svg")
-
 
 
 def render(
@@ -147,7 +146,7 @@ def render(
                     'alt="Agent Workbench Logo" class="logo-light">'
                     '<img src="/static/icons/logo_seo_coach_inverted.png" '
                     'alt="Agent Workbench Logo" class="logo-dark">'
-                    '</div>'
+                    "</div>"
                 ),
                 elem_classes=["agent-workbench-logo-container"],
             )

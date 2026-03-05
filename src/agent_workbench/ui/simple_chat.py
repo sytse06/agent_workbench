@@ -93,16 +93,14 @@ def create_simple_chat_app():
         title="Simple Chat - Direct OpenRouter", theme=gr.themes.Soft()
     ) as app:
 
-        gr.Markdown(
-            """
+        gr.Markdown("""
         # 🚀 Simple Chat - Direct OpenRouter Integration
 
         **Configuration:**
         - Provider: OpenRouter
         - Model: GPT-4o-mini (fastest: ~1.0s response)
         - Direct API: No complex workflows
-        """
-        )
+        """)
 
         # Chat interface
         chatbot = gr.Chatbot(label="Chat", height=400, show_label=True)
@@ -129,14 +127,12 @@ def create_simple_chat_app():
         clear_btn.click(fn=lambda: ([], ""), outputs=[chatbot, msg])
 
         # Status info
-        gr.Markdown(
-            """
+        gr.Markdown("""
         ---
         **Status:** Direct connection to `/api/v1/chat/direct`
         **Expected response time:** ~1.0 seconds
         **No complex workflows:** Just you → API → AI response
-        """
-        )
+        """)
 
     return app
 
