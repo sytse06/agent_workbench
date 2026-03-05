@@ -1,4 +1,4 @@
-FROM python:3.10
+FROM python:3.11
 
 # Set working directory
 WORKDIR /app
@@ -12,9 +12,8 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# CRITICAL: Ensure Gradio 5.x is installed (overrides any default HF Spaces Gradio 4.x)
-# This must come AFTER requirements.txt to ensure version compatibility
-RUN pip install --no-cache-dir --upgrade 'gradio>=5.0.0'
+# Pin Gradio 5.x — code uses type="messages" and Blocks(css=) which break in Gradio 6
+RUN pip install --no-cache-dir --upgrade 'gradio>=5.0.0,<6.0.0'
 
 # Install HF Spaces specific packages (without downgrading gradio)
 RUN pip install --no-cache-dir 'uvicorn>=0.14.0' spaces
