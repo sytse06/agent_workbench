@@ -33,15 +33,9 @@ help:
 	@echo "  make quality-fix         - Auto-fix formatting and linting"
 	@echo "  make pre-commit          - Full pre-commit validation"
 	@echo ""
-	@echo "🌿 Human-Steered Workflow:"
-	@echo "  make arch TASK=CORE-002-name      - Start architecture (human)"
-	@echo "  make feature TASK=CORE-002-name   - Start implementation (AI)"
-	@echo "  make validate TASK=CORE-002-name  - Check boundaries"
-	@echo "  make complete TASK=CORE-002-name  - Merge to develop"
-	@echo ""
-	@echo "🧪 Staging Workflow:"
-	@echo "  make staging-deploy               - Full staging deployment"
-	@echo "  make verify-staging               - Comprehensive staging tests"
+	@echo "🔀 Pull Request:"
+	@echo "  make pr                           - Run checks, push, create PR"
+	@echo "  make pr BODY=path/to/desc.md      - PR with description from file"
 	@echo ""
 	@echo "🚀 Running Application Modes:"
 	@echo "  Agent Workbench (Technical Mode):"
@@ -530,6 +524,50 @@ pre-commit:
 	@$(MAKE) quality-check
 	@$(MAKE) test
 	@echo -e "$(GREEN)✅ All pre-commit checks passed$(NC)"
+
+# Pull Request workflow
+pr:
+	@echo -e "$(CYAN)🔀 Pull Request Workflow$(NC)"
+	@echo "========================"
+	@echo ""
+	@# 1. Verify not on main
+	@current_branch=$$(git branch --show-current); \
+	if [ "$$current_branch" = "main" ]; then \
+		echo -e "$(RED)❌ You're on main. Create a feature branch first:$(NC)"; \
+		echo "  git checkout -b feature/your-feature-name"; \
+		exit 1; \
+	fi; \
+	echo -e "$(BLUE)Branch: $$current_branch$(NC)"
+	@echo ""
+	@# 2. Check for uncommitted changes
+	@if ! git diff --quiet || ! git diff --cached --quiet; then \
+		echo -e "$(RED)❌ You have uncommitted changes. Commit or stash them first.$(NC)"; \
+		git status --short; \
+		exit 1; \
+	fi
+	@# 3. Run pre-commit checks
+	@echo -e "$(BLUE)1. Running pre-commit checks...$(NC)"
+	@$(MAKE) pre-commit
+	@echo ""
+	@# 4. Push to origin
+	@echo -e "$(BLUE)2. Pushing to origin...$(NC)"
+	@current_branch=$$(git branch --show-current); \
+	git push -u origin $$current_branch
+	@echo ""
+	@# 5. Create PR
+	@echo -e "$(BLUE)3. Creating pull request...$(NC)"
+	@current_branch=$$(git branch --show-current); \
+	if [ -n "$(BODY)" ]; then \
+		if [ ! -f "$(BODY)" ]; then \
+			echo -e "$(RED)❌ File not found: $(BODY)$(NC)"; \
+			exit 1; \
+		fi; \
+		gh pr create --base main --head $$current_branch --title "$$current_branch" --body-file "$(BODY)"; \
+	else \
+		gh pr create --base main --head $$current_branch --fill; \
+	fi
+	@echo ""
+	@echo -e "$(GREEN)✅ PR created. Review your diff on GitHub before merging.$(NC)"
 
 # Architecture workflow (keeping existing functionality)
 arch:
