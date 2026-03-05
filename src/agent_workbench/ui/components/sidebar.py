@@ -45,7 +45,8 @@ def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
 
     # Using gr.Column for sidebar to enable push behavior (not overlay)
     # Designer's recommendation: scale=1, min_width=250
-    # Note: visible=True so it's in DOM, starts HIDDEN with conv-sidebar-hidden class (width: 0)
+    # visible=True so it's in DOM, starts HIDDEN via
+    # conv-sidebar-hidden class (width: 0)
     with gr.Column(
         scale=1,
         min_width=250,
@@ -55,12 +56,14 @@ def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
     ) as sidebar_col:
         # New Chat button with icon
         # New Chat button - Visual HTML + Hidden Logic Button pattern
-        # This matches the chat container icon implementation using sprite.svg via <use> tag
+        # Matches chat container icon pattern using sprite.svg
         gr.HTML(
             value=(
                 '<div class="sidebar-new-chat-visual" '
                 "onclick=\"document.querySelector('.sidebar-new-chat-btn').click()\">"
-                '<svg class="icon"><use href="/static/icons/sprite.svg#new-chat"/></svg>'
+                '<svg class="icon">'
+                '<use href="/static/icons/sprite.svg#new-chat"/>'
+                "</svg>"
                 "<span>New Chat</span>"
                 "</div>"
             )
