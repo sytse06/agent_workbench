@@ -1,15 +1,32 @@
-PR cleanup plan
-| **What** | 1-2 sentences: what does this change do? |
-Make a plan with concrete and actionable backlog and PR items (separate files) to move forward with the agent_workbench by assessing wip from all four assessments. 
-| **Why** | 1 sentence: what problem does it solve? |
-Move forward with this project by cutting the slack and focusing on bringing out features step by step. Every feature should deliver or result in working software (at least on local docker container) even when its scope is only cleaning up.
-| **Scope** | Bullet list: what's included. Optionally what's explicitly excluded. |
-- PR-backend-assessment-test.md
-- PR-backend-assessment-fastapi-db.md
-- PR-backend-pydantic-langchain.md
-- PR-backend-assessment-gradio.md
-- Also reflect on optimal sequence of items in backlog to be made
-| **Excluded** | 
-- Writing actual code
-| How to verify it works. |
-Not applicable
+## Summary
+
+- Consolidated all 4 assessments into a sequenced 11-PR cleanup plan across 4 phases
+- Phase 1: Clean baseline (E501, dead tests, smoke tests)
+- Phase 2: Delete ~4,350 lines of dead code across 19 files
+- Phase 3: Fix 8 bugs, externalize JS, strip CSS, add critical tests
+- Phase 4: 12 design decisions to discuss before implementing
+- Every PR results in working software (`make pre-commit` passes, app starts)
+
+## Why
+
+Move forward by cutting slack and delivering working software step by step. The 4 assessments identified 57 backlog items — this plan sequences them into concrete PRs with clear dependencies.
+
+## Scope
+
+Inputs:
+- assessment-fastapi-db.md (17 items)
+- assessment-pydantic-langchain.md (14 items)
+- assessment-gradio.md (18 items)
+- assessment-test-infrastructure.md (8 items)
+
+Deliverable:
+- `docs/project/assessment-cleanup-plan.md` — sequenced PR plan with rationale
+
+Excluded:
+- No code changes
+
+## Test plan
+
+- Not applicable (plan only)
+
+Generated with [Claude Code](https://claude.com/claude-code)
