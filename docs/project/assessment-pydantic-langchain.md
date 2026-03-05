@@ -5,6 +5,50 @@
 
 ---
 
+## Big Picture
+
+The LangChain implementation is over-architected for what it actually does. Strip away all the layers and the production path is:
+
+1. Take user message
+2. Pick a provider, create a ChatModel
+3. Send messages, get response
+4. Save to database
+
+Four steps. But the code routes this through: ConsolidatedWorkbenchService -> WorkflowOrchestrator -> StateGraph (5 nodes) -> ModeDetector -> ModeHandler -> LLMService -> ModelRegistry -> provider factory -> LangChain ChatModel. Plus a Bridge that converts between 3 state representations at every boundary.
+
+**What actually works:**
+- Provider/model init (solid — ModelRegistry is clean)
+- Basic chat persistence (works, but messages stored as JSON blobs instead of using the messages table)
+- Conversation history loading (works, but fragile format assumptions)
+
+**What was attempted but didn't land:**
+- Context/memory — ContextService is entirely `pass` statements
+- Streaming — stubbed, returns nothing
+- Multi-step workflows — StateGraph has 5 nodes but they're essentially a linear pipeline with no real branching logic
+- Agent/tool execution — config storage only, no execution
+
+**The hard truth:** This is a StateGraph workflow engine doing what a single async function could do:
+
+```python
+async def chat(message: str, history: list, provider: str, model: str) -> str:
+    llm = create_model(provider, model)
+    messages = format_history(history) + [HumanMessage(content=message)]
+    response = await llm.ainvoke(messages)
+    save_to_db(conversation_id, message, response.content)
+    return response.content
+```
+
+The complexity isn't earning its keep yet. It would earn its keep with real branching workflows, tool calling, multi-agent coordination, or context retrieval — but those are all Phase 2 stubs.
+
+**Recommendation:** Don't rip it out. The foundation is correct — LangGraph is the right tool for where this project is headed. But acknowledge that right now it's scaffolding around a simple chat function. When cleanup begins after assessment 3/3, the priority should be:
+
+1. Delete the dead code (langgraph_service, workflow_nodes, provider ABCs)
+2. Simplify the state pipeline (one format, not three)
+3. Make context actually work or remove it
+4. Don't add more abstraction layers — add actual features that justify the ones already built
+
+---
+
 ## Executive Summary
 
 **4 competing workflow implementations, only 1 is used.** The production path (consolidated_service -> workflow_orchestrator -> mode_handlers) works correctly, but is surrounded by ~30KB of dead workflow code. Pydantic models have **model shadowing** — the same class name defined in multiple files with different fields, creating import ambiguity. The Bridge pattern works but relies on fragile conventions.
