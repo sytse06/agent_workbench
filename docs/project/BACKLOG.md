@@ -2,13 +2,7 @@
 
 Items move from Later to Next to Now. Each "Now" item becomes a feature branch and a PR.
 
-## Now — Phase 1: Clean Baseline
-
-- [ ] PR-01: Fix E501 violations and enforce full ruff compliance (3 UI files, 27 violations)
-- [ ] PR-02: Delete dead/stub test files (11 files, ~137 tests) — get to 0 failures
-- [ ] PR-03: Add smoke tests + `make test-smoke` target
-
-## Next — Phase 2: Dead Code Removal
+## Now — Phase 2: Dead Code Removal
 
 - [ ] PR-04: Delete dead UI files (app.py, seo_coach_app.py, mode_factory.py, orphaned components)
 - [ ] PR-05: Delete dead routes (context.py, conversations.py, messages.py, files.py)
@@ -55,3 +49,4 @@ Items move from Later to Next to Now. Each "Now" item becomes a feature branch a
 - [x] Backend assessment 3/3: Gradio
 - [x] Backend assessment: test infrastructure
 - [x] Cleanup plan — 11 PRs across 4 phases
+- [x] Phase 1: PR-01 E501 fix (27 violations), PR-02 dead tests (466→324), PR-03 smoke tests (6 tests)
