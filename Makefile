@@ -539,11 +539,28 @@ pr:
 	fi; \
 	echo -e "$(BLUE)Branch: $$current_branch$(NC)"
 	@echo ""
-	@# 2. Check for uncommitted changes
-	@if ! git diff --quiet || ! git diff --cached --quiet; then \
-		echo -e "$(RED)❌ You have uncommitted changes. Commit or stash them first.$(NC)"; \
+	@# 2. Auto-commit PR body file and lockfile if they are the only uncommitted changes
+	@untracked=$$(git ls-files --others --exclude-standard); \
+	modified=$$(git diff --name-only); \
+	all_changes="$$untracked $$modified"; \
+	has_other=false; \
+	for f in $$all_changes; do \
+		case "$$f" in \
+			docs/project/PR-*|uv.lock) ;; \
+			"") ;; \
+			*) has_other=true ;; \
+		esac; \
+	done; \
+	if [ "$$has_other" = "true" ]; then \
+		echo -e "$(RED)❌ You have uncommitted changes beyond PR docs and lockfile. Commit or stash them first.$(NC)"; \
 		git status --short; \
 		exit 1; \
+	fi; \
+	if [ -n "$$untracked$$modified" ]; then \
+		echo -e "$(BLUE)📝 Auto-committing PR docs and lockfile...$(NC)"; \
+		git add $$all_changes; \
+		git commit -m "docs: add PR description and update lockfile"; \
+		echo -e "$(GREEN)✅ Auto-committed$(NC)"; \
 	fi
 	@# 3. Run pre-commit checks
 	@echo -e "$(BLUE)1. Running pre-commit checks...$(NC)"
