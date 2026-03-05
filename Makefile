@@ -27,6 +27,7 @@ help:
 	@echo ""
 	@echo "🧪 Testing & Quality:"
 	@echo "  make test                - Full test suite with coverage"
+	@echo "  make test-smoke          - Smoke tests only (<5s)"
 	@echo "  make test-with-backend   - Auto-start backend + run tests"
 	@echo "  make test-unit-only      - Unit tests only (mocked, no backend)"
 	@echo "  make quality             - Code quality checks (ruff, black, mypy)"
@@ -333,6 +334,11 @@ test-with-backend:
 	@echo -e "$(CYAN)💡 To stop backend: pkill -f uvicorn$(NC)"
 
 # Unit tests without backend dependency
+test-smoke:
+	@echo -e "$(BLUE)🧪 Running smoke tests...$(NC)"
+	@uv run pytest tests/smoke/ -v --tb=short
+	@echo -e "$(GREEN)✅ Smoke tests passed$(NC)"
+
 test-unit-only:
 	@echo -e "$(BLUE)🧪 Running unit tests only (mocked)...$(NC)"
 	@uv run pytest tests/unit/ -v --tb=short
@@ -522,7 +528,8 @@ pre-commit:
 	@echo -e "$(CYAN)🔍 Pre-commit Quality Gate$(NC)"
 	@echo "=========================="
 	@$(MAKE) quality-check
-	@$(MAKE) test
+	@$(MAKE) test-smoke
+	@$(MAKE) test-unit-only
 	@echo -e "$(GREEN)✅ All pre-commit checks passed$(NC)"
 
 # Pull Request workflow
