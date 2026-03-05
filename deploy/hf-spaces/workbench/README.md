@@ -3,8 +3,7 @@ title: Agent Workbench - Technical
 emoji: 🛠️
 colorFrom: blue
 colorTo: purple
-sdk: gradio
-app_file: app.py
+sdk: docker
 pinned: true
 license: mit
 duplicated_from: null

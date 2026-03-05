@@ -3,8 +3,7 @@ title: SEO Coach - Nederland
 emoji: 🚀
 colorFrom: green
 colorTo: blue
-sdk: gradio
-app_file: app.py
+sdk: docker
 pinned: true
 license: mit
 duplicated_from: null
