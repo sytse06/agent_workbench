@@ -28,43 +28,11 @@ def create_settings_page(
     Returns:
         Gradio Blocks interface with Account, Models, Company, Advanced tabs
     """
-    # Load custom CSS with Ubuntu font
+    # Load unified CSS (main.css includes fonts + shared styles)
+    # Plus settings-specific styles
     custom_css = """
-        @import url('/static/assets/css/fonts.css');
-
-        .settings-header {
-            text-align: center;
-            padding: 20px;
-            border-bottom: 1px solid #e0e0e0;
-            margin-bottom: 20px;
-        }
-        .settings-tab {
-            padding: 20px;
-        }
-        .setting-section {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        .success {
-            color: #155724;
-            background: #d4edda;
-            padding: 10px;
-            border-radius: 4px;
-        }
-        .info {
-            color: #0c5460;
-            background: #d1ecf1;
-            padding: 10px;
-            border-radius: 4px;
-        }
-        .warning {
-            color: #856404;
-            background: #fff3cd;
-            padding: 10px;
-            border-radius: 4px;
-        }
+        @import url('/static/assets/css/main.css');
+        @import url('/static/assets/css/settings.css');
     """
 
     with gr.Blocks(

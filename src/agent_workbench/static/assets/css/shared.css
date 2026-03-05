@@ -1,11 +1,20 @@
-"""
-Shared CSS for all modes.
+/**
+ * Shared CSS for Agent Workbench
+ *
+ * This file contains all mode-agnostic styles used across the application.
+ * Mode-specific differences (colors, fonts) are handled via Gradio theme configuration.
+ *
+ * Organization:
+ * - Navigation/Layout
+ * - Page Styles (Chat, Settings)
+ * - Components (Conversation List)
+ * - Responsive Breakpoints
+ */
 
-Mode-specific differences (colors, fonts) are handled via Gradio theme configuration,
-NOT via CSS. This ensures both modes have identical styling with only theme variations.
-"""
+/* ============================================
+   NAVIGATION & LAYOUT
+   ============================================ */
 
-SHARED_CSS = """
 /* Hide Gradio's default route navigation bar (but NOT settings tabs) */
 .gradio-container > nav,
 .gradio-container > .tabs,
@@ -13,6 +22,10 @@ nav a[href^="/?"],
 .header-links {
     display: none !important;
 }
+
+/* ============================================
+   PAGE STYLES
+   ============================================ */
 
 /* Chat page styles */
 .chatbot-container {
@@ -47,6 +60,10 @@ nav a[href^="/?"],
     min-width: 40px;
     padding: 0.5rem;
 }
+
+/* ============================================
+   COMPONENTS - Conversation List
+   ============================================ */
 
 /* Conversation list styling (Dataset component) */
 #conv-list {
@@ -97,7 +114,10 @@ nav a[href^="/?"],
 /* Headers are identified by 📅 emoji in text content */
 /* Note: Non-clickable behavior handled in load_selected_conversation */
 
-/* Responsive layout */
+/* ============================================
+   RESPONSIVE BREAKPOINTS
+   ============================================ */
+
 @media (max-width: 768px) {
     .chatbot-container {
         height: 400px !important;
@@ -115,4 +135,3 @@ nav a[href^="/?"],
         padding: 0.5rem;
     }
 }
-"""

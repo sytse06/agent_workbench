@@ -1,0 +1,767 @@
+/*
+ * Agent Workbench Design Layer
+ *
+ * Visual design implementation based on:
+ * - /design/screenshots/Example_main_screen.png
+ * - /design/screenshots/Example_expanded_sidebar_left.png
+ * - /design/screenshots/Example_settings_screen.png
+ *
+ * This file contains Agent Workbench-specific visual styling.
+ * Functional styles remain in shared.css.
+ *
+ * Created: 2025-01-27
+ * Phase: 4.1 - Foundation & Variables
+ */
+
+/* ===== DESIGN TOKENS ===== */
+
+:root {
+    /* ===== COLORS ===== */
+
+    /* Backgrounds */
+    --awb-bg: #f8f8f8;
+    --awb-surface: #ffffff;
+    --awb-sidebar-bg: #ffffff;
+
+    /* Text */
+    --awb-text-primary: #333333;
+    --awb-text-secondary: #666666;
+    --awb-text-tertiary: #999999;
+    --awb-placeholder: #bbbbbb;
+
+    /* Borders */
+    --awb-border: #e0e0e0;
+    --awb-border-light: #f0f0f0;
+
+    /* Accent colors */
+    --awb-blue: #007AFF;
+    --awb-red: #FF3B30;
+    --awb-green: #34C759;
+    --awb-gray: #8E8E93;
+
+    /* Button states */
+    --awb-btn-disabled: #e0e0e0;
+    --awb-btn-hover: #f5f5f5;
+    --awb-btn-active: #000000;
+
+    /* ===== SPACING ===== */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 12px;
+    --space-lg: 16px;
+    --space-xl: 20px;
+    --space-2xl: 24px;
+    --space-3xl: 32px;
+    --space-4xl: 40px;
+
+    /* ===== TYPOGRAPHY ===== */
+    --font-size-xs: 12px;
+    --font-size-sm: 13px;
+    --font-size-base: 15px;
+    --font-size-lg: 16px;
+    --font-size-xl: 18px;
+
+    /* ===== SHADOWS ===== */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+
+    /* ===== BORDERS ===== */
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-full: 9999px;
+
+    /* ===== TRANSITIONS ===== */
+    --transition-fast: 150ms ease;
+    --transition-base: 250ms ease;
+    --transition-slow: 350ms ease;
+}
+
+/* ===== DARK MODE ===== */
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        /* Dark mode colors */
+        --awb-bg: #1a1a1a;
+        --awb-surface: #2a2a2a;
+        --awb-sidebar-bg: #242424;
+
+        --awb-text-primary: #e0e0e0;
+        --awb-text-secondary: #a0a0a0;
+        --awb-text-tertiary: #707070;
+        --awb-placeholder: #505050;
+
+        --awb-border: #404040;
+        --awb-border-light: #333333;
+
+        --awb-btn-hover: #333333;
+        --awb-btn-disabled: #404040;
+
+        /* Accent colors remain the same for consistency */
+        /* Blue, red, green, gray work well in both modes */
+    }
+}
+
+/* Manual theme overrides */
+body.light-mode {
+    /* Force light theme */
+    --awb-bg: #f8f8f8;
+    --awb-surface: #ffffff;
+    --awb-sidebar-bg: #ffffff;
+
+    --awb-text-primary: #333333;
+    --awb-text-secondary: #666666;
+    --awb-text-tertiary: #999999;
+    --awb-placeholder: #bbbbbb;
+
+    --awb-border: #e0e0e0;
+    --awb-border-light: #f0f0f0;
+
+    --awb-btn-hover: #f5f5f5;
+    --awb-btn-disabled: #e0e0e0;
+    --awb-btn-active: #000000;
+}
+
+body.dark-mode {
+    /* Force dark theme */
+    --awb-bg: #1a1a1a;
+    --awb-surface: #2a2a2a;
+    --awb-sidebar-bg: #242424;
+
+    --awb-text-primary: #e0e0e0;
+    --awb-text-secondary: #a0a0a0;
+    --awb-text-tertiary: #707070;
+    --awb-placeholder: #505050;
+
+    --awb-border: #404040;
+    --awb-border-light: #333333;
+
+    --awb-btn-hover: #333333;
+    --awb-btn-disabled: #404040;
+    --awb-btn-active: #ffffff;
+}
+
+/* ===== LAYOUT ===== */
+/* Phase 4.2: Main Layout - Centered floating chat design */
+
+/* Task 4.2.1: Page Background */
+body {
+    background: var(--awb-bg);
+    font-family: var(--font-family);
+    /* From fonts.css */
+}
+
+/* Override Gradio default background */
+.gradio-container {
+    background: transparent !important;
+}
+
+/* Task 4.2.2: Centered Chat Container */
+/* Task 4.2.2: Centered Chat Container */
+.agent-workbench-chat-container {
+    flex-grow: 1 !important;
+    /* Take remaining space */
+    width: 100%;
+    /* Start full width */
+    max-width: 100%;
+    /* Allow filling */
+
+    /* Center content within the container */
+    align-items: center;
+
+    margin: 0;
+    padding: var(--space-4xl) var(--space-xl);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xl);
+
+    transition: all var(--transition-base);
+}
+
+/* Responsive adjustments for tablet */
+@media (max-width: 768px) {
+    .agent-workbench-chat-container {
+        padding: var(--space-2xl) var(--space-lg);
+    }
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 480px) {
+    .agent-workbench-chat-container {
+        padding: var(--space-xl) var(--space-md);
+    }
+}
+
+/* Task 4.2.3: Main Logo (Idle State) */
+.agent-workbench-logo {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: var(--space-4xl) 0;
+    opacity: 1;
+    transition: opacity var(--transition-base);
+}
+
+.agent-workbench-logo img {
+    width: 72px !important;
+    height: 72px !important;
+    min-width: 72px !important;
+    min-height: 72px !important;
+    max-width: 72px !important;
+    max-height: 72px !important;
+    object-fit: contain !important;
+    /* Logo from design: logo_72.png */
+}
+
+/* Hidden state (for processing) - implemented in Phase 4.3 */
+.agent-workbench-logo.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Responsive logo sizing */
+@media (max-width: 480px) {
+    .agent-workbench-logo img {
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        min-height: 48px !important;
+        max-width: 48px !important;
+        max-height: 48px !important;
+    }
+}
+
+@media (max-height: 600px) and (orientation: landscape) {
+    .agent-workbench-logo {
+        padding: var(--space-xl) 0;
+    }
+
+    .agent-workbench-logo img {
+        width: 40px !important;
+        height: 40px !important;
+        min-width: 40px !important;
+        min-height: 40px !important;
+        max-width: 40px !important;
+        max-height: 40px !important;
+    }
+}
+
+/* ===== CHAT VISIBILITY TOGGLE ===== */
+/* Hide chatbot initially, show logo */
+/* Show chatbot when it has messages, hide logo */
+
+/* Hide chatbot when empty (initial state) */
+/* Gradio's gr.ChatInterface creates a chatbot that we need to hide when empty */
+.agent-workbench-messages {
+    transition: opacity var(--transition-base), height var(--transition-base);
+}
+
+/* Hide chatbot parent container when it has no messages */
+/* Gradio renders messages with specific structure - hide entire chatbot if empty */
+.agent-workbench-chat-container:has(.agent-workbench-messages:empty) .agent-workbench-messages {
+    display: none;
+}
+
+/* Alternatively target by message count - Gradio adds message elements inside */
+/* If chatbot has no .message children, hide it */
+.agent-workbench-messages:not(:has(*)) {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+}
+
+/* When chatbot is visible (has messages), hide the logo */
+.agent-workbench-chat-container:has(.agent-workbench-messages:not(:empty)) .agent-workbench-logo {
+    display: none;
+}
+
+/* ===== GRADIO NAVIGATION HIDE ===== */
+/* Phase 4.2: Hide multipage navigation bar (Home/Settings tabs) */
+
+/* Hide Gradio's default tab navigation */
+.gradio-container .tab-nav,
+.gradio-container .tabs,
+gradio-app>div>div:first-child>div.tab-nav,
+div[class*="tab-nav"],
+header.svelte-1s6ht9y,
+nav.fillable,
+nav[class*="svelte"],
+gradio-app nav {
+    display: none !important;
+}
+
+/* ===== SIDEBAR ===== */
+/* Phase 4.2: Sidebar starts hidden, toggled via JavaScript */
+
+/* Hide Gradio's sidebar on initial load - !important needed to override Gradio */
+/* Sidebar styling - using gr.Column with native visibility toggling */
+/* Hide the sidebar collapse button (arrow) that Gradio adds */
+.sidebar button[aria-label="Close sidebar"],
+.sidebar .collapse-button,
+button.close-sidebar {
+    display: none !important;
+}
+
+/* Custom Sidebar Container */
+/* Custom Sidebar Container - Push Variant (Margin-left based) */
+.agent-workbench-sidebar {
+    position: relative !important;
+    height: 100vh !important;
+
+    /* Fixed width - stays constant */
+    width: 280px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
+
+    /* Start closed (pulled off-screen) */
+    margin-left: -280px !important;
+
+    background: var(--awb-sidebar-bg) !important;
+    border-right: 1px solid var(--awb-border);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+
+    padding: 0 !important;
+    overflow: hidden !important;
+
+    /* Animate margin for smooth push effect */
+    transition: margin-left var(--transition-base), padding var(--transition-base);
+
+    /* Override Gradio flex behavior */
+    flex-grow: 0 !important;
+    flex-shrink: 0 !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Open state class (toggled via JS) */
+.agent-workbench-sidebar.open {
+    /* Bring back into view */
+    margin-left: 0 !important;
+    padding: var(--space-md) !important;
+}
+
+/* Sidebar Header */
+.sidebar-header {
+    padding-bottom: var(--space-md);
+    margin-bottom: var(--space-sm);
+}
+
+/* New Chat Button - Visual Style */
+.sidebar-new-chat-visual {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: var(--space-sm) !important;
+    padding: var(--space-md) !important;
+    border-radius: var(--radius-md) !important;
+    background: transparent !important;
+    border: 1px solid var(--awb-border) !important;
+    color: var(--awb-text-primary) !important;
+    cursor: pointer;
+    transition: all var(--transition-fast) !important;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+
+.sidebar-new-chat-visual svg {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    color: var(--awb-text-secondary);
+}
+
+.sidebar-new-chat-visual:hover {
+    background: var(--awb-surface) !important;
+    border-color: var(--awb-text-secondary) !important;
+    color: var(--awb-text-primary) !important;
+}
+
+.sidebar-new-chat-visual:hover svg {
+    color: var(--awb-text-primary);
+}
+
+/* Sidebar List */
+.sidebar-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.sidebar-list .table-wrap {
+    border: none !important;
+    box-shadow: none !important;
+}
+
+
+/* ===== TOP ICON BAR ===== */
+/* Phase 4.2: Custom horizontal icon bar (sidebar toggle + new chat + settings) */
+/* Centered layout matching chat container */
+
+.agent-workbench-top-bar {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+
+    max-width: 800px;
+    width: 100%;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: var(--space-md) var(--space-xl);
+    background: transparent;
+
+    pointer-events: none;
+    /* Allow clicks through empty space */
+}
+
+.agent-workbench-top-bar>* {
+    pointer-events: auto;
+    /* Re-enable clicks on buttons */
+}
+
+/* Left side icons container */
+.agent-workbench-top-bar-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+/* Right side icons container */
+.agent-workbench-top-bar-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+/* Icon button base styles */
+.agent-workbench-icon-btn {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-md);
+
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+
+    padding: 0;
+
+    /* Color for SVG icons with fill="currentColor" */
+    color: var(--awb-text-secondary);
+}
+
+.agent-workbench-icon-btn:hover {
+    background: var(--awb-btn-hover);
+    color: var(--awb-text-primary);
+}
+
+.agent-workbench-icon-btn img,
+.agent-workbench-icon-btn svg {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    display: block;
+}
+
+/* Settings icon - icon only (no button styling) */
+.agent-workbench-settings-icon {
+    width: 40px;
+    height: 40px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    cursor: pointer;
+    font-size: 20px;
+    color: var(--awb-text-secondary);
+
+    transition: color var(--transition-fast);
+}
+
+.agent-workbench-settings-icon:hover {
+    color: var(--awb-text-primary);
+}
+
+/* Responsive top bar adjustments */
+@media (max-width: 768px) {
+    .agent-workbench-top-bar {
+        padding: var(--space-sm) var(--space-lg);
+    }
+
+    .agent-workbench-top-bar-left,
+    .agent-workbench-top-bar-right {
+        gap: var(--space-sm);
+    }
+}
+
+@media (max-width: 480px) {
+    .agent-workbench-top-bar {
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .agent-workbench-icon-btn {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+    }
+
+    .agent-workbench-icon-btn img {
+        width: 20px;
+        height: 20px;
+    }
+}
+
+/* ===== HIDE UNWANTED GRADIO ELEMENTS ===== */
+/* Phase 4.2: Hide default Gradio UI elements that don't match design */
+
+/* Note: Submit button removed via submit_btn=None in chat.py - no CSS hiding needed */
+
+/* ===== COMPONENTS ===== */
+/* Individual UI components - implemented in Phases 4.3-4.10 */
+
+/* ===== PHASE 4.3: CHAT INPUT BAR ===== */
+/* gr.Blocks pattern with state-dependent submit button */
+
+/* Task 4.3.1: Input Bar Container */
+/* gr.Row wrapper containing textbox + submit button */
+.agent-workbench-input-bar {
+    position: sticky !important;
+    bottom: var(--space-xl);
+
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+
+    background: var(--awb-surface);
+    border: 1px solid var(--awb-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+
+    padding: var(--space-md) !important;
+
+    display: flex;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    gap: var(--space-md) !important;
+
+    transition: box-shadow var(--transition-fast);
+
+    /* Positioning context for absolute submit button */
+    position: relative !important;
+}
+
+.agent-workbench-input-bar:focus-within {
+    box-shadow: var(--shadow-lg);
+    border-color: var(--awb-blue);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .agent-workbench-input-bar {
+        bottom: var(--space-md);
+        border-radius: var(--radius-md);
+    }
+}
+
+@media (max-width: 480px) {
+    .agent-workbench-input-bar {
+        bottom: var(--space-sm);
+        padding: var(--space-sm) !important;
+    }
+}
+
+/* Task 4.3.3: Message Input Field */
+/* Textbox inside input bar - borderless, flex: 1 */
+.agent-workbench-message-input {
+    flex: 1 1 auto !important;
+    flex-grow: 1 !important;
+
+    /* Remove Gradio defaults */
+    border: none !important;
+    background: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+
+    /* Typography */
+    font-size: var(--font-size-base);
+    color: var(--awb-text-primary);
+    font-family: var(--font-family);
+
+    /* Spacing */
+    padding: 0 !important;
+    min-width: 0 !important;
+}
+
+/* Remove borders from textbox wrapper */
+.agent-workbench-input-bar .agent-workbench-message-input label,
+.agent-workbench-input-bar .agent-workbench-message-input .svelte-173056l {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: var(--space-sm) 0 !important;
+}
+
+/* The actual textarea inside */
+.agent-workbench-input-bar .agent-workbench-message-input textarea {
+    border: none !important;
+    background: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+    padding: var(--space-sm) 0 !important;
+
+    /* Add right padding to prevent text from overlapping the absolute button */
+    /* Button width (32px) + spacing on both sides (12px + 12px) = 56px */
+    padding-right: 56px !important;
+}
+
+.agent-workbench-message-input::placeholder,
+.agent-workbench-input-bar .agent-workbench-message-input textarea::placeholder {
+    color: var(--awb-placeholder);
+}
+
+/* Task 4.3.5: Submit Button (Three States) */
+
+/* State 1: Disabled (empty input) - pale gray */
+/* High specificity to override Gradio's Row flex defaults */
+.agent-workbench-input-bar button.agent-workbench-submit-btn,
+button.agent-workbench-submit-btn.sm,
+.row button.agent-workbench-submit-btn {
+    /* Fixed size - prevent flex growing */
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    max-width: 32px !important;
+    max-height: 32px !important;
+
+    /* Absolute positioning - visually inside input bar */
+    position: absolute !important;
+    right: var(--space-md) !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+
+    /* Icon displayed via background-image with SVG sprite */
+    background-image: url('/static/icons/sprite.svg#submit') !important;
+    background-size: 24px 24px !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+
+    /* Remove from flex flow */
+    flex-grow: 0 !important;
+    flex-shrink: 0 !important;
+    flex-basis: auto !important;
+    flex: none !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+
+    border: none !important;
+    border-radius: var(--radius-full) !important;
+    background-color: var(--awb-btn-disabled) !important;
+
+    cursor: not-allowed;
+    transition: background var(--transition-fast), transform var(--transition-fast), color var(--transition-fast);
+
+    /* Color for SVG icons with fill="currentColor" */
+    color: var(--awb-text-tertiary);
+
+    /* Override any Gradio width calculations */
+    box-sizing: border-box !important;
+}
+
+.agent-workbench-submit-btn img {
+    width: 24px !important;
+    height: 24px !important;
+    object-fit: contain !important;
+    opacity: 0.3;
+    transition: opacity var(--transition-fast);
+}
+
+/* State 2: Active (has input text) - black background */
+button.agent-workbench-submit-btn.active,
+button.agent-workbench-submit-btn[aria-disabled="false"],
+.agent-workbench-input-bar button.agent-workbench-submit-btn.active {
+    border-radius: var(--radius-full) !important;
+    background-color: var(--awb-btn-active) !important;
+    cursor: pointer !important;
+}
+
+button.agent-workbench-submit-btn.active img,
+button.agent-workbench-submit-btn[aria-disabled="false"] img,
+.agent-workbench-input-bar button.agent-workbench-submit-btn.active img {
+    opacity: 1;
+    filter: brightness(0) invert(1);
+    /* White icon on black background */
+}
+
+button.agent-workbench-submit-btn.active:hover,
+button.agent-workbench-submit-btn[aria-disabled="false"]:hover {
+    transform: translateY(-50%) scale(1.05);
+}
+
+button.agent-workbench-submit-btn.active:active,
+button.agent-workbench-submit-btn[aria-disabled="false"]:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+/* State 3: Processing (animated) - rotating icon */
+button.agent-workbench-submit-btn.processing,
+.agent-workbench-input-bar button.agent-workbench-submit-btn.processing {
+    background-color: var(--awb-btn-active) !important;
+    cursor: wait !important;
+    color: #ffffff !important;
+    /* White icon for SVG with fill="currentColor" */
+}
+
+button.agent-workbench-submit-btn.processing img,
+.agent-workbench-input-bar button.agent-workbench-submit-btn.processing img {
+    opacity: 1;
+    animation: spin 1s linear infinite;
+    filter: brightness(0) invert(1);
+    /* White icon */
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+    .agent-workbench-submit-btn {
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        min-height: 28px !important;
+    }
+
+    .agent-workbench-submit-btn img {
+        width: 20px !important;
+        height: 20px !important;
+    }
+}

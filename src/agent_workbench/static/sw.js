@@ -12,7 +12,14 @@ const STATIC_ASSETS = [
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
   '/static/icons/apple-touch-icon.png',
-  '/static/offline.html'
+  '/static/offline.html',
+  // CSS files (unified architecture)
+  '/static/assets/css/main.css',
+  '/static/assets/css/fonts.css',
+  '/static/assets/css/shared.css',
+  '/static/assets/css/agent-workbench-design.css',
+  '/static/assets/css/settings.css',
+  '/static/assets/css/seo-coach.css'
 ];
 
 // Install event - cache static assets

@@ -27,21 +27,17 @@ def create_seo_coach_app() -> gr.Blocks:
     Returns:
         Gradio Blocks interface for SEO coaching
     """
+    # Load unified CSS (main.css includes fonts + shared styles)
+    # Plus SEO coach specific styles
+    custom_css = """
+        @import url('/static/assets/css/main.css');
+        @import url('/static/assets/css/seo-coach.css');
+    """
+
     with gr.Blocks(
         title="AI SEO Coach - Nederlandse Bedrijven",
         theme=gr.themes.Soft(),
-        css="""
-        @import url('/static/assets/css/fonts.css');
-
-        .business-panel { background: #f8f9fa; padding: 20px; border-radius: 8px; }
-        .coaching-panel { min-height: 500px; }
-        .success { color: #155724; background: #d4edda; padding: 10px;
-                   border-radius: 4px; }
-        .error { color: #721c24; background: #f8d7da; padding: 10px;
-                 border-radius: 4px; }
-        .processing { color: #0c5460; background: #d1ecf1; padding: 10px;
-                      border-radius: 4px; }
-        """,
+        css=custom_css,
     ) as interface:
 
         # Header with settings button

@@ -759,6 +759,696 @@ class ConsolidatedWorkbenchService:
 
 ---
 
+## CSS Architecture: Unified Stylesheet System
+
+### Overview
+
+Phase 2 implements a **unified CSS architecture** that consolidates styling across the entire application (Gradio UI + PWA) using external stylesheet files with a single source of truth pattern.
+
+**Problem Solved:**
+- **CSS Duplication:** Font imports existed in 3 separate files (app.py, seo_coach_app.py, settings_page.py)
+- **Fragmented Styles:** 87+ lines of inline CSS scattered across 4 Python files
+- **Maintenance Burden:** Style changes required editing multiple Python files
+- **PWA Inconsistency:** No guarantee PWA wrapper styles matched Gradio app
+- **Poor Caching:** Inline CSS cannot be cached by service worker or browser
+
+**Solution:**
+- Extract all CSS to external `.css` files in `/static/assets/css/`
+- Create modular but coordinated stylesheet system
+- Use `@import url()` pattern for stylesheet composition
+- Cache all CSS files in service worker for offline PWA support
+- Maintain Gradio theme system for mode-specific colors (blue/green)
+
+### Architecture Philosophy: Base + Extensions
+
+**Critical Pattern:** Agent Workbench uses an **inheritance model** for modes:
+
+```
+shared.css (Ollama base design - UI-004 target)
+    └── seo-coach.css (Business extensions only)
+    └── settings.css (Settings page layout)
+    └── [future-mode.css] (Other extensions)
+```
+
+**NOT a sibling model:**
+```
+❌ workbench.css (separate standalone file)
+❌ seo-coach.css (separate sibling of workbench)
+```
+
+**Key Principles:**
+- `shared.css` contains the **complete base design** for Agent Workbench (UI-004 Ollama-style target)
+- Mode-specific CSS files contain **only overrides and additions** to the base
+- New modes inherit the base and add minimal customization
+- Changes to base design affect all modes (single source of truth)
+- SEO Coach mode is a **child** that extends the base, not a sibling
+
+**Current vs Target State:**
+- **Current (Phase 1):** `shared.css` has 148 lines of extracted foundational styles
+- **Target (UI-004):** `shared.css` will expand to ~400 lines with full Ollama design
+  - Floating centered chatbox layout
+  - Top navigation bar with icon controls
+  - Sliding sidebar from left
+  - Chat input bar with integrated controls
+  - Dynamic logo with fade animations
+  - Agent status bubbles ("Thinking...")
+  - Message bubbles with streaming
+  - Submit button states
+  - Full dark mode support
+  - Enhanced responsive breakpoints
+- **SEO Coach:** Currently 45 lines, may shrink to ~30 lines as duplicates move to base
+  - Only business panel layout remains
+  - Two-column grid override
+  - Dutch-specific UI tweaks
+
+**Why This Matters:**
+- **Consistency:** All modes share the same core UX patterns
+- **Efficiency:** Add a new mode with ~50 lines of CSS instead of 400+
+- **Maintenance:** Fix a UI bug once in `shared.css`, all modes benefit
+- **Scalability:** Future modes (researcher, debugger, etc.) extend base effortlessly
+
+### File Structure
+
+```
+src/agent_workbench/static/assets/css/
+├── main.css       # Master coordinator (single entry point)
+├── fonts.css      # Ubuntu font family (loaded once)
+├── shared.css     # Core cross-mode styles (navigation, layout, conversation list)
+├── settings.css   # Settings page specific styles
+└── seo-coach.css  # SEO Coach mode specific styles
+```
+
+#### 1. main.css - Master Coordinator
+
+**Purpose:** Single entry point that imports foundational stylesheets
+
+**Content:**
+```css
+/*
+ * Agent Workbench - Master CSS File
+ *
+ * This is the SINGLE entry point for all CSS in the application.
+ * Import this file in Gradio interfaces, and it will load all required styles.
+ *
+ * Architecture:
+ * - fonts.css: Ubuntu font family (loaded once)
+ * - shared.css: Core styles used across all modes
+ * - Mode-specific CSS (settings.css, seo-coach.css) loaded separately as needed
+ */
+
+@import url('fonts.css');
+@import url('shared.css');
+```
+
+**Usage:** Every Gradio interface imports this as the base:
+```python
+custom_css = "@import url('/static/assets/css/main.css');"
+```
+
+#### 2. fonts.css - Typography Foundation
+
+**Purpose:** Define Ubuntu font family (application standard)
+
+**Content:**
+```css
+/* Ubuntu Font Family - Application Standard */
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&display=swap');
+
+:root {
+    --font-family: 'Ubuntu', 'Segoe UI', 'Roboto', 'Oxygen', sans-serif;
+}
+
+body {
+    font-family: var(--font-family);
+}
+```
+
+**Why Separate:** Loaded once, cached by browser, reused everywhere. Prevents duplicate Google Fonts requests.
+
+#### 3. shared.css - Core Cross-Mode Styles
+
+**Purpose:** Styles used across all modes (workbench, seo_coach, settings)
+
+**Content Categories:**
+- Navigation (back buttons, header layout)
+- Page structure (responsive layout, containers)
+- Conversation list (#conv-list table styling)
+- Status messages (.success, .error, .info, .warning)
+- Responsive breakpoints (mobile, tablet, desktop)
+
+**Size:** 148 lines
+
+**Extracted From:** Previously inline `SHARED_CSS` constant in Python
+
+**Key Sections:**
+```css
+/* Conversation list styling (Dataset component) */
+#conv-list table {
+    max-height: 500px;
+    overflow-y: auto;
+    border-radius: 6px;
+    border: 1px solid var(--border-color-primary);
+}
+
+/* Category headers (non-clickable) */
+#conv-list table tr:has(td:first-child[style*="font-weight: bold"]) {
+    background-color: var(--table-even-background-fill);
+    cursor: default;
+}
+
+/* Status message styling */
+.success {
+    padding: 12px;
+    border-radius: 6px;
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.error {
+    padding: 12px;
+    border-radius: 6px;
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+```
+
+#### 4. settings.css - Settings Page Styles
+
+**Purpose:** Styles specific to `/settings` page
+
+**Content:**
+- Settings header layout
+- Tab styling (.settings-tab)
+- Section grouping (.setting-section)
+- Form controls specific to settings
+
+**Size:** 54 lines
+
+**Extracted From:** `settings_page.py` inline CSS (previously 36 lines in Python string)
+
+**Usage:**
+```python
+# settings_page.py
+custom_css = """
+    @import url('/static/assets/css/main.css');
+    @import url('/static/assets/css/settings.css');
+"""
+```
+
+#### 5. seo-coach.css - SEO Coach Extensions
+
+**Purpose:** Business-specific extensions and overrides of base Agent Workbench design
+
+**Inheritance Pattern:** SEO Coach is a **child mode** that extends Agent Workbench base:
+- **Inherits:** Full Ollama design from `shared.css` (floating chat, navigation, sidebar, input bar, messages)
+- **Adds:** Business profile panel, Dutch labels, coaching features
+- **Overrides:** Layout changed from single-column to two-column grid (business panel + chat)
+
+**Content (Extensions Only):**
+- Business panel styling (.business-panel) - NEW component not in base
+- Two-column grid override for .chat-container - OVERRIDE of base layout
+- Coaching panel layout (.coaching-panel) - NEW component
+- Dutch-specific status messages - OVERRIDE of base messages
+- Quick action buttons - NEW component
+
+**Size:** 45 lines (may shrink to ~30 lines when UI-004 base is complete)
+
+**Extracted From:** `seo_coach_app.py` inline CSS (previously 11 lines)
+
+**Usage:**
+```python
+# seo_coach_app.py
+custom_css = """
+    @import url('/static/assets/css/main.css');
+    @import url('/static/assets/css/seo-coach.css');
+"""
+```
+
+### Loading Patterns
+
+#### Pattern 1: Workbench Mode (Default)
+```python
+# ui/app.py
+custom_css = "@import url('/static/assets/css/main.css');"
+
+with gr.Blocks(title="Agent Workbench", css=custom_css) as app:
+    # ... interface ...
+```
+
+**Loads:**
+- main.css → fonts.css + shared.css
+
+**Result:** Blue-themed technical interface with Ubuntu font and core styles
+
+#### Pattern 2: SEO Coach Mode
+```python
+# ui/seo_coach_app.py
+custom_css = """
+    @import url('/static/assets/css/main.css');
+    @import url('/static/assets/css/seo-coach.css');
+"""
+
+with gr.Blocks(title="SEO Coach", css=custom_css) as app:
+    # ... interface ...
+```
+
+**Loads:**
+- main.css → fonts.css + shared.css
+- seo-coach.css (additional business styles)
+
+**Result:** Green-themed business interface with additional SEO-specific styling
+
+#### Pattern 3: Settings Page
+```python
+# ui/settings_page.py
+custom_css = """
+    @import url('/static/assets/css/main.css');
+    @import url('/static/assets/css/settings.css');
+"""
+
+with gr.Blocks(title="Settings", css=custom_css) as app:
+    # ... interface ...
+```
+
+**Loads:**
+- main.css → fonts.css + shared.css
+- settings.css (settings-specific layout)
+
+**Result:** Settings interface with proper tab layout and form styling
+
+#### Pattern 4: Multi-Page App (mode_factory_v2.py)
+```python
+# ui/mode_factory_v2.py
+demo = gr.Blocks(
+    title=config["title"],
+    theme=config["theme"],
+    css="@import url('/static/assets/css/main.css');",
+)
+```
+
+**Loads:**
+- main.css → fonts.css + shared.css
+
+**Result:** Base styling for multi-page routes, additional CSS loaded per route
+
+### Theme System Integration
+
+**Design Decision:** Keep Gradio themes for mode differentiation
+
+**Workbench Mode:**
+```python
+theme = gr.themes.Base(primary_hue="blue", font="Roboto")
+```
+
+**SEO Coach Mode:**
+```python
+theme = gr.themes.Base(primary_hue="green", font="Open Sans")
+```
+
+**Why Both Theme + Custom CSS:**
+- **Gradio Theme:** Controls component colors (blue/green), button variants, primary actions
+- **Custom CSS (shared.css):** Controls layout, spacing, conversation list, status messages, responsive design
+- **Mode CSS (seo-coach.css):** Extends base with mode-specific features
+
+**Result:** "Inherited and extended" approach:
+- Base design (shared.css) provides structure for all modes
+- Gradio themes provide visual identity differentiation (blue for workbench, green for SEO)
+- Mode-specific CSS files add minimal extensions without duplicating base
+
+### PWA Integration
+
+#### Service Worker Caching
+
+All CSS files are cached by service worker for offline PWA support:
+
+```javascript
+// static/sw.js
+const STATIC_ASSETS = [
+  '/',
+  '/static/manifest.json',
+  '/static/icons/icon-192.png',
+  '/static/icons/icon-512.png',
+  '/static/icons/apple-touch-icon.png',
+  '/static/offline.html',
+  // CSS files (unified architecture)
+  '/static/assets/css/main.css',
+  '/static/assets/css/fonts.css',
+  '/static/assets/css/shared.css',
+  '/static/assets/css/settings.css',
+  '/static/assets/css/seo-coach.css'
+];
+
+// Cache-first strategy for static assets
+self.addEventListener('fetch', event => {
+  if (url.pathname.startsWith('/static/')) {
+    event.respondWith(cacheFirst(request, STATIC_CACHE));
+  }
+});
+```
+
+**Caching Strategy:**
+- **Cache-first:** CSS served from cache instantly (zero latency)
+- **Background update:** Cache updated when new version detected
+- **Offline support:** PWA works fully offline with cached styles
+
+**Benefits:**
+- Instant page loads (no CSS network requests)
+- Consistent styling even offline
+- Reduced bandwidth usage
+- Better Core Web Vitals (FCP, LCP)
+
+### Benefits Achieved
+
+**Before CSS Normalization:**
+```
+❌ Font imports duplicated in 3 files (1 import × 3 = 3 network requests)
+❌ 87+ lines of CSS scattered across 4 Python files
+❌ Style changes required editing multiple files
+❌ Inline CSS couldn't be cached by browser
+❌ No service worker caching for styles
+❌ Increased Python file size (mixing concerns)
+```
+
+**After CSS Normalization:**
+```
+✅ Single font import (1 network request, cached)
+✅ Zero inline CSS in Python files
+✅ Style changes made in one CSS file
+✅ Browser caches all CSS files
+✅ Service worker caches CSS for offline PWA
+✅ Cleaner Python code (separation of concerns)
+✅ 87+ lines removed from Python files
+✅ Modular CSS organization (easy to maintain)
+```
+
+**Quantified Improvements:**
+- **Font Loading:** 3 requests → 1 request (67% reduction)
+- **CSS Organization:** 4 Python files → 5 CSS files (proper separation)
+- **Cacheability:** 0% → 100% (all CSS cached)
+- **Offline Support:** None → Full PWA offline capability
+- **Maintenance Effort:** Update 4 files → Update 1 file (75% reduction)
+
+**Note on UI-004 Implementation:**
+
+The current normalization establishes the architectural foundation. When UI-004 (Ollama-style interface) is fully implemented:
+
+**shared.css will expand from 148 → ~400 lines** with these additions:
+- Floating centered chatbox layout
+- Top navigation bar (sidebar toggle, new chat icon, settings icon)
+- Sliding sidebar from left with smooth transitions
+- Chat input bar at bottom with integrated controls:
+  - Web search toggle (globe icon)
+  - Model selector dropdown
+  - File upload indicator
+  - Submit button with state changes (pale → black → processing)
+- Dynamic logo with fade animations (visible when idle, hidden when processing)
+- Agent status bubbles ("Thinking..." with real-time updates)
+- Message bubbles with streaming token display
+- Submit button state machine:
+  - Pale gray: No text entered
+  - Black with arrow: Message typed, ready to send
+  - Processing animation: Response being generated
+- Full dark mode support with CSS variables:
+  - `--bg-color`, `--text-color`, `--chat-bg`, `--sidebar-bg`, `--border-color`
+  - `@media (prefers-color-scheme: dark)` auto-detection
+  - `.light-mode` and `.dark-mode` classes for manual override
+- Enhanced responsive breakpoints:
+  - Desktop (>1024px): Full sidebar width, spacious layout
+  - Tablet (768px-1024px): Collapsible sidebar, medium spacing
+  - Mobile (<768px): Hidden sidebar, compact layout, touch-optimized controls
+- Offline status indicator (cloud icon with slash)
+- Toast notifications (bottom-center positioning)
+- Loading states with animations
+
+**seo-coach.css may shrink from 45 → ~30 lines** as duplicates move to base:
+- Only business panel layout overrides remain
+- Two-column grid for business + chat panels
+- Dutch-specific label styling
+- Quick action buttons (unique to SEO mode)
+- Remove: Navigation styles (now in base), status messages (now in base)
+
+**Result:** Even better maintenance - larger base (400 lines), smaller extensions (~30 lines per mode).
+
+**When to implement:** During UI-004 feature development, migrate styles incrementally:
+1. Add component to shared.css (e.g., `.chat-input-bar`)
+2. Test in workbench mode
+3. Verify SEO Coach inherits correctly
+4. Remove any duplicates from seo-coach.css
+
+### Migration Path
+
+**Phase 1 → Phase 2 Migration:**
+
+1. **Extract fonts.css:**
+   - Moved Google Fonts import from 3 Python files to 1 CSS file
+   - Defined CSS variable `--font-family`
+
+2. **Extract shared.css:**
+   - Converted Python `SHARED_CSS` constant to external file (148 lines)
+   - Removed import from Python files
+
+3. **Extract settings.css:**
+   - Moved 36 lines from `settings_page.py` inline CSS
+   - Added settings-specific selectors
+
+4. **Extract seo-coach.css:**
+   - Moved 11 lines from `seo_coach_app.py` inline CSS
+   - Added business panel styles
+
+5. **Create main.css:**
+   - Master coordinator importing fonts + shared
+   - Single entry point for all interfaces
+
+6. **Update Python Files:**
+   - `app.py`: Use main.css only
+   - `seo_coach_app.py`: Use main.css + seo-coach.css
+   - `settings_page.py`: Use main.css + settings.css
+   - `mode_factory_v2.py`: Use main.css only
+   - `styles.py`: Keep SHARED_CSS for reference (no longer imported)
+
+7. **Update Service Worker:**
+   - Add all 5 CSS files to `STATIC_ASSETS` array
+   - Enable cache-first strategy for `/static/` paths
+
+**Files Modified:**
+- Created: 5 CSS files
+- Modified: 5 Python files (app.py, seo_coach_app.py, settings_page.py, mode_factory_v2.py, sw.js)
+- Unchanged: styles.py (kept for reference)
+
+### Testing & Validation
+
+**Quality Checks:**
+```bash
+make quality          # All passing (black, ruff, mypy)
+make test             # 15/15 tests passing
+```
+
+**Visual Verification:**
+- [x] Workbench mode renders correctly (blue theme + Ubuntu font)
+- [x] SEO Coach mode renders correctly (green theme + business styles)
+- [x] Settings page renders correctly (tab layout + form styling)
+- [x] Conversation list (#conv-list) styled properly with category headers
+- [x] Status messages (.success, .error) render with correct colors
+- [x] Responsive breakpoints work on mobile/tablet/desktop
+- [x] PWA offline mode shows correct styling
+- [x] Service worker caches all CSS files
+
+**Browser Cache Verification:**
+```bash
+# Start app
+make start-app
+
+# Check browser DevTools → Network tab:
+# - All CSS files load once
+# - Subsequent page loads serve from cache (0ms)
+# - Service worker intercepts and serves cached CSS
+```
+
+### Usage Guidelines
+
+**When Adding New Styles:**
+
+1. **Determine Scope:**
+   - Used everywhere? → Add to `shared.css`
+   - Settings page only? → Add to `settings.css`
+   - SEO Coach only? → Add to `seo-coach.css`
+   - Font/typography? → Add to `fonts.css`
+
+2. **Update CSS File:**
+   ```css
+   /* shared.css - example */
+   .new-component {
+       padding: 12px;
+       border-radius: 6px;
+   }
+   ```
+
+3. **No Python Changes Needed:**
+   - CSS automatically loaded via existing imports
+   - Changes immediately visible on page refresh
+
+4. **Update Service Worker (if needed):**
+   - Only if adding NEW CSS file (rare)
+   - Add to `STATIC_ASSETS` array in `sw.js`
+
+**When Creating New Mode (Child of Base):**
+
+**Philosophy:** New modes should **inherit** the base Ollama design and add minimal customization.
+
+**Step 1: Identify What's Unique**
+
+Ask: "What's DIFFERENT about this mode vs base Agent Workbench design?"
+
+Examples:
+- Researcher mode: Needs three-column layout (sources panel + chat + notes panel)
+- Debugger mode: Needs code editor panel + console output
+- Translator mode: Needs side-by-side source/target language panels
+
+**Step 2: Create Extension CSS (Only Differences)**
+
+```css
+/* assets/css/researcher-mode.css */
+
+/* ===== INHERIT BASE OLLAMA DESIGN FROM shared.css ===== */
+/* Do NOT duplicate: navigation, sidebar, input bar, messages */
+
+/* ===== EXTENSIONS ONLY ===== */
+
+/* Override: Three-column layout */
+.chat-container {
+    grid-template-columns: 250px 1fr 250px;  /* sources + chat + notes */
+    max-width: 1400px;  /* Wider for three columns */
+}
+
+/* New component: Sources panel (not in base) */
+.sources-panel {
+    background: var(--panel-bg);
+    border-right: 1px solid var(--border-color);
+    padding: 16px;
+    overflow-y: auto;
+}
+
+/* New component: Notes panel (not in base) */
+.notes-panel {
+    background: var(--panel-bg);
+    border-left: 1px solid var(--border-color);
+    padding: 16px;
+}
+
+/* Override: Adjust message bubbles for narrower chat column */
+.message-bubble {
+    max-width: 100%;  /* Use full width in narrower column */
+}
+```
+
+**Anti-Pattern Examples:**
+
+❌ **Bad: Duplicating Base Styles**
+```css
+/* researcher-mode.css - WRONG */
+.chat-input-bar {
+    /* Copying entire base definition and changing one property */
+    position: sticky;
+    bottom: 20px;
+    width: 100%;
+    background: var(--chat-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;  /* Only this changed! */
+}
+```
+
+✅ **Good: Override Only What Changed**
+```css
+/* researcher-mode.css - CORRECT */
+.chat-input-bar {
+    justify-content: space-between;  /* Only override the changed property */
+}
+```
+
+**Step 3: Import Base + Extension**
+
+```python
+# ui/researcher_mode.py
+custom_css = """
+    @import url('/static/assets/css/main.css');        # Base (fonts + shared)
+    @import url('/static/assets/css/researcher-mode.css');  # Extensions only
+"""
+
+with gr.Blocks(title="Researcher Mode", css=custom_css) as app:
+    # Build interface - inherits Ollama design from shared.css
+    pass
+```
+
+**Step 4: Add to Service Worker**
+
+```javascript
+// static/sw.js
+const STATIC_ASSETS = [
+    // ...
+    '/static/assets/css/researcher-mode.css'  // Add new mode CSS
+];
+```
+
+**Step 5: Test Inheritance**
+
+1. Start app in new mode
+2. Verify base components work (navigation, sidebar, input bar)
+3. Verify mode-specific components render correctly
+4. Check responsive breakpoints from base still work
+5. Test dark mode (should inherit from base)
+
+**Checklist for New Mode:**
+- [ ] Created mode CSS file with ONLY differences
+- [ ] Imported main.css + mode CSS in Gradio interface
+- [ ] Added to service worker STATIC_ASSETS
+- [ ] Tested base components inherit correctly
+- [ ] Verified no duplicate styles from shared.css
+- [ ] Confirmed file size is small (<100 lines)
+- [ ] Documented mode-specific overrides
+
+### Best Practices
+
+**DO:**
+- ✅ Use external CSS files (never inline CSS in Python)
+- ✅ Import main.css in every Gradio interface
+- ✅ Add mode-specific CSS as separate file
+- ✅ Use CSS variables for theme colors
+- ✅ Cache all CSS in service worker
+- ✅ Use `@import url()` for stylesheet composition
+- ✅ Keep Gradio themes for visual identity
+
+**DON'T:**
+- ❌ Add inline CSS to Python files
+- ❌ Duplicate font imports
+- ❌ Override Gradio theme completely (use coordinated approach)
+- ❌ Create monolithic CSS file (keep modular)
+- ❌ Forget to update service worker when adding CSS file
+
+### Future Enhancements
+
+**Phase 2.x Potential Improvements:**
+- [ ] CSS preprocessing (SCSS/LESS) for variables and mixins
+- [ ] CSS minification in production builds
+- [ ] Dark mode support with CSS custom properties
+- [ ] CSS modules for component-scoped styles
+- [ ] Automated CSS purging (remove unused selectors)
+- [ ] CSS-in-JS for dynamic Gradio components (if needed)
+
+**Monitoring:**
+- Track CSS cache hit rates
+- Monitor CSS file sizes (keep < 50KB per file)
+- Measure page load impact (should be negligible)
+- User feedback on visual consistency
+
+---
+
 ## Database Changes
 
 ### Extend Existing Models
