@@ -12,6 +12,9 @@ from typing import Any, Dict, Optional, Tuple
 import gradio as gr
 
 
+
+
+
 def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
     Optional[gr.State],
     Optional[gr.Column],
@@ -45,21 +48,33 @@ def render_sidebar(config: Dict[str, Any], user_state: gr.State) -> Tuple[
 
     # Using gr.Column for sidebar to enable push behavior (not overlay)
     # Designer's recommendation: scale=1, min_width=250
-    # Note: visible=True so it's in DOM, we hide it with CSS initially (display:none)
+    # Note: visible=True so it's in DOM, starts HIDDEN with conv-sidebar-hidden class (width: 0)
     with gr.Column(
         scale=1,
         min_width=250,
         elem_id="conv-sidebar-container",
         visible=True,
-        elem_classes=["conv-sidebar-hidden"],  # CSS class for initial hidden state
+        elem_classes=["agent-workbench-sidebar", "conv-sidebar-hidden"],  # Start hidden
     ) as sidebar_col:
         # New Chat button with icon
+        # New Chat button - Visual HTML + Hidden Logic Button pattern
+        # This matches the chat container icon implementation using sprite.svg via <use> tag
+        gr.HTML(
+            value=(
+                '<div class="sidebar-new-chat-visual" '
+                'onclick="document.querySelector(\'.sidebar-new-chat-btn\').click()">'
+                '<svg class="icon"><use href="/static/icons/sprite.svg#new-chat"/></svg>'
+                '<span>New Chat</span>'
+                '</div>'
+            )
+        )
+
+        # Hidden button that actually triggers the event
+        # Must be visible=True so it's in DOM, but hidden with CSS
         new_chat_btn = gr.Button(
             "New Chat",
-            icon="/static/icons/svg/add_chat_icon_24.svg",
-            variant="primary",
-            size="sm",
-            elem_classes=["sidebar-new-chat-btn"],
+            visible=True,
+            elem_classes=["sidebar-new-chat-btn"],  # Targeted by JS onclick and top bar
         )
 
         gr.Markdown("## Recent Chats")

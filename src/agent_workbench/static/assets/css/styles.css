@@ -90,7 +90,7 @@ body {
 .agent-workbench-chat-container {
     max-width: 800px;
     margin: 0;  /* No auto margin - centering handled by parent */
-    padding: var(--space-4xl) var(--space-xl);
+    padding: 0 var(--space-xl) var(--space-4xl) var(--space-xl);  /* No top padding - top bar aligns with sidebar */
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -172,24 +172,34 @@ div#component-0 {
     margin: 0 !important;
 }
 
-div.row.agent-workbench-top-bar,
-#component-16 {
+div.row.agent-workbench-top-bar {
     border: none !important;
-
-    /* Force full width to match parent container */
     width: 100% !important;
     max-width: 100% !important;
     min-width: 100% !important;
-
     display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    justify-content: space-between !important;
+}
+
+/* Chat container - MUST be column with top alignment */
+#component-16 {
+    border: none !important;
+    /* REMOVED width: 100% to allow flexbox to work with sidebar */
+    display: flex !important;
+    flex-direction: column !important;  /* Column layout, NOT row */
+    align-items: stretch !important;    /* NOT center - stretch to full width */
+    justify-content: flex-start !important;  /* Align children to TOP */
+    position: relative !important;  /* Keep in normal flow, NOT fixed */
 
     /* Remove padding - let container control spacing */
     padding: 0 !important;
     margin: 0 0 var(--space-2xl) 0 !important;
     background: transparent !important;
+}
+
+/* CRITICAL: Override position:fixed on top bar - keep in flex flow */
+.agent-workbench-top-bar,
+#component-17 {
+    position: relative !important;  /* Override agent-workbench-design.css position:fixed */
 }
 
 .agent-workbench-top-bar-left {
@@ -218,6 +228,60 @@ div.row.agent-workbench-top-bar-right,
 #component-20 {
     padding: 0 !important;
     margin: 0 !important;
+}
+
+/* Align top bar height with sidebar New Chat button (#component-8) */
+/* Match the height and padding of the New Chat button container */
+/* Target both ID and Svelte classes for maximum specificity */
+#component-17,
+#component-17.row,
+.agent-workbench-top-bar,
+.agent-workbench-top-bar.row {
+    min-height: 48px !important;
+    max-height: 48px !important;
+    height: 48px !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: var(--space-2xl) !important;
+    flex-shrink: 0 !important;  /* Prevent shrinking */
+    flex-grow: 0 !important;    /* Prevent growing */
+}
+
+/* Override Gradio's gap for first child (top bar) */
+#component-16 > #component-17:first-child {
+    margin-top: 0 !important;
+}
+
+/* Ensure New Chat button (#component-8) is flush with top of sidebar */
+#component-8,
+#conv-sidebar-container > #component-8:first-child {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding: 0 !important;  /* Remove any Gradio block padding */
+}
+
+/* Match both components to same height for perfect alignment */
+#component-8,
+#component-17 {
+    min-height: 48px !important;
+    max-height: 48px !important;
+    height: 48px !important;
+    overflow: hidden !important;  /* Prevent scrollbar if content slightly overflows */
+    display: flex !important;
+    align-items: center !important;  /* Center content vertically within 48px */
+}
+
+/* Ensure the top bar content is properly centered vertically */
+#component-17 > *,
+.agent-workbench-top-bar > * {
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
 }
 
 /* Collapse all nested wrappers using inline-block */
@@ -417,14 +481,40 @@ div.row.agent-workbench-top-bar-right,
    SIDEBAR (Ollama Design)
    ============================================ */
 
-/* Sidebar container - fixed 250px width (compact, fits New Chat button) */
-#conv-sidebar-container {
+/* Ensure parent Row allows both columns to flex properly - target Svelte class too */
+#component-5,
+#component-5.row {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0 !important;
+    width: 100% !important;
+    position: relative !important;
+}
+
+/* Sidebar container - fixed 250px width when open (compact, fits New Chat button) */
+/* Target both ID and Svelte classes for maximum specificity */
+#conv-sidebar-container,
+#conv-sidebar-container.column {
+    position: relative !important;  /* Keep in normal flow */
     flex: 0 0 250px !important;
     min-width: 250px !important;
     max-width: 250px !important;
+    width: 250px !important;
     background: white !important;
     border-right: 1px solid #e5e7eb !important;
-    padding: 16px !important;
+    padding: 0 16px 16px 16px !important;  /* No top padding - align with chat container */
+    transition: all 0.3s ease !important;
+    overflow: hidden !important;
+}
+
+/* Chat container - must flex-grow to fill remaining space */
+/* Target both ID and Svelte classes */
+#component-16,
+#component-16.column {
+    position: relative !important;  /* Keep in normal flow */
+    flex: 1 1 auto !important;  /* Grow to fill available space */
+    min-width: 0 !important;  /* Allow shrinking below content size */
+    width: auto !important;  /* Allow auto width calculation */
 }
 
 /* Sidebar top bar - mirrors chat top bar height and padding */
@@ -434,40 +524,80 @@ div.row.agent-workbench-top-bar-right,
     align-items: center !important;
 }
 
-/* Hide sidebar initially (starts with CSS class conv-sidebar-hidden) */
-#conv-sidebar-container.conv-sidebar-hidden {
-    display: none !important;
-}
-
-/* Hide top bar new chat icon when sidebar is open */
-.hidden-when-sidebar-open {
-    display: none !important;
-}
-
-/* New Chat Button - Ollama style (inside sidebar top bar) */
-.sidebar-new-chat-btn {
-    width: 100% !important;
-    background: #f3f4f6 !important;
+/* Hide sidebar by collapsing to zero width (keeps in layout for push behavior) */
+/* Target both ID and classes with maximum specificity */
+#conv-sidebar-container.conv-sidebar-hidden,
+#conv-sidebar-container.conv-sidebar-hidden.column {
+    flex: 0 0 0 !important;
+    flex-basis: 0 !important;
+    flex-grow: 0 !important;
+    flex-shrink: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    width: 0 !important;
+    padding: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
     border: none !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Hide top bar new chat icon when sidebar is open - high specificity */
+#new-chat-container.hidden-when-sidebar-open,
+#new-chat-container.hidden-when-sidebar-open .prose,
+#new-chat-container.hidden-when-sidebar-open #new-chat-btn {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
+
+/* New Chat Button - Hidden Gradio button (for event handling only) */
+.sidebar-new-chat-btn {
+    display: none !important;  /* Hide visually, but keep in DOM for click events */
+}
+
+/* Visual HTML button (what user sees) - ensure icon + text display properly */
+.sidebar-new-chat-visual {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+    background: #f3f4f6 !important;
+    border: 1px solid #e5e7eb !important;
     border-radius: 8px !important;
-    padding: 12px 16px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+
+.sidebar-new-chat-visual:hover {
+    background: #e5e7eb !important;
+    border-color: #d1d5db !important;
+}
+
+/* Ensure SVG icon is visible and properly sized - match top bar icon size (24px) */
+.sidebar-new-chat-visual svg {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    flex-shrink: 0 !important;
+    fill: currentColor !important;
+    color: #666666 !important;
+    display: block !important;
+}
+
+.sidebar-new-chat-visual:hover svg {
+    color: #111827 !important;
+}
+
+/* Text styling */
+.sidebar-new-chat-visual span {
     font-size: 14px !important;
     font-weight: 500 !important;
     color: #111827 !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 8px !important;
-    transition: background 0.2s ease !important;
-}
-
-.sidebar-new-chat-btn:hover {
-    background: #e5e7eb !important;
-}
-
-.sidebar-new-chat-btn img {
-    width: 18px !important;
-    height: 18px !important;
-    opacity: 0.7;
+    white-space: nowrap !important;
 }
 
 /* Recent Chats Heading - Date grouping style */
@@ -824,26 +954,122 @@ button.agent-workbench-submit-btn.processing svg,
 }
 
 /* ============================================
-   RESPONSIVE
+   RESPONSIVE - Mobile Sidebar Overlay
    ============================================ */
 
 @media (max-width: 768px) {
-    .agent-workbench-chat-container {
-        padding: var(--space-2xl) var(--space-lg);
+    /* MOBILE: Remove Gradio's default main padding to allow full-width top bar */
+    main.fillable,
+    main.app,
+    main.fillable.app,
+    .gradio-container main,
+    gradio-app main {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
     }
 
+    /* MOBILE: Sidebar switches to overlay mode (standard mobile UX) */
+    #conv-sidebar-container,
+    #conv-sidebar-container.column {
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 250px !important;
+        z-index: 2000;  /* Above everything */
+        transform: translateX(-100%);  /* Hidden by default - off screen */
+        transition: transform 0.3s ease;
+        box-shadow: 2px 0 8px rgba(0,0,0,0.15);
+        padding: 16px !important;  /* Equal padding on all sides for mobile overlay */
+    }
+
+    /* Sidebar visible - slide in from left */
+    #conv-sidebar-container:not(.conv-sidebar-hidden) {
+        transform: translateX(0);
+    }
+
+    /* Chat container - always full width on mobile */
+    #component-16 {
+        width: 100% !important;
+        max-width: 100vw !important;  /* Override any parent constraints */
+        margin-left: 0 !important;
+        overflow-x: hidden !important;  /* Prevent horizontal scroll */
+        padding-left: 0 !important;  /* No padding - let children handle their own spacing */
+        padding-right: 0 !important;
+    }
+
+    /* Top bar - ensure full width on mobile (override 800px max-width) */
+    #component-17,
     .agent-workbench-top-bar {
-        padding: var(--space-sm) var(--space-lg);
+        width: 100vw !important;  /* Full viewport width */
+        max-width: 100vw !important;  /* Override 800px constraint */
+        left: 0 !important;
+        right: 0 !important;
+        padding: var(--space-sm) var(--space-md) !important;  /* Internal padding for icons */
+        display: flex !important;
+        justify-content: space-between !important;
+        margin-left: 0 !important;  /* Override any inherited margins */
+        margin-right: 0 !important;
     }
 
+    /* Add horizontal padding to content areas (not top bar) */
+    #component-16 > *:not(#component-17):not(.agent-workbench-top-bar) {
+        padding-left: var(--space-md) !important;
+        padding-right: var(--space-md) !important;
+    }
+
+    /* Ensure both left and right sections are visible */
     .agent-workbench-top-bar-left,
     .agent-workbench-top-bar-right {
         gap: var(--space-sm);
+        flex-shrink: 0 !important;
+    }
+
+    /* Settings icon - CRITICAL: Override Gradio's inline min-width: min(0px, 100%) */
+    #settings-icon-container {
+        display: flex !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        min-width: 40px !important;  /* Override inline style min-width: min(0px, 100%) = 0 */
+        max-width: 48px !important;  /* Constrain to icon size + minimal padding */
+        width: auto !important;
+        height: auto !important;
+        overflow: visible !important;
+    }
+
+    /* Remove padding from settings icon wrapper */
+    #settings-icon-container .html-container {
+        padding: 0 !important;
+    }
+
+    .agent-workbench-top-bar-right {
+        display: flex !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+
+    /* Chat container - full viewport width on mobile (override 800px) */
+    .agent-workbench-chat-container {
+        max-width: 100vw !important;  /* Override 800px desktop max-width */
+        width: 100% !important;
+        padding: var(--space-2xl) var(--space-lg);
+        overflow-x: hidden !important;  /* Prevent horizontal scroll from content */
     }
 
     .agent-workbench-input-bar {
         bottom: var(--space-md);
         border-radius: var(--radius-md);
+    }
+
+    /* Input bar components - override general padding with 10px */
+    #component-16 #component-25,
+    #component-16 #component-26,
+    #component-25,
+    #component-26 {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
     }
 
     .chatbot-container {

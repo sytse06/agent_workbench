@@ -149,7 +149,8 @@ body.dark-mode {
 /* Task 4.2.1: Page Background */
 body {
     background: var(--awb-bg);
-    font-family: var(--font-family); /* From fonts.css */
+    font-family: var(--font-family);
+    /* From fonts.css */
 }
 
 /* Override Gradio default background */
@@ -158,14 +159,26 @@ body {
 }
 
 /* Task 4.2.2: Centered Chat Container */
+/* Task 4.2.2: Centered Chat Container */
 .agent-workbench-chat-container {
-    max-width: 800px;
-    margin: 0;  /* Removed 'auto' to allow sidebar push behavior */
+    flex-grow: 1 !important;
+    /* Take remaining space */
+    width: 100%;
+    /* Start full width */
+    max-width: 100%;
+    /* Allow filling */
+
+    /* Center content within the container */
+    align-items: center;
+
+    margin: 0;
     padding: var(--space-4xl) var(--space-xl);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     gap: var(--space-2xl);
+
+    transition: all var(--transition-base);
 }
 
 /* Responsive adjustments for tablet */
@@ -271,7 +284,7 @@ body {
 /* Hide Gradio's default tab navigation */
 .gradio-container .tab-nav,
 .gradio-container .tabs,
-gradio-app > div > div:first-child > div.tab-nav,
+gradio-app>div>div:first-child>div.tab-nav,
 div[class*="tab-nav"],
 header.svelte-1s6ht9y,
 nav.fillable,
@@ -291,6 +304,99 @@ gradio-app nav {
 button.close-sidebar {
     display: none !important;
 }
+
+/* Custom Sidebar Container */
+/* Custom Sidebar Container - Push Variant (Margin-left based) */
+.agent-workbench-sidebar {
+    position: relative !important;
+    height: 100vh !important;
+
+    /* Fixed width - stays constant */
+    width: 280px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
+
+    /* Start closed (pulled off-screen) */
+    margin-left: -280px !important;
+
+    background: var(--awb-sidebar-bg) !important;
+    border-right: 1px solid var(--awb-border);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+
+    padding: 0 !important;
+    overflow: hidden !important;
+
+    /* Animate margin for smooth push effect */
+    transition: margin-left var(--transition-base), padding var(--transition-base);
+
+    /* Override Gradio flex behavior */
+    flex-grow: 0 !important;
+    flex-shrink: 0 !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Open state class (toggled via JS) */
+.agent-workbench-sidebar.open {
+    /* Bring back into view */
+    margin-left: 0 !important;
+    padding: var(--space-md) !important;
+}
+
+/* Sidebar Header */
+.sidebar-header {
+    padding-bottom: var(--space-md);
+    margin-bottom: var(--space-sm);
+}
+
+/* New Chat Button - Visual Style */
+.sidebar-new-chat-visual {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: var(--space-sm) !important;
+    padding: var(--space-md) !important;
+    border-radius: var(--radius-md) !important;
+    background: transparent !important;
+    border: 1px solid var(--awb-border) !important;
+    color: var(--awb-text-primary) !important;
+    cursor: pointer;
+    transition: all var(--transition-fast) !important;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+
+.sidebar-new-chat-visual svg {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    color: var(--awb-text-secondary);
+}
+
+.sidebar-new-chat-visual:hover {
+    background: var(--awb-surface) !important;
+    border-color: var(--awb-text-secondary) !important;
+    color: var(--awb-text-primary) !important;
+}
+
+.sidebar-new-chat-visual:hover svg {
+    color: var(--awb-text-primary);
+}
+
+/* Sidebar List */
+.sidebar-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.sidebar-list .table-wrap {
+    border: none !important;
+    box-shadow: none !important;
+}
+
 
 /* ===== TOP ICON BAR ===== */
 /* Phase 4.2: Custom horizontal icon bar (sidebar toggle + new chat + settings) */
@@ -313,11 +419,13 @@ button.close-sidebar {
     padding: var(--space-md) var(--space-xl);
     background: transparent;
 
-    pointer-events: none; /* Allow clicks through empty space */
+    pointer-events: none;
+    /* Allow clicks through empty space */
 }
 
-.agent-workbench-top-bar > * {
-    pointer-events: auto; /* Re-enable clicks on buttons */
+.agent-workbench-top-bar>* {
+    pointer-events: auto;
+    /* Re-enable clicks on buttons */
 }
 
 /* Left side icons container */
@@ -602,7 +710,8 @@ button.agent-workbench-submit-btn.active img,
 button.agent-workbench-submit-btn[aria-disabled="false"] img,
 .agent-workbench-input-bar button.agent-workbench-submit-btn.active img {
     opacity: 1;
-    filter: brightness(0) invert(1); /* White icon on black background */
+    filter: brightness(0) invert(1);
+    /* White icon on black background */
 }
 
 button.agent-workbench-submit-btn.active:hover,
@@ -620,20 +729,23 @@ button.agent-workbench-submit-btn.processing,
 .agent-workbench-input-bar button.agent-workbench-submit-btn.processing {
     background-color: var(--awb-btn-active) !important;
     cursor: wait !important;
-    color: #ffffff !important; /* White icon for SVG with fill="currentColor" */
+    color: #ffffff !important;
+    /* White icon for SVG with fill="currentColor" */
 }
 
 button.agent-workbench-submit-btn.processing img,
 .agent-workbench-input-bar button.agent-workbench-submit-btn.processing img {
     opacity: 1;
     animation: spin 1s linear infinite;
-    filter: brightness(0) invert(1); /* White icon */
+    filter: brightness(0) invert(1);
+    /* White icon */
 }
 
 @keyframes spin {
     from {
         transform: rotate(0deg);
     }
+
     to {
         transform: rotate(360deg);
     }

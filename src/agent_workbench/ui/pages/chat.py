@@ -47,7 +47,7 @@ def svg_to_data_uri(svg_path: str) -> str:
 # Load icons as data URIs at module level (replicating Gradio's built-in icon pattern)
 SUBMIT_ICON_DATA_URI = svg_to_data_uri("/static/icons/svg/submit_icon_24.svg")
 PROCESSING_ICON_DATA_URI = svg_to_data_uri("/static/icons/svg/processing_icon_24.svg")
-ADD_CHAT_ICON_DATA_URI = svg_to_data_uri("/static/icons/svg/add_chat_icon_24.svg")
+
 
 
 def render(
