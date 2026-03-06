@@ -74,19 +74,63 @@ def render(
         "render() called, load_custom_js=%s", config.get("load_custom_js", False)
     )
 
-    # Workbench: native Gradio ChatInterface — save_history gives the built-in sidebar
+    # Workbench: native gr.Sidebar (collapsed by default) + gr.ChatInterface
     if not config.get("load_custom_js"):
-        gr.ChatInterface(
+        conv_storage = gr.BrowserState(
+            default_value=[],
+            storage_key="wb_conversations",
+        )
+
+        with gr.Sidebar(open=False, label="Conversations"):
+            new_chat_btn = gr.Button("New Chat", size="sm", variant="secondary")
+            conv_dataset = gr.Dataset(
+                components=[gr.Textbox(visible=False)],
+                samples=[],
+                show_label=False,
+                type="index",
+            )
+
+        chat_iface = gr.ChatInterface(
             fn=handle_chat_interface_message,
             additional_inputs=[user_state, settings_state],
-            save_history=True,
+            save_history=False,
             type="messages",
+            title="Agent Workbench Chat",
             textbox=gr.Textbox(
                 placeholder=config["labels"]["placeholder"],
                 submit_btn=True,
             ),
         )
-        return None, None
+
+        # Save conversation after each message
+        chat_iface.chatbot.change(
+            fn=update_conversations_list,
+            inputs=[chat_iface.chatbot, conv_storage, user_state],
+            outputs=[conv_storage],
+        )
+
+        # Update sidebar list when storage changes
+        conv_storage.change(
+            fn=populate_list,
+            inputs=[user_state, conv_storage],
+            outputs=[conv_dataset],
+        )
+
+        # Load selected conversation into chatbot
+        conv_dataset.select(
+            fn=load_selected_conversation,
+            inputs=[user_state, conv_storage],
+            outputs=[chat_iface.chatbot, conversation_state],
+        )
+
+        # New chat clears the chatbot and state
+        new_chat_btn.click(
+            fn=lambda: ([], []),
+            outputs=[chat_iface.chatbot, conversation_state],
+        )
+
+        # Return storage + dataset so mode_factory wires the page-load event
+        return conv_storage, conv_dataset
 
     # SEO Coach: custom branded UI
     # BrowserState for conversations list (sidebar)
