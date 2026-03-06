@@ -61,6 +61,12 @@ Reference: `docs/phase2/phase2_architecture_plan.md`, `docs/project/ARCHITECTURE
 
 ---
 
+## Later — Security & Environment
+
+- [ ] Review credentials strategy: audit what's in config/*.env, document rationale for gitignore approach, ensure dev/staging/prod secrets are properly separated and not cross-contaminating
+
+---
+
 ## Later — Design Decisions (discuss before implementing)
 
 - [ ] Messages table: normalize into it or delete it?
