@@ -58,22 +58,27 @@ src/agent_workbench/
 ├── services/
 │   ├── conversation_service.py   - Business logic
 │   ├── state_manager.py          - State persistence
-│   ├── langgraph_bridge.py       - State conversion (Bridge)
+│   ├── langgraph_bridge.py       - State conversion (Bridge domain object)
 │   ├── simple_chat_workflow.py   - 2-node minimal workflow
-│   └── consolidated_service.py   - Full workflow service
+│   ├── consolidated_service.py   - Full workflow service
+│   ├── auth_service.py           - [Phase 2.0] OAuth + session management
+│   ├── user_settings_service.py  - [Phase 2.1] User settings CRUD
+│   ├── langgraph_service.py      - [Phase 2] 5-node workflow orchestration
+│   └── workflow_nodes.py         - [Phase 2] LangGraph node implementations
 ├── api/routes/
 │   ├── chat_workflow.py          - PRIMARY workflow endpoints
 │   ├── simple_chat.py            - Testing endpoints
-│   ├── conversations.py          - Conversation CRUD
-│   ├── messages.py               - Message CRUD
 │   ├── agent_configs.py          - Agent config CRUD
 │   └── health.py                 - Health checks
 ├── ui/
-│   ├── mode_factory.py           - Mode-based interface factory
-│   ├── app.py                    - Workbench interface
-│   └── seo_coach_app.py          - SEO Coach interface (Dutch)
+│   ├── mode_factory_v2.py        - Mode-based interface factory (current)
+│   └── pages/                    - Page components (chat, settings, etc.)
 └── main.py                       - FastAPI app + Gradio mounting
 ```
+
+> **Phase 2 services** (`auth_service`, `user_settings_service`, `langgraph_service`,
+> `workflow_nodes`) are pre-built Phase 2 infrastructure. Do NOT delete them as dead
+> code — they are unwired by design until Phase 2 implementation begins.
 
 ## Conventions
 
@@ -127,6 +132,11 @@ For deeper context, read these on-demand:
 - `docs/phase1/PHASE_1_IMPLEMENTATION.md` — **AUTHORITATIVE** Phase 1 architecture source
 - `docs/phase1/GRADIO_STANDARDIZATION_COMPLETE.md` — Gradio mounting docs
 - `docs/architecture/decisions/` — Architecture decision records
+- `docs/phase2/phase2_architecture_plan.md` — Phase 2 plan: single agent, LangChain v1 `create_agent()`, 8 sub-phases
+- `docs/phase2/phase2_phase1_alignment_analysis.md` — Domain object alignment matrix (Phase 1 → Phase 2)
+- `docs/phase2/state_management_critical_pattern.md` — **CRITICAL**: LangGraph owns conversation state; agent uses ephemeral task-scoped `task_id` (NOT `conversation_id`) for working memory
+- `docs/phase2/phase2_testing_strategy.md` — ~60 tests planned, per-phase coverage targets
+- `docs/phase2/Feat-dev-plan-chat-history-in-sidebar-in-chatpage.md` — Conversation browser sidebar (workbench-first, feature-flagged)
 
 ## Byterover MCP Integration
 

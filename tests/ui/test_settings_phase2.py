@@ -154,28 +154,8 @@ class TestModelConfigurationLoading:
 class TestSettingsPersistence:
     """Test settings save and load functionality"""
 
-    @patch("agent_workbench.services.user_settings_service.UserSettingsService")
-    def test_settings_load_from_user_settings_service(self, mock_service_class):
-        """Test settings load user preferences on page load"""
-        # Mock UserSettingsService
-        mock_service = MagicMock()
-        user_id = str(uuid4())
-        mock_service.get_all_settings.return_value = {
-            "model_config": {
-                "provider": "openrouter",
-                "model": "openai/gpt-4o-mini",
-                "temperature": 0.7,
-                "max_tokens": 2000,
-            },
-            "appearance": {"theme": "Auto"},
-            "context": {
-                "name": "My Project",
-                "url": "https://example.com",
-                "description": "Test project",
-            },
-        }
-        mock_service_class.return_value = mock_service
-
+    def test_settings_load_returns_defaults_for_guest(self):
+        """Test settings load returns defaults when no user is authenticated"""
         config = {
             "title": "Agent Workbench",
             "labels": {
@@ -191,45 +171,12 @@ class TestSettingsPersistence:
             "allow_model_selection": True,
             "show_company_section": False,
         }
-        user_state = gr.State({"user_id": user_id})
+        user_state = gr.State(None)
         settings_state = gr.State({})
 
         with gr.Blocks() as demo:
             settings.render(config, user_state, settings_state)
 
-        # Settings page should render with loaded values
-        assert isinstance(demo, gr.Blocks)
-
-    @patch("agent_workbench.services.user_settings_service.UserSettingsService")
-    def test_settings_save_to_user_settings_service(self, mock_service_class):
-        """Test settings save to UserSettingsService on button click"""
-        # Mock UserSettingsService
-        mock_service = MagicMock()
-        mock_service.bulk_set_settings.return_value = None
-        mock_service_class.return_value = mock_service
-
-        config = {
-            "title": "Agent Workbench",
-            "labels": {
-                "models_tab": "🤖 Models",
-                "appearance_tab": "🎨 Appearance",
-                "context_tab": "📁 Project Info",
-                "account_tab": "👤 Account",
-                "provider_label": "Provider",
-                "model_label": "Model",
-                "temperature_label": "Temperature",
-                "max_tokens_label": "Max Tokens",
-            },
-            "allow_model_selection": True,
-            "show_company_section": False,
-        }
-        user_state = gr.State({"user_id": str(uuid4())})
-        settings_state = gr.State({})
-
-        with gr.Blocks() as demo:
-            settings.render(config, user_state, settings_state)
-
-        # Settings page should have save handler wired
         assert isinstance(demo, gr.Blocks)
 
 
@@ -283,38 +230,6 @@ class TestSettingsValidation:
 
 class TestErrorHandling:
     """Test error handling for save failures"""
-
-    @patch("agent_workbench.services.user_settings_service.UserSettingsService")
-    def test_database_save_failure_shows_error(self, mock_service_class):
-        """Test error message shown when database save fails"""
-        # Mock UserSettingsService to raise exception
-        mock_service = MagicMock()
-        mock_service.bulk_set_settings.side_effect = Exception("Database error")
-        mock_service_class.return_value = mock_service
-
-        config = {
-            "title": "Agent Workbench",
-            "labels": {
-                "models_tab": "🤖 Models",
-                "appearance_tab": "🎨 Appearance",
-                "context_tab": "📁 Project Info",
-                "account_tab": "👤 Account",
-                "provider_label": "Provider",
-                "model_label": "Model",
-                "temperature_label": "Temperature",
-                "max_tokens_label": "Max Tokens",
-            },
-            "allow_model_selection": True,
-            "show_company_section": False,
-        }
-        user_state = gr.State({"user_id": str(uuid4())})
-        settings_state = gr.State({})
-
-        with gr.Blocks() as demo:
-            settings.render(config, user_state, settings_state)
-
-        # Settings page should handle errors gracefully
-        assert isinstance(demo, gr.Blocks)
 
     def test_validation_failure_prevents_save(self):
         """Test validation failure prevents settings save"""

@@ -18,7 +18,9 @@ from src.agent_workbench.services.consolidated_service import (
 @pytest.fixture
 def mock_db_session():
     """Mock database session."""
-    return AsyncMock()
+    mock = AsyncMock()
+    mock.add = MagicMock()  # session.add() is synchronous
+    return mock
 
 
 @pytest.fixture
