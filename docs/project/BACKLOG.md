@@ -10,14 +10,19 @@ See `docs/project/ARCHITECTURE.md` for the dot on the horizon.
 
 - [x] PR-04: Delete dead UI files (app.py, seo_coach_app.py, mode_factory.py v1, orphaned components)
 - [x] PR-05: Delete dead routes (context.py, conversations.py, messages.py, files.py)
-- [ ] PR-06: main.py bloat removal + test quality fixes
-  - Remove ~470 lines of dead fallback interfaces and DI functions from main.py
-  - Fix SQLAlchemy `declarative_base` deprecation warning (database.py)
-  - Fix `AsyncMock` / real DB engine leaking in unit tests
+- [x] PR-06: main.py bloat removal + test quality fixes
+  - Removed ~470 lines of dead fallback interfaces and DI functions from main.py
+  - Fixed SQLAlchemy `declarative_base` deprecation warning (database.py)
+  - Fixed `AsyncMock` / real DB engine leaking in unit tests
   - NOTE: `auth_service`, `user_settings_service`, `langgraph_service`, `workflow_nodes`
     were restored — they are Phase 2 pre-built infrastructure, not dead code
-- [ ] PR-07: Review dead Pydantic models and aliases (6 shadows, 15 aliases, provider ABCs)
-  - Check each against Phase 2 plans before deleting
+- [x] PR-07: Dead Pydantic models + aliases
+  - Deleted 12 backward-compat aliases from `schemas.py` (Conversation×5, Message×5, AgentConfig×2)
+  - Deleted 2 unused shadow models from `consolidated_state.py` (CreateConversationRequest, ConversationResponse)
+  - Kept `ContextUpdateRequest` in `consolidated_state.py` — actively imported by `chat_workflow.py`
+    (plan assumed unused; grep proved otherwise — follow-up PR should redirect import to `api_models.py`)
+  - Provider ABCs in `providers.py` (~160 lines): confirmed used at runtime via `PROVIDER_FACTORIES`
+    in `simple_chat.py`; deferred to later PR
 
 ---
 
