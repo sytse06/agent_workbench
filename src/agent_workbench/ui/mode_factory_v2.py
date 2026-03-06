@@ -199,11 +199,13 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
     # CSS loaded conditionally per mode:
     # - Workbench: css=None (plain Gradio, theme only)
     # - SEO Coach: full CSS stack pre-built in config by create_seo_app()
-    demo = gr.Blocks(
-        title=config["title"],
-        theme=config["theme"],
-        css=config.get("css"),
-    )
+    # Gradio 6: theme/css moved from Blocks() to launch(); for ASGI mounting
+    # set them directly on the demo object before building routes.
+    demo = gr.Blocks(title=config["title"])
+    demo.theme = gr.utils.get_theme(config["theme"])
+    demo.css = config.get("css")
+    demo.css_paths = []
+    demo._set_html_css_theme_variables()
 
     # Define shared state BEFORE routes so all routes can access them
     with demo:

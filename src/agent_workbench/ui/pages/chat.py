@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import gradio as gr
 import requests  # type: ignore[import-untyped]
 
+from ..components.message_converter import to_chat_message
 from ..components.sidebar import render_sidebar
 
 logger = logging.getLogger(__name__)
@@ -94,7 +95,6 @@ def render(
             fn=handle_chat_interface_message,
             additional_inputs=[user_state, settings_state],
             save_history=False,
-            type="messages",
             title="Agent Workbench Chat",
             textbox=gr.Textbox(
                 placeholder=config["labels"]["placeholder"],
@@ -232,9 +232,8 @@ def render(
 
             # Chatbot (messages display)
             chatbot = gr.Chatbot(
-                type="messages",
                 elem_classes=["agent-workbench-messages"],
-                show_copy_button=True,
+                buttons=["copy"],
                 height=600,
                 label="",
                 value=conversation_state.value if conversation_state.value else [],
@@ -298,7 +297,7 @@ def render(
 
             def handle_submit(
                 message: str,
-                history: List[Dict[str, str]],
+                history: List[gr.ChatMessage],
                 user_state_val: Optional[Dict[str, Any]],
                 settings_val: Optional[Dict[str, Any]],
             ):
@@ -365,22 +364,33 @@ def render(
                         ai_response = result.get(
                             "assistant_response", "No response received"
                         )
+                        response_metadata = result.get("response_metadata", {})
                     else:
                         ai_response = (
                             f"API Error {response.status_code}: " f"{response.text}"
                         )
+                        response_metadata = {}
 
                 except requests.exceptions.Timeout:
                     ai_response = "Request timed out after 30 seconds"
+                    response_metadata = {}
                 except requests.exceptions.ConnectionError:
                     ai_response = "Connection failed - is the server running?"
+                    response_metadata = {}
                 except Exception as e:
                     ai_response = f"Unexpected error: {str(e)}"
+                    response_metadata = {}
 
-                # Update history with user message and response
+                # Update history with user message and response (gr.ChatMessage)
                 new_history = history + [
-                    {"role": "user", "content": message},
-                    {"role": "assistant", "content": ai_response},
+                    to_chat_message({"role": "user", "content": message}),
+                    to_chat_message(
+                        {
+                            "role": "assistant",
+                            "content": ai_response,
+                            "metadata": response_metadata,
+                        }
+                    ),
                 ]
 
                 # State 1: Back to disabled (empty input)
@@ -642,8 +652,25 @@ def load_selected_conversation(
     return [], []
 
 
+def _content_to_str(content: Any) -> str:
+    """Normalize Gradio 6 message content to plain string.
+
+    In Gradio 6, content can be a list of content parts (multimodal format)
+    instead of a plain string. Extract text parts into a single string.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [
+            item.get("text", "") if isinstance(item, dict) else str(item)
+            for item in content
+        ]
+        return " ".join(p for p in parts if p)
+    return str(content) if content is not None else ""
+
+
 def update_conversations_list(
-    conv_state: List[Dict[str, str]],
+    conv_state: List[Dict[str, Any]],
     conv_list: List[Dict[str, Any]],
     user_state: Optional[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
@@ -678,9 +705,12 @@ def update_conversations_list(
         return conv_list if conv_list else []
 
     # Extract first user message as title
-    first_user_msg = next(
-        (msg["content"] for msg in conv_state if msg.get("role") == "user"),
-        "Untitled",
+    # _content_to_str handles Gradio 6's list format for multimodal content
+    first_user_msg = _content_to_str(
+        next(
+            (msg["content"] for msg in conv_state if msg.get("role") == "user"),
+            "Untitled",
+        )
     )
     title = first_user_msg[:50]
 
@@ -699,7 +729,7 @@ def update_conversations_list(
     # Get last message for preview
     preview = ""
     if len(conv_state) > 0:
-        preview = conv_state[-1].get("content", "")[:100]
+        preview = _content_to_str(conv_state[-1].get("content", ""))[:100]
 
     # Remove existing entry with same ID
     updated_list = [c for c in (conv_list or []) if c.get("id") != conv_id]
@@ -757,10 +787,10 @@ def load_conversation_into_chat(
 
 def handle_chat_interface_message(
     message: str,
-    history: List[Dict[str, str]],
+    history: List[Dict[str, Any]],
     user_state: Optional[Dict[str, Any]],
     settings: Optional[Dict[str, Any]] = None,
-) -> str:
+) -> gr.ChatMessage:
     """
     Handle chat message submission for gr.ChatInterface.
 
@@ -771,15 +801,15 @@ def handle_chat_interface_message(
         settings: User settings (model config, etc.)
 
     Returns:
-        Assistant's response text only (ChatInterface manages history)
+        gr.ChatMessage with assistant response and optional metadata.
 
     Note:
         gr.ChatInterface automatically adds user message to history and
-        appends the returned response, so we only return assistant text.
+        appends the returned response, so we only return the assistant message.
     """
 
     if not message.strip():
-        return "Please enter a message."
+        return gr.ChatMessage(role="assistant", content="Please enter a message.")
 
     # Get model config from settings or use defaults
     if settings and "model_config" in settings:
@@ -815,18 +845,32 @@ def handle_chat_interface_message(
         if response.status_code == 200:
             result = response.json()
             ai_response = result.get("assistant_response", "No response received")
-            return ai_response
+            response_metadata = result.get("response_metadata", {})
+            return to_chat_message(
+                {
+                    "role": "assistant",
+                    "content": ai_response,
+                    "metadata": response_metadata,
+                }
+            )
         else:
-            return f"API Error {response.status_code}: {response.text}"
+            return gr.ChatMessage(
+                role="assistant",
+                content=f"API Error {response.status_code}: {response.text}",
+            )
 
     except requests.exceptions.Timeout:
-        return "Request timed out after 30 seconds"
+        return gr.ChatMessage(
+            role="assistant", content="Request timed out after 30 seconds"
+        )
 
     except requests.exceptions.ConnectionError:
-        return "Connection failed - is the server running?"
+        return gr.ChatMessage(
+            role="assistant", content="Connection failed - is the server running?"
+        )
 
     except Exception as e:
-        return f"Unexpected error: {str(e)}"
+        return gr.ChatMessage(role="assistant", content=f"Unexpected error: {str(e)}")
 
 
 def handle_chat_message(

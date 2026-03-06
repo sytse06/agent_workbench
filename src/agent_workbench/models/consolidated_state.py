@@ -325,6 +325,7 @@ class ConsolidatedWorkflowResponse(BaseModel):
     business_profile: Optional[Dict[str, Any]] = None
     coaching_context: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any] = {}
+    response_metadata: Optional[Dict[str, Any]] = None
 
 
 class WorkflowUpdate(BaseModel):

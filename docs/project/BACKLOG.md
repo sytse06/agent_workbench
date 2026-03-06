@@ -34,7 +34,7 @@ See `docs/project/ARCHITECTURE.md` for the dot on the horizon.
   - `await session.delete()` — assessment was wrong; SQLAlchemy 2.0 AsyncSession.delete() IS async; `await` kept
   - Debug `print()` → `logger.debug()` in chat.py and mode_factory_v2.py
   - NOTE: `type="messages"` removal deferred — project pinned to Gradio <6.0.0; belongs in Gradio 6 upgrade PR
-- [ ] PR-08b: Gradio 6 upgrade — bump `gradio>=6.0.0`, remove `type="messages"` from gr.Chatbot (chat.py:168)
+- [x] PR-08b: Gradio 6 upgrade — bump `gradio>=6.0.0`, remove `type="messages"`, adopt `gr.ChatMessage`, `MessageConverter`, `response_metadata` passthrough, Pydantic/LangChain boundary fixes
 - [x] PR-09: Externalize inline JavaScript (246 lines) + stable elem_id selectors
   - Extracted 246-line JS block → static/js/ui-init.js (IIFE, SEO Coach only)
   - Added elem_id= to layout components (aw-main, aw-top-bar, aw-input-bar)

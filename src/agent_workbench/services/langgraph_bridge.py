@@ -210,12 +210,13 @@ class LangGraphStateBridge:
             if isinstance(msg, StandardMessage):
                 standard_messages.append(msg)
             elif isinstance(msg, dict):
-                # Convert dictionary format
+                # Convert dictionary format (preserve metadata if present)
                 standard_messages.append(
                     StandardMessage(
                         role=msg.get("role", "user"),
                         content=msg.get("content", ""),
                         timestamp=msg.get("timestamp", datetime.utcnow()),
+                        metadata=msg.get("metadata"),
                     )
                 )
             else:
@@ -329,11 +330,13 @@ class LangGraphStateBridge:
             "conversation_id": str(consolidated_state.conversation_id),
             "user_message": user_message,
             "assistant_response": None,
-            "model_config": consolidated_state.model_config.dict(),
+            "model_config": consolidated_state.model_config.model_dump(),
             "provider_name": consolidated_state.provider_name,
             "context_data": consolidated_state.context_data,
             "active_contexts": consolidated_state.active_contexts,
-            "conversation_history": [msg.dict() for msg in consolidated_state.messages],
+            "conversation_history": [
+                msg.model_dump() for msg in consolidated_state.messages
+            ],
             "workflow_mode": consolidated_state.coaching_phase or "workbench",
             "workflow_steps": [],
             "current_operation": None,
@@ -352,9 +355,11 @@ class LangGraphStateBridge:
     ) -> Dict[str, Any]:
         """Convert LangGraph workflow state back to ConsolidatedState format."""
 
-        # Convert back to ConsolidatedState format
+        # Convert back to ConsolidatedState format (safe field-scoped reconstruction)
+        _sm_fields = set(StandardMessage.model_fields)
         messages = [
-            StandardMessage(**msg) for msg in workflow_state["conversation_history"]
+            StandardMessage(**{k: v for k, v in msg.items() if k in _sm_fields})
+            for msg in workflow_state["conversation_history"]
         ]
 
         # Add assistant response if generated
