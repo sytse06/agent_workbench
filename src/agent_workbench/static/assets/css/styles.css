@@ -1,51 +1,22 @@
 /*
- * Agent Workbench Styles
+ * Agent Workbench Styles — SEO Coach mode
  *
- * All component styles in one file.
- * Imports tokens.css for design system variables.
+ * Loaded conditionally for SEO Coach only. Workbench uses plain Gradio.
+ * Tokens (CSS variables) are loaded first by build_gradio_app().
  *
  * Sections:
- * 1. Tokens import
- * 2. Typography
- * 3. Layout
- * 4. Navigation
- * 5. Components
- * 6. Responsive
+ * 1. Layout
+ * 2. Navigation
+ * 3. Top Icon Bar
+ * 4. Logo
+ * 5. Chat Visibility Toggle
+ * 6. Sidebar (Ollama Design)
+ * 7. Input Bar
+ * 8. Submit Button
+ * 9. Conversation List
+ * 10. Settings
+ * 11. Responsive
  */
-
-@import url('tokens.css');
-
-/* ============================================
-   TYPOGRAPHY
-   ============================================ */
-
-/* Default: Lora for body text */
-* {
-    font-family: var(--font-family-body);
-}
-
-/* Ubuntu for all headings */
-h1, h2, h3, h4, h5, h6,
-.heading,
-.header {
-    font-family: var(--font-family-headers);
-}
-
-/* Gradio container */
-.gradio-container {
-    font-family: var(--font-family-body) !important;
-}
-
-/* Buttons, inputs, and interactive elements use Ubuntu */
-.gr-button,
-.gr-input,
-.gr-box,
-button,
-input,
-select,
-textarea {
-    font-family: var(--font-family-headers) !important;
-}
 
 /* ============================================
    LAYOUT
@@ -77,13 +48,6 @@ body {
 .agent-workbench-top-bar .prose {
     background: transparent !important;
     background-color: transparent !important;
-}
-
-/* Chat container parent row - center content when sidebar closed */
-#component-14 {
-    display: flex !important;
-    justify-content: center !important;
-    width: 100% !important;
 }
 
 /* Centered chat container */
@@ -125,7 +89,7 @@ gradio-app nav {
    TOP ICON BAR
    ============================================ */
 
-/* Remove default Gradio borders - but preserve layout structure */
+/* Remove default Gradio borders */
 #component-0,
 .agent-workbench-top-bar,
 .agent-workbench-chat-container,
@@ -181,16 +145,14 @@ div.row.agent-workbench-top-bar {
 }
 
 /* Chat container - MUST be column with top alignment */
-#component-16 {
+#aw-main,
+#aw-main.column {
     border: none !important;
-    /* REMOVED width: 100% to allow flexbox to work with sidebar */
     display: flex !important;
-    flex-direction: column !important;  /* Column layout, NOT row */
-    align-items: stretch !important;    /* NOT center - stretch to full width */
-    justify-content: flex-start !important;  /* Align children to TOP */
-    position: relative !important;  /* Keep in normal flow, NOT fixed */
-
-    /* Remove padding - let container control spacing */
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    position: relative !important;
     padding: 0 !important;
     margin: 0 0 var(--space-2xl) 0 !important;
     background: transparent !important;
@@ -198,16 +160,16 @@ div.row.agent-workbench-top-bar {
 
 /* CRITICAL: Override position:fixed on top bar - keep in flex flow */
 .agent-workbench-top-bar,
-#component-17 {
-    position: relative !important;  /* Override agent-workbench-design.css position:fixed */
+#aw-top-bar {
+    position: relative !important;
 }
 
 .agent-workbench-top-bar-left {
     display: flex;
     align-items: center;
-    gap: 0;  /* Remove gap - spacing controlled by icon buttons */
+    gap: 0;
     justify-content: flex-start;
-    position: relative;  /* Enable absolute positioning for children */
+    position: relative;
 }
 
 .agent-workbench-top-bar-right {
@@ -215,26 +177,20 @@ div.row.agent-workbench-top-bar {
     align-items: center;
     gap: var(--space-md);
     justify-content: flex-end;
-
-    /* Force full width to ensure icon reaches right edge */
     width: 100%;
     flex-grow: 1;
 }
 
-/* Remove Gradio row padding from icon groups to align with container edges */
+/* Remove Gradio row padding from icon groups */
 div.row.agent-workbench-top-bar-left,
-#component-17,
-div.row.agent-workbench-top-bar-right,
-#component-20 {
+div.row.agent-workbench-top-bar-right {
     padding: 0 !important;
     margin: 0 !important;
 }
 
-/* Align top bar height with sidebar New Chat button (#component-8) */
-/* Match the height and padding of the New Chat button container */
-/* Target both ID and Svelte classes for maximum specificity */
-#component-17,
-#component-17.row,
+/* Top bar height */
+#aw-top-bar,
+#aw-top-bar.row,
 .agent-workbench-top-bar,
 .agent-workbench-top-bar.row {
     min-height: 48px !important;
@@ -248,36 +204,36 @@ div.row.agent-workbench-top-bar-right,
     margin: 0 !important;
     margin-top: 0 !important;
     margin-bottom: var(--space-2xl) !important;
-    flex-shrink: 0 !important;  /* Prevent shrinking */
-    flex-grow: 0 !important;    /* Prevent growing */
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
 }
 
 /* Override Gradio's gap for first child (top bar) */
-#component-16 > #component-17:first-child {
+#aw-main > #aw-top-bar:first-child {
     margin-top: 0 !important;
 }
 
-/* Ensure New Chat button (#component-8) is flush with top of sidebar */
+/* Ensure New Chat button is flush with top of sidebar */
 #component-8,
 #conv-sidebar-container > #component-8:first-child {
     margin-top: 0 !important;
     margin-bottom: 0 !important;
-    padding: 0 !important;  /* Remove any Gradio block padding */
+    padding: 0 !important;
 }
 
-/* Match both components to same height for perfect alignment */
+/* Match both components to same height */
 #component-8,
-#component-17 {
+#aw-top-bar {
     min-height: 48px !important;
     max-height: 48px !important;
     height: 48px !important;
-    overflow: hidden !important;  /* Prevent scrollbar if content slightly overflows */
+    overflow: hidden !important;
     display: flex !important;
-    align-items: center !important;  /* Center content vertically within 48px */
+    align-items: center !important;
 }
 
 /* Ensure the top bar content is properly centered vertically */
-#component-17 > *,
+#aw-top-bar > *,
 .agent-workbench-top-bar > * {
     height: 100% !important;
     display: flex !important;
@@ -301,10 +257,10 @@ div.row.agent-workbench-top-bar-right,
     border: none !important;
 }
 
-/* Force icon buttons to sit next to each other with controlled spacing */
+/* Force icon buttons to sit next to each other */
 .agent-workbench-top-bar-left .agent-workbench-icon-btn {
     margin-left: 0 !important;
-    margin-right: 20px !important;  /* 20px gap between icons */
+    margin-right: 20px !important;
     padding: 0 !important;
 }
 
@@ -320,7 +276,7 @@ div.row.agent-workbench-top-bar-right,
 /* Fallback: Absolute positioning for new chat icon */
 #new-chat-container {
     position: absolute !important;
-    left: 44px !important;  /* 40px icon width + 4px gap */
+    left: 44px !important;
     top: 50% !important;
     transform: translateY(-50%) !important;
 }
@@ -334,17 +290,16 @@ div.row.agent-workbench-top-bar-right,
     margin: 0 !important;
 }
 
-/* Right icon group - explicit padding/margin removal */
+/* Right icon group */
 .agent-workbench-top-bar-right,
 .agent-workbench-top-bar-right.row,
-div.row.agent-workbench-top-bar-right,
-#component-20 {
+div.row.agent-workbench-top-bar-right {
     padding: 0 !important;
     margin: 0 !important;
     flex-shrink: 0 !important;
 }
 
-/* Settings icon container - force full width expansion through all Gradio wrappers */
+/* Settings icon container */
 #settings-icon-container,
 #settings-icon-container > .block,
 #settings-icon-container > .block > .html-container,
@@ -430,7 +385,6 @@ div.row.agent-workbench-top-bar-right,
 }
 
 /* Theme-aware logo switching */
-/* Light mode: show logo-light, hide logo-dark */
 .agent-workbench-logo img.logo-dark {
     display: none !important;
 }
@@ -439,7 +393,6 @@ div.row.agent-workbench-top-bar-right,
     display: block !important;
 }
 
-/* Dark mode: show logo-dark, hide logo-light */
 @media (prefers-color-scheme: dark) {
     .agent-workbench-logo img.logo-light {
         display: none !important;
@@ -481,51 +434,37 @@ div.row.agent-workbench-top-bar-right,
    SIDEBAR (Ollama Design)
    ============================================ */
 
-/* Ensure parent Row allows both columns to flex properly - target Svelte class too */
-#component-5,
-#component-5.row {
-    display: flex !important;
-    flex-direction: row !important;
-    gap: 0 !important;
-    width: 100% !important;
-    position: relative !important;
-}
-
-/* Sidebar container - fixed 250px width when open (compact, fits New Chat button) */
-/* Target both ID and Svelte classes for maximum specificity */
+/* Sidebar container - fixed 250px width when open */
 #conv-sidebar-container,
 #conv-sidebar-container.column {
-    position: relative !important;  /* Keep in normal flow */
+    position: relative !important;
     flex: 0 0 250px !important;
     min-width: 250px !important;
     max-width: 250px !important;
     width: 250px !important;
     background: white !important;
     border-right: 1px solid #e5e7eb !important;
-    padding: 0 16px 16px 16px !important;  /* No top padding - align with chat container */
+    padding: 0 16px 16px 16px !important;
     transition: all 0.3s ease !important;
     overflow: hidden !important;
 }
 
 /* Chat container - must flex-grow to fill remaining space */
-/* Target both ID and Svelte classes */
-#component-16,
-#component-16.column {
-    position: relative !important;  /* Keep in normal flow */
-    flex: 1 1 auto !important;  /* Grow to fill available space */
-    min-width: 0 !important;  /* Allow shrinking below content size */
-    width: auto !important;  /* Allow auto width calculation */
+#aw-main,
+#aw-main.column {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
 }
 
-/* Sidebar top bar - mirrors chat top bar height and padding */
+/* Sidebar top bar */
 .sidebar-top-bar {
     min-height: 48px !important;
     padding: var(--space-md) !important;
     align-items: center !important;
 }
 
-/* Hide sidebar by collapsing to zero width (keeps in layout for push behavior) */
-/* Target both ID and classes with maximum specificity */
+/* Hide sidebar by collapsing to zero width */
 #conv-sidebar-container.conv-sidebar-hidden,
 #conv-sidebar-container.conv-sidebar-hidden.column {
     flex: 0 0 0 !important;
@@ -543,7 +482,7 @@ div.row.agent-workbench-top-bar-right,
     overflow: hidden !important;
 }
 
-/* Hide top bar new chat icon when sidebar is open - high specificity */
+/* Hide top bar new chat icon when sidebar is open */
 #new-chat-container.hidden-when-sidebar-open,
 #new-chat-container.hidden-when-sidebar-open .prose,
 #new-chat-container.hidden-when-sidebar-open #new-chat-btn {
@@ -552,12 +491,12 @@ div.row.agent-workbench-top-bar-right,
     opacity: 0 !important;
 }
 
-/* New Chat Button - Hidden Gradio button (for event handling only) */
+/* New Chat Button - Hidden Gradio button (event handling only) */
 .sidebar-new-chat-btn {
-    display: none !important;  /* Hide visually, but keep in DOM for click events */
+    display: none !important;
 }
 
-/* Visual HTML button (what user sees) - ensure icon + text display properly */
+/* Visual HTML button */
 .sidebar-new-chat-visual {
     width: 100% !important;
     display: flex !important;
@@ -577,7 +516,7 @@ div.row.agent-workbench-top-bar-right,
     border-color: #d1d5db !important;
 }
 
-/* Ensure SVG icon is visible and properly sized - match top bar icon size (24px) */
+/* Ensure SVG icon is visible */
 .sidebar-new-chat-visual svg {
     width: 24px !important;
     height: 24px !important;
@@ -600,7 +539,7 @@ div.row.agent-workbench-top-bar-right,
     white-space: nowrap !important;
 }
 
-/* Recent Chats Heading - Date grouping style */
+/* Recent Chats Heading */
 #conv-sidebar-container h2 {
     font-size: 12px !important;
     font-weight: 500 !important;
@@ -610,7 +549,7 @@ div.row.agent-workbench-top-bar-right,
     padding: 0 !important;
 }
 
-/* Conversation List (gr.Dataset) - Ollama simple list style */
+/* Conversation List (gr.Dataset) */
 #conv-list {
     background: transparent !important;
     border: none !important;
@@ -623,7 +562,6 @@ div.row.agent-workbench-top-bar-right,
     padding: 0 !important;
 }
 
-/* Individual conversation items */
 #conv-list .grid-wrap {
     gap: 2px !important;
 }
@@ -652,7 +590,7 @@ div.row.agent-workbench-top-bar-right,
     background: #e5e7eb !important;
 }
 
-/* Clear History Button - Subtle styling */
+/* Clear History Button */
 #conv-sidebar-container button:has(span:contains("Clear History")) {
     margin-top: auto;
     padding: 8px 12px !important;
@@ -703,7 +641,6 @@ button.close-sidebar {
 
     transition: box-shadow var(--transition-fast);
 
-    /* Positioning context for absolute submit button */
     position: relative !important;
 }
 
@@ -743,9 +680,6 @@ button.close-sidebar {
     outline: none !important;
     box-shadow: none !important;
     padding: var(--space-sm) 0 !important;
-
-    /* Add right padding to prevent text from overlapping the absolute button */
-    /* Button width (32px) + spacing on both sides (12px + 12px) = 56px */
     padding-right: 56px !important;
 }
 
@@ -769,14 +703,12 @@ button.agent-workbench-submit-btn.sm,
     max-width: 32px !important;
     max-height: 32px !important;
 
-    /* Absolute positioning - visually inside input bar */
     position: absolute !important;
     right: var(--space-md) !important;
     top: 50% !important;
     transform: translateY(-50%) !important;
-    z-index: 10 !important;  /* Above input container */
+    z-index: 10 !important;
 
-    /* Icon displayed via mask-image (allows recoloring via background-color) */
     -webkit-mask-image: url('/static/icons/svg/submit_icon_24.svg') !important;
     mask-image: url('/static/icons/svg/submit_icon_24.svg') !important;
     -webkit-mask-size: 24px 24px !important;
@@ -786,7 +718,6 @@ button.agent-workbench-submit-btn.sm,
     -webkit-mask-repeat: no-repeat !important;
     mask-repeat: no-repeat !important;
 
-    /* Remove from flex flow */
     flex-grow: 0 !important;
     flex-shrink: 0 !important;
     flex-basis: auto !important;
@@ -801,16 +732,16 @@ button.agent-workbench-submit-btn.sm,
 
     border: none !important;
     border-radius: var(--radius-full) !important;
-    background-color: var(--awb-text-tertiary) !important;  /* Icon color (gray) */
+    background-color: var(--awb-text-tertiary) !important;
 
     cursor: not-allowed;
-    opacity: 1 !important;  /* Fully visible, not faded */
+    opacity: 1 !important;
     transition: background-color var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
 
     box-sizing: border-box !important;
 }
 
-/* Hover state for disabled button - subtle feedback */
+/* Hover state for disabled button */
 button.agent-workbench-submit-btn[disabled]:hover,
 .agent-workbench-input-bar button.agent-workbench-submit-btn[disabled]:hover {
     transform: translateY(-50%) scale(1.05) !important;
@@ -825,11 +756,11 @@ button.agent-workbench-submit-btn[disabled]:hover,
     transition: opacity var(--transition-fast);
 }
 
-/* State 2: Active (has text) - black icon on transparent background, or full black circle */
+/* State 2: Active (has text) */
 button.agent-workbench-submit-btn.active,
 button.agent-workbench-submit-btn[aria-disabled="false"],
 .agent-workbench-input-bar button.agent-workbench-submit-btn.active {
-    background-color: var(--awb-btn-active) !important;  /* Black icon */
+    background-color: var(--awb-btn-active) !important;
     cursor: pointer !important;
     opacity: 1 !important;
 }
@@ -850,14 +781,13 @@ button.agent-workbench-submit-btn[aria-disabled="false"]:active {
     transform: translateY(-50%) scale(0.95);
 }
 
-/* State 3: Processing (animated) - black icon */
+/* State 3: Processing (animated) */
 button.agent-workbench-submit-btn.processing,
 .agent-workbench-input-bar button.agent-workbench-submit-btn.processing {
-    background-color: var(--awb-btn-active) !important;  /* Black icon */
+    background-color: var(--awb-btn-active) !important;
     cursor: wait !important;
     opacity: 1 !important;
 
-    /* Show processing icon instead of submit icon */
     -webkit-mask-image: url('/static/icons/svg/processing_icon_24.svg') !important;
     mask-image: url('/static/icons/svg/processing_icon_24.svg') !important;
 }
@@ -958,7 +888,7 @@ button.agent-workbench-submit-btn.processing svg,
    ============================================ */
 
 @media (max-width: 768px) {
-    /* MOBILE: Remove Gradio's default main padding to allow full-width top bar */
+    /* MOBILE: Remove Gradio's default main padding */
     main.fillable,
     main.app,
     main.fillable.app,
@@ -970,7 +900,7 @@ button.agent-workbench-submit-btn.processing svg,
         padding-bottom: 0 !important;
     }
 
-    /* MOBILE: Sidebar switches to overlay mode (standard mobile UX) */
+    /* MOBILE: Sidebar switches to overlay mode */
     #conv-sidebar-container,
     #conv-sidebar-container.column {
         position: fixed !important;
@@ -978,11 +908,11 @@ button.agent-workbench-submit-btn.processing svg,
         left: 0;
         height: 100vh;
         width: 250px !important;
-        z-index: 2000;  /* Above everything */
-        transform: translateX(-100%);  /* Hidden by default - off screen */
+        z-index: 2000;
+        transform: translateX(-100%);
         transition: transform 0.3s ease;
         box-shadow: 2px 0 8px rgba(0,0,0,0.15);
-        padding: 16px !important;  /* Equal padding on all sides for mobile overlay */
+        padding: 16px !important;
     }
 
     /* Sidebar visible - slide in from left */
@@ -991,31 +921,31 @@ button.agent-workbench-submit-btn.processing svg,
     }
 
     /* Chat container - always full width on mobile */
-    #component-16 {
+    #aw-main {
         width: 100% !important;
-        max-width: 100vw !important;  /* Override any parent constraints */
+        max-width: 100vw !important;
         margin-left: 0 !important;
-        overflow-x: hidden !important;  /* Prevent horizontal scroll */
-        padding-left: 0 !important;  /* No padding - let children handle their own spacing */
+        overflow-x: hidden !important;
+        padding-left: 0 !important;
         padding-right: 0 !important;
     }
 
-    /* Top bar - ensure full width on mobile (override 800px max-width) */
-    #component-17,
+    /* Top bar - ensure full width on mobile */
+    #aw-top-bar,
     .agent-workbench-top-bar {
-        width: 100vw !important;  /* Full viewport width */
-        max-width: 100vw !important;  /* Override 800px constraint */
+        width: 100vw !important;
+        max-width: 100vw !important;
         left: 0 !important;
         right: 0 !important;
-        padding: var(--space-sm) var(--space-md) !important;  /* Internal padding for icons */
+        padding: var(--space-sm) var(--space-md) !important;
         display: flex !important;
         justify-content: space-between !important;
-        margin-left: 0 !important;  /* Override any inherited margins */
+        margin-left: 0 !important;
         margin-right: 0 !important;
     }
 
     /* Add horizontal padding to content areas (not top bar) */
-    #component-16 > *:not(#component-17):not(.agent-workbench-top-bar) {
+    #aw-main > *:not(#aw-top-bar):not(.agent-workbench-top-bar) {
         padding-left: var(--space-md) !important;
         padding-right: var(--space-md) !important;
     }
@@ -1027,19 +957,18 @@ button.agent-workbench-submit-btn.processing svg,
         flex-shrink: 0 !important;
     }
 
-    /* Settings icon - CRITICAL: Override Gradio's inline min-width: min(0px, 100%) */
+    /* Settings icon - CRITICAL: Override Gradio's inline min-width */
     #settings-icon-container {
         display: flex !important;
         opacity: 1 !important;
         visibility: visible !important;
-        min-width: 40px !important;  /* Override inline style min-width: min(0px, 100%) = 0 */
-        max-width: 48px !important;  /* Constrain to icon size + minimal padding */
+        min-width: 40px !important;
+        max-width: 48px !important;
         width: auto !important;
         height: auto !important;
         overflow: visible !important;
     }
 
-    /* Remove padding from settings icon wrapper */
     #settings-icon-container .html-container {
         padding: 0 !important;
     }
@@ -1050,12 +979,12 @@ button.agent-workbench-submit-btn.processing svg,
         visibility: visible !important;
     }
 
-    /* Chat container - full viewport width on mobile (override 800px) */
+    /* Chat container - full viewport width on mobile */
     .agent-workbench-chat-container {
-        max-width: 100vw !important;  /* Override 800px desktop max-width */
+        max-width: 100vw !important;
         width: 100% !important;
         padding: var(--space-2xl) var(--space-lg);
-        overflow-x: hidden !important;  /* Prevent horizontal scroll from content */
+        overflow-x: hidden !important;
     }
 
     .agent-workbench-input-bar {
@@ -1063,11 +992,8 @@ button.agent-workbench-submit-btn.processing svg,
         border-radius: var(--radius-md);
     }
 
-    /* Input bar components - override general padding with 10px */
-    #component-16 #component-25,
-    #component-16 #component-26,
-    #component-25,
-    #component-26 {
+    /* Input bar components */
+    #aw-input-bar {
         padding-left: 10px !important;
         padding-right: 10px !important;
     }

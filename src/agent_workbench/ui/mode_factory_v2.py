@@ -11,13 +11,27 @@ No code duplication - single builder, different configurations.
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import gradio as gr
 
 from .pages import chat, settings
 
 logger = logging.getLogger(__name__)
+
+_CSS_DIR = Path(__file__).resolve().parent.parent / "static" / "assets" / "css"
+
+
+def _load_css(files: List[str]) -> str:
+    """Concatenate CSS files from the assets/css directory."""
+    parts = []
+    for name in files:
+        path = _CSS_DIR / name
+        if path.exists():
+            parts.append(path.read_text())
+        else:
+            logger.warning("CSS file not found: %s", path)
+    return "\n".join(parts)
 
 
 def create_app() -> gr.Blocks:
@@ -47,8 +61,13 @@ def create_workbench_app() -> gr.Blocks:
     """
     config = {
         "title": "Agent Workbench",
-        "theme": gr.themes.Base(primary_hue="blue", font="Roboto"),  # Blue theme
-        "load_custom_js": False,  # Workbench: plain Gradio, no custom JS
+        # Plain Gradio theme — no custom CSS, no custom JS
+        "theme": gr.themes.Base(
+            primary_hue=gr.themes.colors.blue,
+            font=gr.themes.GoogleFont("Roboto"),
+        ),
+        "css": None,  # Workbench: zero custom CSS
+        "load_custom_js": False,  # Workbench: zero custom JS
         # English labels
         "labels": {
             # Chat page
@@ -75,8 +94,7 @@ def create_workbench_app() -> gr.Blocks:
         # Feature flags
         "allow_model_selection": True,  # Show model controls in settings
         "show_company_section": False,  # Hide business-specific fields
-        "show_conv_browser": os.getenv("SHOW_CONV_BROWSER", "true").lower()
-        == "true",  # Show conversation sidebar
+        "show_conv_browser": False,  # Workbench: no conversation sidebar
         # Default model config
         "available_providers": ["openrouter", "google"],
         "default_provider": "openrouter",
@@ -101,7 +119,14 @@ def create_seo_app() -> gr.Blocks:
     """
     config = {
         "title": "SEO Coach",
-        "theme": gr.themes.Base(primary_hue="green", font="Open Sans"),  # Green theme
+        # Branded theme + full custom CSS stack
+        "theme": gr.themes.Base(
+            primary_hue=gr.themes.colors.emerald,
+            font=gr.themes.GoogleFont("Open Sans"),
+        ),
+        "css": _load_css(
+            ["tokens.css", "styles.css", "shared.css", "settings.css", "seo-coach.css"]
+        ),
         "load_custom_js": True,  # SEO Coach: full custom UI, load ui-init.js
         # Dutch labels
         "labels": {
@@ -165,55 +190,19 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
     Phase 2: Now includes settings_state for sharing config between pages
     """
 
-    # Create Blocks instance with unified CSS
-    # main.css imports fonts.css + shared.css (all core styles)
-    # Critical CSS inlined to bypass browser caching issues
-
     # Tell Gradio to serve the static directory as static files
     # This allows gr.Button(icon="...") to serve icons without permission checks
     # Ref: https://www.gradio.app/docs/gradio/set_static_paths
     static_dir = Path(__file__).resolve().parent.parent / "static"
     gr.set_static_paths(paths=[str(static_dir)])
 
-    # Load custom CSS directly - @import doesn't work in Gradio's inline styles
-    # Must load tokens.css first for CSS variables, then styles.css
-    css_dir = static_dir / "assets" / "css"
-    tokens_css = (
-        (css_dir / "tokens.css").read_text()
-        if (css_dir / "tokens.css").exists()
-        else ""
-    )
-    styles_css = (
-        (css_dir / "styles.css").read_text()
-        if (css_dir / "styles.css").exists()
-        else ""
-    )
-
-    # Remove @import statements (tokens.css loaded separately)
-    styles_css = "\n".join(
-        line
-        for line in styles_css.split("\n")
-        if not line.strip().startswith("@import")
-    )
-
+    # CSS loaded conditionally per mode:
+    # - Workbench: css=None (plain Gradio, theme only)
+    # - SEO Coach: full CSS stack pre-built in config by create_seo_app()
     demo = gr.Blocks(
         title=config["title"],
         theme=config["theme"],
-        css=f"""
-        /* Google Fonts loaded via FastAPI middleware (main.py:inject_google_fonts)
-           Gradio's Constructable Stylesheets don't support @import for external URLs */
-
-        /* Design tokens (CSS variables) */
-        {tokens_css}
-
-        /* Custom component styles */
-        {styles_css}
-
-        /* Critical fix: prevent input bar wrapping (Phase 4.3) */
-        .agent-workbench-input-bar {{
-            flex-wrap: nowrap !important;
-        }}
-        """,
+        css=config.get("css"),
     )
 
     # Define shared state BEFORE routes so all routes can access them
