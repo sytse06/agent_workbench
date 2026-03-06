@@ -10,6 +10,7 @@ controlled by config labels.
 """
 
 import base64
+import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -18,6 +19,8 @@ import gradio as gr
 import requests  # type: ignore[import-untyped]
 
 from ..components.sidebar import render_sidebar
+
+logger = logging.getLogger(__name__)
 
 
 def svg_to_data_uri(svg_path: str) -> str:
@@ -66,8 +69,9 @@ def render(
 
     Phase 3: Added conversation history sidebar (feature-flagged)
     """
-    print("[DEBUG chat.py] render() CALLED")
-    print(f"  config['show_conv_browser']: {config.get('show_conv_browser', False)}")
+    logger.debug(
+        "render() called, show_conv_browser=%s", config.get("show_conv_browser", False)
+    )
 
     # BrowserState for conversations list (sidebar)
     # Note: Individual conversation storage removed - gr.ChatInterface manages history
@@ -359,10 +363,7 @@ def render(
             # Phase 3: Wire up conversation persistence after message
             # Chatbot component updates trigger localStorage save
             if config.get("show_conv_browser", False) and (conversations_list_storage):
-                print(
-                    "[DEBUG chat.py] Wiring conversation persistence to "
-                    "chatbot component"
-                )
+                logger.debug("Wiring conversation persistence to chatbot component")
 
                 # Update BrowserState after each message submission
                 # When chatbot value changes, save to localStorage
@@ -383,10 +384,9 @@ def render(
                     outputs=[conv_list],
                 )
 
-                print(
-                    "[DEBUG chat.py] ✅ Event handlers wired: "
-                    "chatbot.change() → update_conversations_list → "
-                    "populate_list"
+                logger.debug(
+                    "Event handlers wired: chatbot.change"
+                    " -> update_conversations_list -> populate_list"
                 )
 
             # Phase 3: Wire up sidebar if enabled
@@ -415,12 +415,10 @@ def render(
     # Return BrowserState and Dataset list for page load event in mode_factory
     # This enables conversation list population on page refresh
     if config.get("show_conv_browser", False):
-        print("[DEBUG chat.py] render() RETURNING:")
-        print(f"  conversations_list_storage: {conversations_list_storage}")
-        print(f"  conv_list: {conv_list}")
+        logger.debug("render() returning conversations_list_storage and conv_list")
         return conversations_list_storage, conv_list
     else:
-        print("[DEBUG chat.py] render() RETURNING None, None (show_conv_browser=False)")
+        logger.debug("render() returning None, None (show_conv_browser=False)")
         return None, None
 
 
@@ -446,12 +444,11 @@ def populate_list(
         - Conversation titles (no date suffix)
         - Categories: Today, This Week, Older
     """
-    print("[DEBUG chat.py] populate_list CALLED!")
-    print(f"  user_state: {user_state}")
-    print(f"  browser_state length: {len(browser_state) if browser_state else 0}")
-    if browser_state:
-        sample = browser_state[:2] if len(browser_state) >= 2 else browser_state
-        print(f"  browser_state sample: {sample}")
+    logger.debug(
+        "populate_list: user_state=%s, browser_state length=%d",
+        user_state,
+        len(browser_state) if browser_state else 0,
+    )
 
     samples = []
 
@@ -497,19 +494,19 @@ def populate_list(
             samples.extend(older_convs)
 
         conv_count = len(today_convs) + len(this_week_convs) + len(older_convs)
-        print(
-            f"[populate_list] Guest: {conv_count} conversations "
-            f"(Today: {len(today_convs)}, Week: {len(this_week_convs)}, "
-            f"Older: {len(older_convs)})"
+        logger.debug(
+            "populate_list guest: %d conversations (Today: %d, Week: %d, Older: %d)",
+            conv_count,
+            len(today_convs),
+            len(this_week_convs),
+            len(older_convs),
         )
     else:
         # For authenticated users: Fetch from API
         # TODO: Implement when needed
-        print("[populate_list] Auth: API not implemented")
+        logger.debug("populate_list: auth user — API not yet implemented")
 
-    print(f"[DEBUG chat.py] populate_list RETURNING {len(samples)} samples")
-    if samples:
-        print(f"  First 3 samples: {samples[:3]}")
+    logger.debug("populate_list returning %d samples", len(samples))
 
     return gr.update(samples=samples)
 
@@ -543,14 +540,16 @@ def load_selected_conversation(
     else:
         clicked_text = str(selected_value) if selected_value else ""
 
-    print("[load_selected_conversation] CALLED!")
-    print(f"  - clicked_text: '{clicked_text}'")
-    print(f"  - user_state: {user_state}")
-    print(f"  - browser_state length: {len(browser_state) if browser_state else 0}")
+    logger.debug(
+        "load_selected_conversation: clicked='%s', user_state=%s, storage=%d items",
+        clicked_text,
+        user_state,
+        len(browser_state) if browser_state else 0,
+    )
 
     # Ignore category header clicks
     if clicked_text.startswith("📅"):
-        print("[load_selected_conversation] Header clicked, ignoring")
+        logger.debug("load_selected_conversation: header clicked, ignoring")
         return [], []
 
     # For guest users: Load from BrowserState by title match
@@ -560,18 +559,21 @@ def load_selected_conversation(
             if conv_title == clicked_text:
                 messages = conv.get("messages", [])
                 msg_count = len(messages)
-                print(
-                    f"[load_selected_conversation] Found conversation: "
-                    f"'{conv_title}' with {msg_count} messages"
+                logger.debug(
+                    "load_selected_conversation: found '%s' with %d messages",
+                    conv_title,
+                    msg_count,
                 )
                 return messages, messages
 
-        print(f"[load_selected_conversation] No match found for '{clicked_text}'")
+        logger.debug(
+            "load_selected_conversation: no match found for '%s'", clicked_text
+        )
         return [], []
 
     # For authenticated users: Fetch from API
     # TODO: Implement API fetching when needed
-    print("[load_selected_conversation] API fetching not yet implemented")
+    logger.debug("load_selected_conversation: auth user — API not yet implemented")
     return [], []
 
 
@@ -593,20 +595,21 @@ def update_conversations_list(
     Returns:
         Updated conversations list (for guests) or empty list (for auth users)
     """
-    # Debug logging
-    print("[update_conversations_list] Called with:")
-    print(f"  - conv_state length: {len(conv_state) if conv_state else 0}")
-    print(f"  - conv_list length: {len(conv_list) if conv_list else 0}")
-    print(f"  - user_state: {user_state}")
+    logger.debug(
+        "update_conversations_list: conv_state=%d, conv_list=%d, user_state=%s",
+        len(conv_state) if conv_state else 0,
+        len(conv_list) if conv_list else 0,
+        user_state,
+    )
 
     # Authenticated users use database - return empty list
     if user_state and user_state.get("user_id"):
-        print("[update_conversations_list] Auth user - returning empty")
+        logger.debug("update_conversations_list: auth user — returning empty")
         return []
 
     # Guest users: update localStorage list
     if not conv_state or len(conv_state) == 0:
-        print("[update_conversations_list] Empty conv_state - returning existing")
+        logger.debug("update_conversations_list: empty conv_state — returning existing")
         return conv_list if conv_list else []
 
     # Extract first user message as title
@@ -621,11 +624,12 @@ def update_conversations_list(
     conv_id = str(abs(hash(first_user_msg)))
     timestamp = datetime.now().isoformat()
 
-    # Debug: Print extracted info
-    print("[update_conversations_list] Extracted:")
-    print(f"  - first_user_msg: '{first_user_msg}'")
-    print(f"  - generated ID: {conv_id}")
-    print(f"  - existing IDs in list: {[c.get('id') for c in (conv_list or [])]}")
+    logger.debug(
+        "update_conversations_list: title='%s', id=%s, existing=%s",
+        first_user_msg,
+        conv_id,
+        [c.get("id") for c in (conv_list or [])],
+    )
 
     # Get last message for preview
     preview = ""
@@ -648,11 +652,12 @@ def update_conversations_list(
     # Keep only last 20 conversations
     result = updated_list[:20]
 
-    # Debug logging
-    print("[update_conversations_list] Created new entry:")
-    print(f"  - id: {conv_id}")
-    print(f"  - title: {title}")
-    print(f"  - Returning list with {len(result)} conversations")
+    logger.debug(
+        "update_conversations_list: saved '%s' (id=%s), returning %d conversations",
+        title,
+        conv_id,
+        len(result),
+    )
 
     return result
 

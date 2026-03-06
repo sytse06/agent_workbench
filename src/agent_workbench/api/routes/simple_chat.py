@@ -166,6 +166,7 @@ async def test_model_connectivity(request: ModelTestRequest) -> ModelTestRespons
     - Provider availability testing
     - Latency benchmarking
     """
+    api_key_source = "environment_variable"
     try:
         # Create model configuration
         model_config = ModelConfig(
@@ -200,9 +201,7 @@ async def test_model_connectivity(request: ModelTestRequest) -> ModelTestRespons
             status="success",
             provider=request.provider,
             model=request.model_name,
-            response_length=len(
-                response.reply
-            ),  # Fixed: use .reply instead of .content
+            response_length=len(response.message),
             latency_ms=latency_ms,
             api_key_source=api_key_source,
         )
@@ -214,9 +213,7 @@ async def test_model_connectivity(request: ModelTestRequest) -> ModelTestRespons
             provider=request.provider,
             model=request.model_name,
             error=str(e),
-            api_key_source=(
-                api_key_source if "api_key_source" in locals() else "unknown"
-            ),
+            api_key_source=api_key_source,
         )
 
 
