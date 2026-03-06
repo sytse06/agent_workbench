@@ -67,14 +67,29 @@ def render(
         conversation_state: Shared conversation messages state
         settings_state: User settings (model config, theme, context)
 
-    Phase 3: Added conversation history sidebar (feature-flagged)
+    Workbench mode: gr.ChatInterface with save_history=True (native Gradio sidebar)
+    SEO Coach mode: custom branded UI with manual event wiring
     """
     logger.debug(
-        "render() called, show_conv_browser=%s", config.get("show_conv_browser", False)
+        "render() called, load_custom_js=%s", config.get("load_custom_js", False)
     )
 
+    # Workbench: native Gradio ChatInterface — save_history gives the built-in sidebar
+    if not config.get("load_custom_js"):
+        gr.ChatInterface(
+            fn=handle_chat_interface_message,
+            additional_inputs=[user_state, settings_state],
+            save_history=True,
+            type="messages",
+            textbox=gr.Textbox(
+                placeholder=config["labels"]["placeholder"],
+                submit_btn=True,
+            ),
+        )
+        return None, None
+
+    # SEO Coach: custom branded UI
     # BrowserState for conversations list (sidebar)
-    # Note: Individual conversation storage removed - gr.ChatInterface manages history
     conversations_list_storage = gr.BrowserState(
         default_value=[],  # List of conversation metadata
         storage_key="agent_workbench_conversations_list",
