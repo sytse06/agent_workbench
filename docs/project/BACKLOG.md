@@ -126,3 +126,4 @@ Reference: `docs/phase2/phase2_architecture_plan.md`, `docs/project/ARCHITECTURE
 - [x] Cleanup plan — 11 PRs across 4 phases
 - [x] Phase 1: PR-01 E501 fix (27 violations), PR-02 dead tests (466→324), PR-03 smoke tests (6 tests)
 - [x] Cleanup Phase 2: PR-04 dead UI files (-3,689 lines), PR-05 dead routes
+- [x] Cleanup Phase 3: PR-09 externalize JS + stable elem_ids, PR-10 CSS conditional loading (-1,229 lines CSS deleted)
