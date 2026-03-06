@@ -35,8 +35,18 @@ See `docs/project/ARCHITECTURE.md` for the dot on the horizon.
   - Debug `print()` → `logger.debug()` in chat.py and mode_factory_v2.py
   - NOTE: `type="messages"` removal deferred — project pinned to Gradio <6.0.0; belongs in Gradio 6 upgrade PR
 - [ ] PR-08b: Gradio 6 upgrade — bump `gradio>=6.0.0`, remove `type="messages"` from gr.Chatbot (chat.py:168)
-- [ ] PR-09: Externalize inline JavaScript (246 lines) + stable elem_id selectors
-- [ ] PR-10: Strip custom CSS to Gradio-native styling (~800 → ~100 lines)
+- [x] PR-09: Externalize inline JavaScript (246 lines) + stable elem_id selectors
+  - Extracted 246-line JS block → static/js/ui-init.js (IIFE, SEO Coach only)
+  - Added elem_id= to layout components (aw-main, aw-top-bar, aw-input-bar)
+  - Replaced all #component-N selectors in JS with named IDs
+  - Workbench: load_custom_js=False (zero JS loaded)
+- [x] PR-10: CSS conditional loading + cleanup (-1,229 lines deleted)
+  - Deleted agent-workbench-design.css (766 lines, exact duplicate of tokens.css)
+  - Deleted fonts.css (206 lines, replaced by gr.themes.GoogleFont())
+  - Deleted main.css (12 lines, replaced by Python-side _load_css())
+  - Trimmed styles.css: 1,152 → ~450 lines (removed #component-N, font-family overrides)
+  - Workbench: css=None, show_conv_browser=False, gr.themes.GoogleFont("Roboto")
+  - SEO Coach: full CSS stack loaded via _load_css(), gr.themes.GoogleFont("Open Sans")
 - [ ] PR-11: Add critical missing tests (bridge, orchestrator, mode handlers, state manager)
 
 ---
@@ -116,3 +126,4 @@ Reference: `docs/phase2/phase2_architecture_plan.md`, `docs/project/ARCHITECTURE
 - [x] Cleanup plan — 11 PRs across 4 phases
 - [x] Phase 1: PR-01 E501 fix (27 violations), PR-02 dead tests (466→324), PR-03 smoke tests (6 tests)
 - [x] Cleanup Phase 2: PR-04 dead UI files (-3,689 lines), PR-05 dead routes
+- [x] Cleanup Phase 3: PR-09 externalize JS + stable elem_ids, PR-10 CSS conditional loading (-1,229 lines CSS deleted)
