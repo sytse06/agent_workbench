@@ -102,9 +102,11 @@ def render(
             ) = render_sidebar(config, user_state)
 
         # Main chat area (scale=4 to allow sidebar push behavior)
-        with gr.Column(scale=4, elem_classes=["agent-workbench-chat-container"]):
+        with gr.Column(
+            scale=4, elem_id="aw-main", elem_classes=["agent-workbench-chat-container"]
+        ):
             # Top icon bar (now inside chat container for automatic alignment)
-            with gr.Row(elem_classes=["agent-workbench-top-bar"]):
+            with gr.Row(elem_id="aw-top-bar", elem_classes=["agent-workbench-top-bar"]):
                 # Left side: Sidebar toggle + New chat icon
                 with gr.Row(elem_classes=["agent-workbench-top-bar-left"]):
                     # Sidebar toggle button (always visible)
@@ -178,7 +180,9 @@ def render(
             )
 
             # Input bar (Task 4.3.1: container with textbox + submit button)
-            with gr.Row(elem_classes=["agent-workbench-input-bar"]):
+            with gr.Row(
+                elem_id="aw-input-bar", elem_classes=["agent-workbench-input-bar"]
+            ):
                 # Message input field (Task 4.3.3: borderless, flex: 1)
                 textbox = gr.Textbox(
                     placeholder=config["labels"]["placeholder"],
