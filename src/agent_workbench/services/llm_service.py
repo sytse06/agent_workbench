@@ -5,15 +5,35 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 from uuid import UUID
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 
 from ..core.exceptions import LLMProviderError, ModelConfigurationError, StreamingError
 from ..core.retry import retry_llm_call
 from ..models.api_models import ChatResponse
 from ..models.schemas import ModelConfig
+from ..models.standard_messages import StandardMessage
 from .providers import provider_registry
 
 logger = logging.getLogger(__name__)
+
+_ROLE_TO_LC: dict = {
+    "user": HumanMessage,
+    "assistant": AIMessage,
+    "system": SystemMessage,
+    "tool": ToolMessage,
+}
+
+
+def standard_to_lc(msg: StandardMessage) -> BaseMessage:
+    """Convert StandardMessage to the appropriate LangChain message type."""
+    cls = _ROLE_TO_LC.get(msg.role, HumanMessage)
+    return cls(content=msg.content)
 
 
 class ChatService:

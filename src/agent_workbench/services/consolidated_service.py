@@ -1,6 +1,7 @@
 """Main consolidated service integrating LLM-001B with LangGraph workflows."""
 
 import logging
+import time
 from typing import Any, Dict, Literal, Optional, Union
 from uuid import UUID, uuid4
 
@@ -121,6 +122,7 @@ class ConsolidatedWorkbenchService:
         """
         try:
             logger.info("🎯 DEBUG: Starting workflow execution")
+            _start_time = time.monotonic()
 
             # Convert conversation_id to UUID if it's a string
             conversation_id = self._ensure_uuid(request.conversation_id)
@@ -194,7 +196,8 @@ class ConsolidatedWorkbenchService:
 
             # Convert to response format
             logger.info("🎯 DEBUG: Converting to response format")
-            return self._convert_to_response(final_state)
+            elapsed = time.monotonic() - _start_time
+            return self._convert_to_response(final_state, duration=elapsed)
 
         except Exception as e:
             logger.error(f"Workflow execution failed: {str(e)}")
@@ -483,17 +486,22 @@ class ConsolidatedWorkbenchService:
             )
 
     def _convert_to_response(
-        self, final_state: WorkbenchState
+        self, final_state: WorkbenchState, duration: Optional[float] = None
     ) -> ConsolidatedWorkflowResponse:
         """
         Convert final workflow state to response format.
 
         Args:
             final_state: Final LangGraph state
+            duration: Elapsed execution time in seconds
 
         Returns:
             Consolidated workflow response
         """
+        response_metadata: Dict[str, Any] = {"status": "done"}
+        if duration is not None:
+            response_metadata["duration"] = round(duration, 3)
+
         return ConsolidatedWorkflowResponse(
             conversation_id=final_state["conversation_id"],
             assistant_response=final_state.get("assistant_response") or "",
@@ -510,6 +518,7 @@ class ConsolidatedWorkbenchService:
                 "debug_mode": final_state.get("debug_mode"),
                 "provider_used": final_state["provider_name"],
             },
+            response_metadata=response_metadata,
         )
 
 
