@@ -28,7 +28,13 @@ See `docs/project/ARCHITECTURE.md` for the dot on the horizon.
 
 ## Next — Cleanup Phase 3: Structural Improvements
 
-- [ ] PR-08: Fix known bugs (response.reply, await delete, debug prints, Gradio 6 prep)
+- [x] PR-08: Fix known bugs (response.reply, await delete, debug prints)
+  - `response.reply` → `response.message` in simple_chat.py
+  - `api_key_source` initialized before try block (removes fragile `locals()` check)
+  - `await session.delete()` — assessment was wrong; SQLAlchemy 2.0 AsyncSession.delete() IS async; `await` kept
+  - Debug `print()` → `logger.debug()` in chat.py and mode_factory_v2.py
+  - NOTE: `type="messages"` removal deferred — project pinned to Gradio <6.0.0; belongs in Gradio 6 upgrade PR
+- [ ] PR-08b: Gradio 6 upgrade — bump `gradio>=6.0.0`, remove `type="messages"` from gr.Chatbot (chat.py:168)
 - [ ] PR-09: Externalize inline JavaScript (246 lines) + stable elem_id selectors
 - [ ] PR-10: Strip custom CSS to Gradio-native styling (~800 → ~100 lines)
 - [ ] PR-11: Add critical missing tests (bridge, orchestrator, mode handlers, state manager)

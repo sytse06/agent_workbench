@@ -76,7 +76,7 @@ async def test_direct_chat_failure():
 async def test_model_connectivity_success():
     """Test successful model connectivity test."""
     mock_response = AsyncMock()
-    mock_response.reply = "Test response"
+    mock_response.message = "Test response"
 
     with patch(
         "src.agent_workbench.api.routes.simple_chat.ChatService"

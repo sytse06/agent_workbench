@@ -230,17 +230,18 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
             config, user_state, conversation_state, settings_state
         )
 
-        # DEBUG: Check what chat.render() returned
-        print("[DEBUG mode_factory_v2] After chat.render():")
-        print(f"  conversations_list_storage: {conversations_list_storage}")
-        print(f"  conv_list: {conv_list}")
-        print(f"  Type conversations_list_storage: {type(conversations_list_storage)}")
-        print(f"  Type conv_list: {type(conv_list)}")
+        logger.debug(
+            "After chat.render(): conversations_list_storage=%s, conv_list=%s",
+            conversations_list_storage,
+            conv_list,
+        )
 
         # Auto-load conversation history into Dataset list from BrowserState
         # on page load (only for guest users - auth users use database)
         if conversations_list_storage and conv_list:
-            print("[DEBUG mode_factory_v2] IF condition passed - setting up load event")
+            logger.debug(
+                "Sidebar enabled — wiring demo.load event for conversation list"
+            )
 
             @demo.load(
                 inputs=[user_state, conversations_list_storage], outputs=[conv_list]
@@ -251,25 +252,24 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
 
                 For guest users only - authenticated users use database.
                 """
-                print("[DEBUG mode_factory_v2] load_conversations_from_browser CALLED!")
-                print(f"  user_state_val: {user_state_val}")
-                print(
-                    f"  stored_conversations length: {len(stored_conversations or [])}"
+                logger.debug(
+                    "load_conversations_from_browser: user_state=%s, stored=%d items",
+                    user_state_val,
+                    len(stored_conversations or []),
                 )
 
                 from .pages.chat import populate_list
 
                 result = populate_list(user_state_val, stored_conversations or [])
-                print(f"[DEBUG mode_factory_v2] populate_list returned: {result}")
+                logger.debug("populate_list returned: %s", result)
                 return result
 
         else:
-            print(
-                "[DEBUG mode_factory_v2] IF condition FAILED - " "load event NOT set up"
+            logger.debug(
+                "Sidebar load event NOT wired: storage=%s, conv_list=%s",
+                conversations_list_storage,
+                conv_list,
             )
-            storage_is_none = conversations_list_storage is None
-            print(f"  conversations_list_storage is None: {storage_is_none}")
-            print(f"  conv_list is None: {conv_list is None}")
 
         # Phase 4.2: Logo/chatbot visibility toggle + icon bar functionality
         # Toggle visibility based on message count (Ollama design pattern)
