@@ -244,14 +244,6 @@ class ConversationSchema(BaseModel):
         return self.model_dump(exclude_none=True)
 
 
-# Backwards compatibility aliases - these will be removed in next phase
-ConversationBase = ConversationSchema
-ConversationCreate = ConversationSchema
-ConversationUpdate = ConversationSchema
-ConversationInDB = ConversationSchema
-ConversationResponse = ConversationSchema
-
-
 class MessageSchema(BaseModel):
     """Unified message schema for all CRUD operations."""
 
@@ -342,14 +334,6 @@ class MessageSchema(BaseModel):
         return self.model_dump(exclude_none=True)
 
 
-# Backwards compatibility aliases - these will be removed in next phase
-MessageBase = MessageSchema
-MessageCreate = MessageSchema
-MessageUpdate = MessageSchema
-MessageInDB = MessageSchema
-MessageResponse = MessageSchema
-
-
 class AgentConfigSchema(BaseModel):
     """Unified agent configuration schema for all CRUD operations."""
 
@@ -432,11 +416,8 @@ class AgentConfigSchema(BaseModel):
         return self.model_dump(exclude_none=True)
 
 
-# Backwards compatibility aliases - these will be removed in next phase
-AgentConfigBase = AgentConfigSchema
 AgentConfigCreate = AgentConfigSchema
 AgentConfigUpdate = AgentConfigSchema
-AgentConfigInDB = AgentConfigSchema
 AgentConfigResponse = AgentConfigSchema
 
 

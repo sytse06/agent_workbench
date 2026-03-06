@@ -1,6 +1,5 @@
 """LangGraph state models for unified dual-mode workflow system."""
 
-from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional, Union
 from uuid import UUID
 
@@ -345,24 +344,3 @@ class ContextUpdateRequest(BaseModel):
     context_data: Dict[str, Any]
     sources: List[str]
     merge_strategy: Literal["replace", "merge", "append"] = "merge"
-
-
-class CreateConversationRequest(BaseModel):
-    """Request model for creating conversations."""
-
-    title: Optional[str] = None
-    workflow_mode: Literal["workbench", "seo_coach"] = "workbench"
-    llm_config: Optional[ModelConfig] = None
-    is_temporary: bool = False
-
-
-class ConversationResponse(BaseModel):
-    """Response model for conversation operations."""
-
-    id: UUID
-    title: str
-    workflow_mode: str
-    created_at: datetime
-    last_activity: datetime
-    message_count: int
-    is_temporary: bool = False
