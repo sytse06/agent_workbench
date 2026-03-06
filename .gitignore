@@ -28,14 +28,12 @@ ENV/
 env.bak/
 venv.bak/
 
-# Environment files - SPECIFIC exclusions
+# Environment files
 config/
 *.env
 .env
 .env.local
 .env.*.local
-# Keep template configurations
-!config/*.env
 
 # Database
 *.db
@@ -71,9 +69,7 @@ htmlcov/
 .coverage
 .coverage.*
 
-# Alembic (keep structure, ignore generated migrations)
-alembic/versions/*.py
-!alembic/versions/__init__.py
+# Alembic (migrations tracked for schema reproducibility)
 
 # AI Development
 .ai_context.md
@@ -91,11 +87,3 @@ prod_backup_*/
 # Documentation builds
 docs/_build/
 site/
-.clinerules/byterover-rules.md
-.kilocode/rules/byterover-rules.md
-.roo/rules/byterover-rules.md
-.windsurf/rules/byterover-rules.md
-.cursor/rules/byterover-rules.mdc
-.kiro/steering/byterover-rules.md
-.qoder/rules/byterover-rules.md
-.augment/rules/byterover-rules.md
