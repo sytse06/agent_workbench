@@ -13,7 +13,9 @@ class TestConversationService:
 
     def setup_method(self):
         """Setup method for tests."""
-        self.service = ConversationService()
+        from unittest.mock import MagicMock
+
+        self.service = ConversationService(db=MagicMock())
 
     # @pytest.mark.asyncio
     def test_create_conversation_without_title(self):

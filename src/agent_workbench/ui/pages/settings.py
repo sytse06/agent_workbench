@@ -18,7 +18,6 @@ from typing import Any, Dict, Optional, Tuple
 import gradio as gr
 
 from ...services.model_config_service import ModelConfigService
-from ...services.user_settings_service import UserSettingsService
 
 # ============================================================================
 # VALIDATION FUNCTIONS
@@ -122,40 +121,12 @@ async def handle_settings_save(
         if not validate_url(context_url):
             return "", "❌ Invalid URL format (must start with http:// or https://)"
 
-        # Prepare settings dictionary
-        settings = {
-            "model_config": {
-                "provider": provider,
-                "model": model,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-            },
-            "appearance": {"theme": theme},
-            "context": {
-                "name": context_name,
-                "url": context_url,
-                "description": context_description,
-            },
-        }
-
-        # Save to database if authenticated, otherwise to localStorage (via JS)
-        if user_state and user_state.get("user_id"):
-            user_id = user_state["user_id"]
-            settings_service = UserSettingsService()
-
-            # Save all settings
-            await settings_service.bulk_set_settings(
-                user_id=user_id, settings=settings, category="ui", setting_type="active"
-            )
-
-            return "✅ Settings saved successfully", ""
-        else:
-            # Guest mode - settings will be handled by JavaScript localStorage
-            # Return success message, actual save happens in JS
-            return (
-                "✅ Settings saved to browser storage (guest mode)",
-                "",
-            )
+        # Guest mode - settings persisted via JavaScript localStorage
+        # TODO: Add database persistence when auth is implemented
+        return (
+            "✅ Settings saved to browser storage",
+            "",
+        )
 
     except Exception as e:
         return "", f"❌ Failed to save settings: {str(e)}"
@@ -184,43 +155,8 @@ async def handle_settings_load(user_state: Optional[Dict[str, Any]]) -> Dict[str
             "context_description": "",
         }
 
-        # Load from database if authenticated
-        if user_state and user_state.get("user_id"):
-            user_id = user_state["user_id"]
-            settings_service = UserSettingsService()
-
-            all_settings = await settings_service.get_all_settings(user_id)
-
-            # Extract model config
-            model_config = all_settings.get("model_config", {})
-            if isinstance(model_config, dict) and "value" in model_config:
-                model_config = model_config["value"]
-
-            # Extract appearance
-            appearance = all_settings.get("appearance", {})
-            if isinstance(appearance, dict) and "value" in appearance:
-                appearance = appearance["value"]
-
-            # Extract context
-            context = all_settings.get("context", {})
-            if isinstance(context, dict) and "value" in context:
-                context = context["value"]
-
-            # Merge with defaults
-            return {
-                "provider": model_config.get("provider", defaults["provider"]),
-                "model": model_config.get("model", defaults["model"]),
-                "temperature": model_config.get("temperature", defaults["temperature"]),
-                "max_tokens": model_config.get("max_tokens", defaults["max_tokens"]),
-                "theme": appearance.get("theme", defaults["theme"]),
-                "context_name": context.get("name", defaults["context_name"]),
-                "context_url": context.get("url", defaults["context_url"]),
-                "context_description": context.get(
-                    "description", defaults["context_description"]
-                ),
-            }
-
         # Guest mode - return defaults (JS will load from localStorage)
+        # TODO: Add database loading when auth is implemented
         return defaults
 
     except Exception:

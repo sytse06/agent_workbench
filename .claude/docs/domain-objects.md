@@ -51,13 +51,16 @@ Current: Basic structure in `WorkbenchState.context_data`
 **Location:** `services/context_service.py`
 
 ## 6. USER MODE
-Persona-based UI and workflow customization.
+Persona-based UI and workflow customization. Phase 2 extends this to a full User domain.
 
 - `workbench`: Technical users, full model controls, debug tools
 - `seo_coach`: Business users, Dutch language, business forms
-- `ModeFactory` creates mode-specific Gradio interfaces
+- `mode_factory_v2.py` creates mode-specific Gradio interfaces via `APP_MODE` env var
+- **Phase 2.0:** extends to full User domain object (HF OAuth, sessions, user profiles)
+- **Phase 2.1:** user settings persistence via `UserSettingsService`
 
-**Location:** `ui/mode_factory.py`, `ui/app.py`, `ui/seo_coach_app.py`
+**Location (current):** `ui/mode_factory_v2.py`, `ui/pages/`
+**Phase 2 services (pre-built, unwired):** `services/auth_service.py`, `services/user_settings_service.py`
 
 ## 7. AGENT/TOOL
 **Status:** Config storage only - needs Phase 2 implementation.
@@ -71,5 +74,11 @@ Convert between storage and execution formats.
 
 - `LangGraphStateBridge`: `ConversationState` <-> `WorkbenchState` conversion
 - Context merging, message format translation, workflow state tracking
+- **Phase 2 extension:** Bridge gains `user_id` parameter; loads user settings from DB into state
 
 **Location:** `services/langgraph_bridge.py`
+**Phase 2 workflow infra (pre-built):** `services/langgraph_service.py` (5-node orchestrator), `services/workflow_nodes.py` (node implementations)
+
+**CRITICAL Phase 2 state pattern:** LangGraph StateGraph owns conversation state (persistent,
+keyed by `conversation_id`). Agent gets ephemeral working memory keyed by unique `task_id`
+— never `conversation_id`. See `docs/phase2/state_management_critical_pattern.md`.
