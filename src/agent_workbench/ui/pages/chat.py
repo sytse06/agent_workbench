@@ -105,63 +105,65 @@ def render(
         with gr.Column(
             scale=4, elem_id="aw-main", elem_classes=["agent-workbench-chat-container"]
         ):
-            # Top icon bar (now inside chat container for automatic alignment)
-            with gr.Row(elem_id="aw-top-bar", elem_classes=["agent-workbench-top-bar"]):
-                # Left side: Sidebar toggle + New chat icon
-                with gr.Row(elem_classes=["agent-workbench-top-bar-left"]):
-                    # Sidebar toggle button (always visible)
-                    _sidebar_toggle_btn = gr.HTML(  # noqa: F841
-                        value=(
-                            '<div class="agent-workbench-icon-btn" '
-                            'id="sidebar-toggle-btn" aria-label="Toggle Sidebar">'
-                            '<svg class="icon">'
-                            '<use href="/static/icons/sprite.svg#sidebar"/>'
-                            "</svg>"
-                            "</div>"
-                        ),
-                        elem_id="sidebar-toggle-container",
-                    )
+            # Custom icon bar + logo: SEO Coach only
+            # Workbench uses plain Gradio — no icon bar, no branded logo
+            if config.get("load_custom_js"):
+                with gr.Row(
+                    elem_id="aw-top-bar", elem_classes=["agent-workbench-top-bar"]
+                ):
+                    # Left side: Sidebar toggle + New chat icon
+                    with gr.Row(elem_classes=["agent-workbench-top-bar-left"]):
+                        _sidebar_toggle_btn = gr.HTML(  # noqa: F841
+                            value=(
+                                '<div class="agent-workbench-icon-btn" '
+                                'id="sidebar-toggle-btn" aria-label="Toggle Sidebar">'
+                                '<svg class="icon">'
+                                '<use href="/static/icons/sprite.svg#sidebar"/>'
+                                "</svg>"
+                                "</div>"
+                            ),
+                            elem_id="sidebar-toggle-container",
+                        )
 
-                    # New chat button (visible when sidebar closed) - uses SVG sprite
-                    # When sidebar opens, this hides and New Chat appears in sidebar
-                    _new_chat_btn = gr.HTML(  # noqa: F841
-                        value=(
-                            '<div class="agent-workbench-icon-btn" '
-                            'id="new-chat-btn" aria-label="New Chat">'
-                            '<svg class="icon">'
-                            '<use href="/static/icons/sprite.svg#new-chat"/>'
-                            "</svg>"
-                            "</div>"
-                        ),
-                        elem_id="new-chat-container",
-                        visible=True,  # Initially visible when sidebar is closed
-                    )
+                        _new_chat_btn = gr.HTML(  # noqa: F841
+                            value=(
+                                '<div class="agent-workbench-icon-btn" '
+                                'id="new-chat-btn" aria-label="New Chat">'
+                                '<svg class="icon">'
+                                '<use href="/static/icons/sprite.svg#new-chat"/>'
+                                "</svg>"
+                                "</div>"
+                            ),
+                            elem_id="new-chat-container",
+                            visible=True,
+                        )
 
-                # Right side: Settings icon - uses SVG sprite
-                with gr.Row(elem_classes=["agent-workbench-top-bar-right"]):
-                    _settings_icon = gr.HTML(  # noqa: F841
-                        value=(
-                            '<div class="agent-workbench-icon-btn" '
-                            'id="settings-icon" aria-label="Settings">'
-                            '<svg class="icon">'
-                            '<use href="/static/icons/sprite.svg#settings"/>'
-                            "</svg>"
-                            "</div>"
-                        ),
-                        elem_id="settings-icon-container",
-                    )
-            # Main logo (shown when idle, theme-aware)
-            gr.HTML(
-                value=(
-                    '<div class="agent-workbench-logo">'
-                    '<img src="/static/icons/logo_seo_coach.png" '
-                    'alt="Agent Workbench Logo" class="logo-light">'
-                    '<img src="/static/icons/logo_seo_coach_inverted.png" '
-                    'alt="Agent Workbench Logo" class="logo-dark">'
-                    "</div>"
-                ),
-                elem_classes=["agent-workbench-logo-container"],
-            )
+                    # Right side: Settings icon
+                    with gr.Row(elem_classes=["agent-workbench-top-bar-right"]):
+                        _settings_icon = gr.HTML(  # noqa: F841
+                            value=(
+                                '<div class="agent-workbench-icon-btn" '
+                                'id="settings-icon" aria-label="Settings">'
+                                '<svg class="icon">'
+                                '<use href="/static/icons/sprite.svg#settings"/>'
+                                "</svg>"
+                                "</div>"
+                            ),
+                            elem_id="settings-icon-container",
+                        )
+
+                # Branded logo (shown when idle, theme-aware)
+                gr.HTML(
+                    value=(
+                        '<div class="agent-workbench-logo">'
+                        '<img src="/static/icons/logo_seo_coach.png" '
+                        'alt="Agent Workbench Logo" class="logo-light">'
+                        '<img src="/static/icons/logo_seo_coach_inverted.png" '
+                        'alt="Agent Workbench Logo" class="logo-dark">'
+                        "</div>"
+                    ),
+                    elem_classes=["agent-workbench-logo-container"],
+                )
 
             # Phase 4.3: State-dependent chat interface with gr.Blocks
             # Following skills.md Pattern 1: State-Dependent Button
