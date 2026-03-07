@@ -125,7 +125,7 @@ Deferred from Phase 2 — implement after agent functionality is stable.
 - [ ] SEO Coach production deployment to HuggingFace Spaces
 - [ ] Multi-agent coordination via LangGraph (Phase 3+)
 - [ ] Agent memory and learning
-- [ ] Streaming support (stream_workflow)
+- [x] Streaming support — wired in Phase 2.0 via `AgentService.astream()` + Gradio generator handlers
 
 ---
 
