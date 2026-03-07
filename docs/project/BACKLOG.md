@@ -57,29 +57,46 @@ See `docs/project/ARCHITECTURE.md` for the dot on the horizon.
 Sub-phases must be implemented in order — each is a prerequisite for the next.
 Reference: `docs/phase2/phase2_architecture_plan.md`, `docs/project/ARCHITECTURE.md`
 
-- [ ] Phase 2.0: User Authentication
+Auth, PWA, and user management are deferred to Phase 3 — orthogonal to agent
+functionality and would delay the core agent work.
+
+- [ ] Phase 2.0: Agent core
+  - Wire `create_agent` (LangChain v1) — replaces simple_chat_workflow
+  - Wire `langgraph_service.py` + `workflow_nodes.py` into StateGraph
+  - CRITICAL: agent uses `task_id` (not `conversation_id`) for working memory
+  - Connect multi-turn history from DB (wire `_get_conversation_history()` stub)
+  - Stream thinking tokens via LangChain v1 `content_blocks` → `gr.ChatMessage`
+- [ ] Phase 2.1: File UI
+  - File upload component in chatbot
+  - Approval dialog (auto-approve stub)
+- [ ] Phase 2.2: File processing
+  - Docling conversion pipeline (PDF, DOCX, HTML → structured text)
+  - File handling in context and state
+- [ ] Phase 2.3: ContentRetriever Tool
+  - LangChain `@tool` wrapping vector store query
+  - Depends on Docling pipeline from 2.2
+- [ ] Phase 2.4: Firecrawl MCP Tool
+  - Web content retrieval as agent tool
+- [ ] Phase 2.5: Middleware
+  - Built-in first: PII redaction, summarization, human-in-the-loop
+  - Custom: context, memory, execution tracking
+
+---
+
+## Later — Phase 3: Auth, PWA & Production
+
+Deferred from Phase 2 — implement after agent functionality is stable.
+
+- [ ] Phase 3.0: User Authentication
   - HF OAuth via Gradio `Request`, session management (30-min timeout reuse)
   - Alembic migration: `users`, `user_settings`, `user_sessions` tables
   - Extend `DatabaseBackend` protocol + `AdaptiveDatabase` with user methods
   - Wire `auth_service.py` into Gradio `on_load` event
-- [ ] Phase 2.1: PWA + Settings Page
+- [ ] Phase 3.1: PWA + Settings Page
   - `static/manifest.json`, `static/service-worker.js`
   - Wire `user_settings_service.py` into settings page save/load
   - Share target handler (`/share` endpoint)
-- [ ] Phase 2.2: File UI Stubs
-  - File upload component (stubbed), approval dialog (auto-approve stub)
-- [ ] Phase 2.3: Agent Service + Debug Logging
-  - LangChain v1 `create_agent()` behind `ENABLE_LANGCHAIN_V1` feature flag
-  - Structured `AgentResponse` outputs (Pydantic)
-  - `AgentExecutionLogModel`, `ToolCallLogModel`, `DebugLoggingMiddleware`
-  - `AnalyticsService` with indexed queries
-  - Wire `langgraph_service.py` + `workflow_nodes.py` into 4-node StateGraph
-  - CRITICAL: agent uses `task_id` (not `conversation_id`) for working memory
-- [ ] Phase 2.4: ContentRetriever Tool (LangChain BaseTool + Docling)
-- [ ] Phase 2.5: Built-in Middleware (PII redaction, summarization, human-in-the-loop)
-- [ ] Phase 2.6: Custom Middleware (context, memory, execution tracking)
-- [ ] Phase 2.7: Firecrawl MCP Tool
-- [ ] Phase 2.8: Production Hardening (rate limiting, concurrency, monitoring)
+- [ ] Phase 3.2: Production Hardening (rate limiting, concurrency, monitoring)
 
 ---
 
