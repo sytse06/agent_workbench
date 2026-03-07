@@ -93,48 +93,30 @@ class TestConsolidatedWorkbenchService:
         assert service.state_manager is not None
         assert service.conversation_service is not None
         assert service.context_service is not None
-        assert service.llm_service is not None
+        assert service.agent_service is not None
         assert service.state_bridge is not None
         assert service.mode_detector is not None
-        assert service.workflow_orchestrator is not None
-        assert service.workbench_handler is not None
-        assert service.seo_coach_handler is not None
+        assert service.lang_graph_service is not None
 
-    @patch("src.agent_workbench.services.consolidated_service.StateManager")
-    @patch("src.agent_workbench.services.consolidated_service.ConversationService")
-    @patch("src.agent_workbench.services.consolidated_service.ContextService")
-    @patch("src.agent_workbench.services.consolidated_service.ChatService")
     async def test_execute_workflow_seo_coach(
         self,
-        mock_chat_service,
-        mock_context_service,
-        mock_conversation_service,
-        mock_state_manager,
         service,
         mock_db_session,
         sample_request,
         sample_workbench_state,
     ):
         """Test workflow execution for SEO coach mode."""
-        # Setup mocks
         await service.initialize(mock_db_session)
 
-        # Mock mode detector
         service.mode_detector.get_effective_mode = AsyncMock(return_value="seo_coach")
-
-        # Mock conversation creation
         conversation_id = uuid4()
         service._create_conversation = AsyncMock(return_value=conversation_id)
-
-        # Mock workflow execution
-        service.workflow_orchestrator.execute_workflow = AsyncMock(
+        service.lang_graph_service.execute_workflow = AsyncMock(
             return_value=sample_workbench_state
         )
 
-        # Execute workflow
         response = await service.execute_workflow(sample_request)
 
-        # Verify response
         assert isinstance(response, ConsolidatedWorkflowResponse)
         assert response.workflow_mode == "seo_coach"
         assert response.execution_successful
@@ -160,7 +142,7 @@ class TestConsolidatedWorkbenchService:
         # Mock dependencies
         service.mode_detector.get_effective_mode = AsyncMock(return_value="workbench")
         service._create_conversation = AsyncMock(return_value=uuid4())
-        service.workflow_orchestrator.execute_workflow = AsyncMock(
+        service.lang_graph_service.execute_workflow = AsyncMock(
             return_value=sample_workbench_state
         )
 
@@ -181,7 +163,7 @@ class TestConsolidatedWorkbenchService:
 
         # Mock workflow to raise exception
         service.mode_detector.get_effective_mode = AsyncMock(return_value="seo_coach")
-        service.workflow_orchestrator.execute_workflow = AsyncMock(
+        service.lang_graph_service.execute_workflow = AsyncMock(
             side_effect=Exception("Workflow failed")
         )
 
@@ -197,29 +179,26 @@ class TestConsolidatedWorkbenchService:
     async def test_stream_workflow(
         self, service, mock_db_session, sample_request, sample_workbench_state
     ):
-        """Test streaming workflow execution."""
+        """Test streaming workflow yields events."""
         await service.initialize(mock_db_session)
 
-        # Mock workflow execution
-        service.execute_workflow = AsyncMock(
-            return_value=ConsolidatedWorkflowResponse(
-                conversation_id=sample_workbench_state["conversation_id"],
-                assistant_response="Streaming response",
-                workflow_mode="seo_coach",
-                execution_successful=True,
-                workflow_steps=["Step 1", "Step 2"],
-                context_data={},
-                metadata={},
-            )
+        # stream_workflow is an async generator — patch the agent_service.astream
+        async def fake_astream(**kwargs):
+            yield {"type": "answer_chunk", "content": "Hello"}
+            yield {"type": "done", "response": type("R", (), {"message": "Hello"})()}
+
+        service.agent_service.astream = fake_astream
+        service.mode_detector.get_effective_mode = AsyncMock(return_value="workbench")
+        service._create_conversation = AsyncMock(
+            return_value=sample_workbench_state["conversation_id"]
         )
 
-        # Test the stub implementation
-        # (Original async generator was replaced with a stub)
-        # The stub just calls execute_workflow directly
-        await service.stream_workflow(sample_request)
+        events = []
+        async for event in service.stream_workflow(sample_request):
+            events.append(event)
 
-        # Verify that execute_workflow was called
-        service.execute_workflow.assert_called_once_with(sample_request)
+        assert any(e["type"] == "answer_chunk" for e in events)
+        assert any(e["type"] == "done" for e in events)
 
     async def test_get_conversation_state(
         self, service, mock_db_session, sample_workbench_state

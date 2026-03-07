@@ -12,8 +12,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ...models.schemas import ModelConfig
+from ...services.agent_service import AgentService
 from ...services.llm_service import ChatService
-from ...services.simple_chat_workflow import SimpleChatWorkflow
 
 logger = logging.getLogger(__name__)
 
@@ -103,40 +103,32 @@ async def simple_chat(request: SimpleChatRequest) -> SimpleChatResponse:
         )
         logger.info(f"✅ Model config created: {model_config}")
 
-        logger.info("🔧 Initializing SimpleChatWorkflow...")
-        # Initialize simple workflow (maintains LangGraph architecture)
-        workflow = SimpleChatWorkflow(model_config)
-        logger.info("✅ SimpleChatWorkflow initialized")
+        logger.info("🔧 Initializing AgentService...")
+        agent = AgentService(model_config)
+        logger.info("✅ AgentService initialized")
 
-        # Execute minimal LangGraph workflow
         import time
 
         start_time = time.time()
-        logger.info("🤖 Executing workflow...")
+        logger.info("🤖 Executing agent...")
 
-        final_state = await workflow.execute(request.message)
-
-        latency_ms = (time.time() - start_time) * 1000
-        logger.info(f"✅ Workflow completed in {latency_ms:.0f}ms")
-
-        # Check workflow success
-        if not final_state["execution_successful"]:
-            error_msg = final_state.get("error_message", "Unknown error")
-            logger.error(f"❌ Workflow failed: {error_msg}")
-            raise HTTPException(status_code=500, detail=f"Workflow failed: {error_msg}")
-
-        logger.info(
-            f"📝 Response preview: {final_state['assistant_response'][:100]}..."
+        response = await agent.run(
+            messages=[{"role": "user", "content": request.message}]
         )
 
+        latency_ms = (time.time() - start_time) * 1000
+        logger.info(f"✅ Agent completed in {latency_ms:.0f}ms")
+
+        logger.info(f"📝 Response preview: {response.message[:100]}...")
+
         result = SimpleChatResponse(
-            content=final_state["assistant_response"],
+            content=response.message,
             conversation_id=str(uuid4()),
             model_used=request.model_name,
             provider_used=request.provider,
             latency_ms=latency_ms,
             status="success",
-            workflow_steps=["process_input", "generate_response"],
+            workflow_steps=["agent_run"],
         )
         logger.info("✅ SimpleChatResponse created successfully")
         logger.info("=" * 80)

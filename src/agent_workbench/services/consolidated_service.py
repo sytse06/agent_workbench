@@ -15,14 +15,13 @@ from ..models.consolidated_state import (
     WorkbenchState,
 )
 from ..models.schemas import ModelConfig
+from .agent_service import AgentService
 from .context_service import ContextService
 from .conversation_service import ConversationService
 from .langgraph_bridge import LangGraphStateBridge
-from .llm_service import ChatService
+from .langgraph_service import LangGraphService
 from .mode_detector import ModeDetector
-from .mode_handlers import SEOCoachModeHandler, WorkbenchModeHandler
 from .state_manager import StateManager
-from .workflow_orchestrator import WorkflowOrchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -45,16 +44,12 @@ class ConsolidatedWorkbenchService:
         self.state_manager: Optional[StateManager] = None
         self.conversation_service: Optional[ConversationService] = None
         self.context_service: Optional[ContextService] = None
-        self.llm_service: Optional[ChatService] = None
 
         # LangGraph orchestration components
         self.state_bridge: Optional[LangGraphStateBridge] = None
         self.mode_detector: Optional[ModeDetector] = None
-        self.workflow_orchestrator: Optional[WorkflowOrchestrator] = None
-
-        # Mode handlers
-        self.workbench_handler: Optional[WorkbenchModeHandler] = None
-        self.seo_coach_handler: Optional[SEOCoachModeHandler] = None
+        self.agent_service: Optional[AgentService] = None
+        self.lang_graph_service: Optional[LangGraphService] = None
 
     def _ensure_uuid(
         self, conversation_id: Optional[Union[UUID, str]]
@@ -79,29 +74,21 @@ class ConsolidatedWorkbenchService:
         """
         self.db_session = db_session
 
-        # Initialize LLM-001B components
+        # Core components
         self.state_manager = StateManager(db_session)
         self.conversation_service = ConversationService()
         self.context_service = ContextService()
-        self.llm_service = ChatService(self.default_model_config)
 
-        # Initialize LangGraph components
+        # Agent + LangGraph service
+        self.agent_service = AgentService(self.default_model_config)
         self.state_bridge = LangGraphStateBridge(
             self.state_manager, self.context_service
         )
         self.mode_detector = ModeDetector(db_session)
-
-        # Initialize mode handlers
-        self.workbench_handler = WorkbenchModeHandler(
-            self.llm_service, self.context_service
-        )
-        self.seo_coach_handler = SEOCoachModeHandler(
-            self.llm_service, self.context_service
-        )
-
-        # Initialize workflow orchestrator
-        self.workflow_orchestrator = WorkflowOrchestrator(
-            self.state_bridge, self.workbench_handler, self.seo_coach_handler
+        self.lang_graph_service = LangGraphService(
+            state_bridge=self.state_bridge,
+            agent_service=self.agent_service,
+            context_service=self.context_service,
         )
 
     async def execute_workflow(
@@ -160,14 +147,10 @@ class ConsolidatedWorkbenchService:
             logger.info(f"🎯 DEBUG: Initial state prepared with model: {model_info}")
 
             # Execute LangGraph workflow
-            orchestrator_available = self.workflow_orchestrator is not None
-            logger.info(
-                f"🎯 DEBUG: Executing LangGraph workflow "
-                f"(orchestrator available: {orchestrator_available})"
-            )
+            logger.info("🎯 DEBUG: Executing LangGraph workflow")
             final_state = (
-                await self.workflow_orchestrator.execute_workflow(initial_state)
-                if self.workflow_orchestrator
+                await self.lang_graph_service.execute_workflow(initial_state)
+                if self.lang_graph_service
                 else initial_state
             )
             logger.info("🎯 DEBUG: Workflow execution completed")
@@ -212,23 +195,82 @@ class ConsolidatedWorkbenchService:
                 metadata={"error": str(e)},
             )
 
-    # This is a stub implementation for mypy validation
-    # The actual implementation will be added in a future PR
-    async def stream_workflow(self, request: ConsolidatedWorkflowRequest):
-        """
-        Stream consolidated workflow execution with real-time updates.
+    async def stream_workflow(  # type: ignore[return]
+        self, request: ConsolidatedWorkflowRequest
+    ):
+        """Stream workflow — yields event dicts (thinking_chunk, answer_chunk, done).
 
-        Args:
-            request: Consolidated workflow request
-
-        Returns:
-            Implementation will be added in a future PR
+        State is saved after the 'done' event.
         """
-        # To be implemented in a future PR
-        # For now, just execute the workflow non-streaming
-        await self.execute_workflow(request)
-        # This function will be properly implemented with AsyncGenerator return type
-        # in a future PR with proper mypy typing
+        if self.agent_service is None or self.lang_graph_service is None:
+            yield {"type": "answer_chunk", "content": "Service not initialized."}
+            return
+
+        conversation_id = self._ensure_uuid(request.conversation_id)
+        effective_mode = (
+            await self.mode_detector.get_effective_mode(
+                conversation_id=conversation_id,
+                requested_mode=request.workflow_mode,
+                request_data=request.model_dump(),
+            )
+            if self.mode_detector
+            else "workbench"
+        )
+
+        if not conversation_id:
+            conversation_id = await self._create_conversation(request, effective_mode)
+
+        initial_state = await self._prepare_initial_state(
+            request, conversation_id, effective_mode
+        )
+
+        # Load history into state
+        try:
+            loaded = await self.state_bridge.load_into_langgraph_state(
+                conversation_id=conversation_id,
+                user_message=request.user_message,
+                workflow_mode=effective_mode,
+                business_profile=request.business_profile,
+            )
+            initial_state = {**initial_state, **loaded}  # type: ignore[assignment]
+        except Exception:
+            pass  # history load failure is non-fatal; proceed without history
+
+        # Build messages using the appropriate mode handler
+        if effective_mode == "seo_coach":
+            handler = self.lang_graph_service.seo_coach_handler
+            model_config = handler._get_dutch_coaching_config(initial_state)
+            messages = await handler._build_coaching_messages(
+                initial_state, model_config
+            )
+        else:
+            handler = self.lang_graph_service.workbench_handler
+            model_config = initial_state["model_config"]
+            messages = await handler._build_workbench_messages(
+                initial_state, model_config
+            )
+
+        messages_dicts = [{"role": m.type, "content": m.content} for m in messages]
+
+        final_response_text = ""
+        async for event in self.agent_service.astream(
+            messages=messages_dicts,
+            model_config=model_config if effective_mode == "seo_coach" else None,
+        ):
+            yield event
+            if event["type"] == "done":
+                final_response_text = event["response"].message
+
+        # Persist the turn after streaming completes
+        if final_response_text:
+            from ..models.standard_messages import StandardMessage
+            history = list(initial_state.get("conversation_history", []))
+            history.append(StandardMessage(role="user", content=request.user_message))
+            history.append(
+                StandardMessage(role="assistant", content=final_response_text)
+            )
+            save_state = {**initial_state, "conversation_history": history}  # type: ignore[assignment]
+            await self.lang_graph_service.save_turn(save_state)
 
     async def get_conversation_state(self, conversation_id: UUID) -> WorkbenchState:
         """
@@ -465,19 +507,12 @@ class ConsolidatedWorkbenchService:
             Direct LLM response
         """
         try:
-            # Use model config from request or default
             model_config = request.llm_config or self.default_model_config
-
-            # Create fresh LLM service for fallback
-            fallback_service = ChatService(model_config)
-
-            # Get direct response
-            response = await fallback_service.chat_completion(
-                message=request.user_message,
-                conversation_id=None,  # No state persistence in fallback
+            fallback_agent = AgentService(model_config)
+            response = await fallback_agent.run(
+                messages=[{"role": "user", "content": request.user_message}]
             )
-
-            return response.content
+            return response.message
 
         except Exception as e:
             logger.error(f"Direct LLM fallback failed: {str(e)}")

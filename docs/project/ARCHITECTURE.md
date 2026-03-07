@@ -18,15 +18,15 @@ The platform evolves in phases: from stable Phase 1 foundations toward full agen
 
 Every feature, service, and API endpoint belongs to one of these. When something doesn't fit, that's a signal.
 
-| # | Object | Current (Phase 1) | Phase 2 Extension |
-|---|--------|-------------------|-------------------|
-| 1 | **MESSAGE** | `StandardMessage` + `MessageModel` | Structured `AgentResponse` outputs |
+| # | Object | Current (Phase 1 + 2.0) | Phase 2 Extension |
+|---|--------|-------------------------|-------------------|
+| 1 | **MESSAGE** | `StandardMessage` + `MessageModel` + `AgentResponse` | Richer tool/thinking metadata |
 | 2 | **CONVERSATION** | CRUD + `ConversationModel` (has `user_id` field already) | Linked to authenticated user |
 | 3 | **STATE** | `WorkbenchState` (TypedDict) + `ConversationState` (Pydantic) | Extended with `user_id`, `user_settings` |
-| 4 | **WORKFLOW** | `SimpleChatWorkflow` (2-node) + `ConsolidatedWorkbenchService` | 4-node StateGraph + LangChain v1 agent |
+| 4 | **WORKFLOW** | `LangGraphService` (5-node StateGraph, both modes) + `ConsolidatedWorkbenchService` | LangChain v1 `create_agent()` for tool use |
 | 5 | **CONTEXT** | Placeholder in `ContextService` | Populated from user settings |
 | 6 | **USER MODE** | Persona switch via `APP_MODE` env var (`mode_factory_v2.py`) | Full User domain: auth, profiles, settings |
-| 7 | **AGENT/TOOL** | Config storage only (`AgentConfigModel`) | Live agent execution via `create_agent()` |
+| 7 | **AGENT/TOOL** | `AgentService`: `run()` (batch) + `astream()` (streaming), both modes | Tool execution via `create_agent()` (Phase 2.3) |
 | 8 | **BRIDGE** | `LangGraphStateBridge`: ConversationState ↔ WorkbenchState | Extended with user context loading |
 
 **Source:** `.claude/docs/domain-objects.md` — keep in sync when architecture changes.
@@ -36,24 +36,29 @@ Every feature, service, and API endpoint belongs to one of these. When something
 ## Phase 2 Roadmap
 
 Phase 2 releases as **v0.2.0**. All sub-phases build on Phase 1 without breaking it.
-LangChain v1 `create_agent()` is alpha — feature-flagged (`ENABLE_LANGCHAIN_V1=true/false`).
+Auth, PWA, and user management are deferred to Phase 3 — orthogonal to agent functionality.
 
 ### Sub-phases in order (each is a prerequisite for the next)
 
+| Phase | Name | Key deliverable | Status |
+|-------|------|-----------------|--------|
+| **2.0** | Agent Core | `AgentService` (`run`/`astream`), `LangGraphService` (5-node StateGraph), SSE streaming, multi-turn history wired | ✅ Done |
+| **2.1** | File UI | File upload component, approval dialog stub | — |
+| **2.2** | File Processing | Docling pipeline (PDF/DOCX/HTML → structured text), file handling in state | — |
+| **2.3** | ContentRetriever Tool | LangChain `@tool` wrapping vector store; introduces `create_agent()` | — |
+| **2.4** | Firecrawl MCP Tool | Web content retrieval as agent tool via MCP adapter | — |
+| **2.5** | Middleware | PII redaction, summarization, human-in-the-loop; then custom memory/tracking | — |
+
+### Phase 3: Auth, PWA & Production
+
 | Phase | Name | Key deliverable | Pre-built infra |
 |-------|------|-----------------|-----------------|
-| **2.0** | User Authentication | HF OAuth, session management, user profiles | `auth_service.py` |
-| **2.1** | PWA + Settings | PWA manifest, settings page, user settings persistence | `user_settings_service.py` |
-| **2.2** | File UI Stubs | File upload component (stub), approval dialog (stub) | — |
-| **2.3** | Agent Service + Logging | `create_agent()`, structured outputs, `AgentExecutionLogModel`, `DebugLoggingMiddleware` | `langgraph_service.py`, `workflow_nodes.py` |
-| **2.4** | ContentRetriever Tool | LangChain `BaseTool` wrapping Docling document processor | — |
-| **2.5** | Built-in Middleware | PII redaction, summarization, human-in-the-loop | — |
-| **2.6** | Custom Middleware | Context, memory, execution tracking | — |
-| **2.7** | Firecrawl MCP | MCP server connection, Firecrawl adapter | — |
-| **2.8** | Production Hardening | Rate limiting, error boundaries, monitoring, concurrency | — |
+| **3.0** | User Authentication | HF OAuth, session management, user profiles | `auth_service.py` |
+| **3.1** | PWA + Settings | PWA manifest, settings page, user settings persistence | `user_settings_service.py` |
+| **3.2** | Production Hardening | Rate limiting, error boundaries, monitoring, concurrency | — |
 
-**Migration path:** Phase 1 workflow remains default. Phase 2 agent runs behind feature flag.
-Phase 2.3 makes v1 agent experimental. Full transition only after GA release of LangChain v1.
+**Migration path:** `AgentService.run()` / `astream()` replace the retired `SimpleChatWorkflow`.
+`create_agent()` (LangChain v1) is introduced in Phase 2.3 when tools arrive — feature-flagged until stable.
 
 ---
 
@@ -82,9 +87,9 @@ Both `queue()` and `run_startup_events()` are required.
 
 **Source:** `.claude/docs/gradio-fastapi-pattern.md`
 
-### 4. Phase 2 services are pre-built infrastructure, not dead code
-`auth_service.py`, `user_settings_service.py`, `langgraph_service.py`, `workflow_nodes.py`
-are intentionally unwired until their phase begins. Do not delete them.
+### 4. Phase 2/3 services are pre-built infrastructure, not dead code
+`auth_service.py` and `user_settings_service.py` are intentionally unwired until Phase 3.
+`langgraph_service.py` is now **live** (wired in Phase 2.0). Do not delete any of these.
 
 ### 5. Database protocol abstraction
 All DB access through `AdaptiveDatabase` → `DatabaseBackend` protocol.
@@ -97,7 +102,7 @@ Phase 2 adds user methods to the protocol. SQLiteBackend implements them first; 
 | Layer | Choice | Why |
 |-------|--------|-----|
 | Workflow engine | LangGraph StateGraph | TypedDict state, conditional routing, checkpointing |
-| Agent framework | LangChain v1 `create_agent()` | Standardized API, built-in middleware, MCP adapters |
+| Agent execution | `AgentService` (`model.ainvoke` / `model.astream`) → Phase 2.3: LangChain v1 `create_agent()` | Direct LangChain ChatModel now; `create_agent()` when tools arrive |
 | Backend | FastAPI (async) | Lightweight, Pydantic integration, OpenAPI docs |
 | UI | Gradio (mounted on FastAPI) | Rapid UI, mode-specific config, no JS framework needed |
 | Database | SQLite + SQLAlchemy async | Zero-ops local; Hub DB for HF Spaces |

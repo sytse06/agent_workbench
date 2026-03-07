@@ -1,4 +1,4 @@
-"""Unit tests for WorkflowOrchestrator routing and node logic."""
+"""Unit tests for LangGraphService routing and node logic."""
 
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -6,14 +6,14 @@ from uuid import uuid4
 import pytest
 
 from agent_workbench.models.schemas import ModelConfig
-from agent_workbench.services.workflow_orchestrator import WorkflowOrchestrator
+from agent_workbench.services.langgraph_service import LangGraphService
 
 
 def make_orchestrator():
     state_bridge = MagicMock()
-    workbench_handler = MagicMock()
-    seo_coach_handler = MagicMock()
-    return WorkflowOrchestrator(state_bridge, workbench_handler, seo_coach_handler)
+    agent_service = MagicMock()
+    context_service = MagicMock()
+    return LangGraphService(state_bridge, agent_service, context_service)
 
 
 def minimal_state(**overrides):

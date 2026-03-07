@@ -113,11 +113,17 @@ async def workflow_chat_stream(
     """
     try:
 
+        import json
+
         async def generate_stream():
-            """Generate streaming workflow updates."""
-            async for update in service.stream_workflow(request):
-                # Format as Server-Sent Events
-                yield f"data: {update.model_dump_json()}\n\n"
+            """Generate streaming workflow updates as SSE."""
+            async for event in service.stream_workflow(request):
+                # Serialize: replace AgentResponse object in "done" event
+                payload = dict(event)
+                resp_obj = payload.get("response")
+                if payload.get("type") == "done" and hasattr(resp_obj, "model_dump"):
+                    payload["response"] = payload["response"].model_dump()
+                yield f"data: {json.dumps(payload)}\n\n"
 
         return StreamingResponse(
             generate_stream(),
