@@ -56,3 +56,40 @@ def test_static_files_served():
     response = client.get("/static/assets/css/tokens.css")
     # 200 means static serving works
     assert response.status_code == 200
+
+
+def test_workflow_orchestrator_graph_compiles():
+    """WorkflowOrchestrator builds its LangGraph without error."""
+    from unittest.mock import MagicMock
+
+    from agent_workbench.services.workflow_orchestrator import WorkflowOrchestrator
+
+    orch = WorkflowOrchestrator(
+        state_bridge=MagicMock(),
+        workbench_handler=MagicMock(),
+        seo_coach_handler=MagicMock(),
+    )
+    assert orch.workflow is not None
+
+
+def test_simple_chat_workflow_builds():
+    """SimpleChatWorkflow compiles its graph without error."""
+    from agent_workbench.models.schemas import ModelConfig
+    from agent_workbench.services.simple_chat_workflow import SimpleChatWorkflow
+
+    config = ModelConfig(provider="anthropic", model_name="claude-3.5-sonnet")
+    workflow = SimpleChatWorkflow(config)
+    assert workflow.workflow is not None
+
+
+def test_langgraph_bridge_instantiates():
+    """LangGraphStateBridge instantiates with mocked dependencies."""
+    from unittest.mock import MagicMock
+
+    from agent_workbench.services.langgraph_bridge import LangGraphStateBridge
+
+    bridge = LangGraphStateBridge(
+        state_manager=MagicMock(),
+        context_service=MagicMock(),
+    )
+    assert bridge is not None
