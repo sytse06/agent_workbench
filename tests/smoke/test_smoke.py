@@ -58,28 +58,28 @@ def test_static_files_served():
     assert response.status_code == 200
 
 
-def test_workflow_orchestrator_graph_compiles():
-    """WorkflowOrchestrator builds its LangGraph without error."""
+def test_langgraph_service_graph_compiles():
+    """LangGraphService builds its StateGraph without error."""
     from unittest.mock import MagicMock
 
-    from agent_workbench.services.workflow_orchestrator import WorkflowOrchestrator
+    from agent_workbench.services.langgraph_service import LangGraphService
 
-    orch = WorkflowOrchestrator(
+    svc = LangGraphService(
         state_bridge=MagicMock(),
-        workbench_handler=MagicMock(),
-        seo_coach_handler=MagicMock(),
+        agent_service=MagicMock(),
+        context_service=MagicMock(),
     )
-    assert orch.workflow is not None
+    assert svc.workflow is not None
 
 
-def test_simple_chat_workflow_builds():
-    """SimpleChatWorkflow compiles its graph without error."""
+def test_agent_service_instantiates():
+    """AgentService instantiates with a ModelConfig."""
     from agent_workbench.models.schemas import ModelConfig
-    from agent_workbench.services.simple_chat_workflow import SimpleChatWorkflow
+    from agent_workbench.services.agent_service import AgentService
 
     config = ModelConfig(provider="anthropic", model_name="claude-3.5-sonnet")
-    workflow = SimpleChatWorkflow(config)
-    assert workflow.workflow is not None
+    agent = AgentService(config)
+    assert agent is not None
 
 
 def test_langgraph_bridge_instantiates():

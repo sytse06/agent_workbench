@@ -2,15 +2,16 @@
 
 import logging
 from typing import Any, Dict, List, Literal
+from uuid import uuid4
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from ..core.dutch_prompts import DutchSEOPrompts
 from ..models.consolidated_state import WorkbenchState
 from ..models.schemas import ModelConfig
 from ..models.standard_messages import StandardMessage
+from .agent_service import AgentService
 from .context_service import ContextService
-from .llm_service import ChatService
 
 logger = logging.getLogger(__name__)
 
@@ -18,15 +19,8 @@ logger = logging.getLogger(__name__)
 class WorkbenchModeHandler:
     """Handle workbench mode processing with technical capabilities."""
 
-    def __init__(self, llm_service: ChatService, context_service: ContextService):
-        """
-        Initialize workbench mode handler.
-
-        Args:
-            llm_service: LLM service for chat completions
-            context_service: Context injection service
-        """
-        self.llm_service = llm_service
+    def __init__(self, agent_service: AgentService, context_service: ContextService):
+        self.agent_service = agent_service
         self.context_service = context_service
 
     async def process_message(self, state: WorkbenchState) -> WorkbenchState:  # type: ignore
@@ -61,8 +55,13 @@ class WorkbenchModeHandler:
             # Prepare messages for LLM
             messages = await self._build_workbench_messages(state, model_config)
 
-            # Process with technical configuration
-            response = await self.llm_service._chat_with_model(messages, model_config)
+            # Execute via AgentService
+            agent_response = await self.agent_service.run(
+                messages=[{"role": m.type, "content": m.content} for m in messages],
+                task_id=str(uuid4()),
+                model_config=model_config,
+            )
+            response = agent_response.message
 
             # Add technical metadata
             technical_metadata = {
@@ -183,13 +182,16 @@ class WorkbenchModeHandler:
                 context_prompt = "Context Information:\n" + "\n".join(context_parts)
                 messages.append(SystemMessage(content=context_prompt))
 
-        # Add conversation history
+        # Add conversation history (both turns for multi-turn context)
         for msg in state["conversation_history"]:
-            if msg.get("role") == "user":
-                messages.append(HumanMessage(content=msg["content"]))
-            elif msg.get("role") == "assistant":
-                # Skip adding assistant messages to avoid duplication
-                pass
+            if isinstance(msg, dict):
+                role, content = msg.get("role"), msg.get("content", "")
+            else:
+                role, content = getattr(msg, "role", None), getattr(msg, "content", "")
+            if role == "user":
+                messages.append(HumanMessage(content=content))
+            elif role == "assistant":
+                messages.append(AIMessage(content=content))
 
         # Add current user message
         messages.append(HumanMessage(content=state["user_message"]))
@@ -200,15 +202,8 @@ class WorkbenchModeHandler:
 class SEOCoachModeHandler:
     """Handle SEO coach mode processing with Dutch business context."""
 
-    def __init__(self, llm_service: ChatService, context_service: ContextService):
-        """
-        Initialize SEO coach mode handler.
-
-        Args:
-            llm_service: LLM service for chat completions
-            context_service: Context injection service
-        """
-        self.llm_service = llm_service
+    def __init__(self, agent_service: AgentService, context_service: ContextService):
+        self.agent_service = agent_service
         self.context_service = context_service
         self.dutch_prompts = DutchSEOPrompts()
 
@@ -242,8 +237,13 @@ class SEOCoachModeHandler:
             # Prepare messages for Dutch coaching
             messages = await self._build_coaching_messages(state, dutch_config)
 
-            # Generate coaching response
-            response = await self.llm_service._chat_with_model(messages, dutch_config)
+            # Execute via AgentService with SEO Coach model config
+            agent_response = await self.agent_service.run(
+                messages=[{"role": m.type, "content": m.content} for m in messages],
+                task_id=str(uuid4()),
+                model_config=dutch_config,
+            )
+            response = agent_response.message
 
             # Update coaching phase if needed
             updated_state = await self._update_coaching_phase(state)
@@ -411,11 +411,17 @@ Coaching fase: {phase}"""
 
             messages.append(SystemMessage(content=context_msg))
 
-        # Add conversation history
+        # Add conversation history (both turns for multi-turn context)
         for msg in state["conversation_history"]:
-            if msg.get("role") == "user":
-                messages.append(HumanMessage(content=msg["content"]))
-            # Skip assistant messages to avoid duplication
+            if isinstance(msg, dict):
+                role, content = msg.get("role"), msg.get("content", "")
+            else:
+                role = getattr(msg, "role", None)
+                content = getattr(msg, "content", "")
+            if role == "user":
+                messages.append(HumanMessage(content=content))
+            elif role == "assistant":
+                messages.append(AIMessage(content=content))
 
         # Add current user message
         messages.append(HumanMessage(content=state["user_message"]))

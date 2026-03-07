@@ -10,10 +10,11 @@ controlled by config labels.
 """
 
 import base64
+import json
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import gradio as gr
 import requests  # type: ignore[import-untyped]
@@ -342,61 +343,141 @@ def render(
                     temperature = 0.7
                     max_tokens = 2000
 
-                try:
-                    # Call full workflow endpoint
-                    response = requests.post(
-                        "http://localhost:8000/api/v1/chat/workflow",
-                        json={
-                            "user_message": message,
-                            "workflow_mode": "workbench",
-                            "llm_config": {
-                                "provider": provider,
-                                "model_name": model_name,
-                                "temperature": temperature,
-                                "max_tokens": max_tokens,
-                            },
-                        },
-                        timeout=30,
-                    )
+                payload = {
+                    "user_message": message,
+                    "workflow_mode": "seo_coach",
+                    "llm_config": {
+                        "provider": provider,
+                        "model_name": model_name,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                    },
+                }
 
-                    if response.status_code == 200:
-                        result = response.json()
-                        ai_response = result.get(
-                            "assistant_response", "No response received"
-                        )
-                        response_metadata = result.get("response_metadata", {})
-                    else:
-                        ai_response = (
-                            f"API Error {response.status_code}: " f"{response.text}"
-                        )
-                        response_metadata = {}
+                # Streaming: build up the assistant message token by token
+                user_msg = to_chat_message({"role": "user", "content": message})
+                answer_content = ""
+                thinking_content = ""
+
+                try:
+                    with requests.post(
+                        "http://localhost:8000/api/v1/chat/workflow/stream",
+                        json=payload,
+                        stream=True,
+                        timeout=60,
+                    ) as resp:
+                        if resp.status_code != 200:
+                            answer_content = (
+                                f"API Error {resp.status_code}: {resp.text}"
+                            )
+                        else:
+                            for line in resp.iter_lines():
+                                if not line:
+                                    continue
+                                raw = (
+                                    line.decode("utf-8")
+                                    if isinstance(line, bytes)
+                                    else line
+                                )
+                                if not raw.startswith("data: "):
+                                    continue
+                                try:
+                                    event = json.loads(raw[6:])
+                                except json.JSONDecodeError:
+                                    continue
+
+                                event_type = event.get("type")
+                                if event_type == "thinking_chunk":
+                                    thinking_content += event.get("content", "")
+                                    thinking_msg = gr.ChatMessage(
+                                        role="assistant",
+                                        content=thinking_content,
+                                        metadata={
+                                            "title": "Redenering",
+                                            "status": "thinking",
+                                        },
+                                    )
+                                    streaming_history = history + [
+                                        user_msg,
+                                        thinking_msg,
+                                    ]
+                                    yield (
+                                        streaming_history,
+                                        message,
+                                        gr.Button(
+                                            value="",
+                                            interactive=False,
+                                            size="sm",
+                                            elem_classes=[
+                                                "agent-workbench-submit-btn",
+                                                "processing",
+                                            ],
+                                            elem_id="submit-btn",
+                                        ),
+                                    )
+                                elif event_type == "answer_chunk":
+                                    answer_content += event.get("content", "")
+                                    streaming_msgs: List[gr.ChatMessage] = [user_msg]
+                                    if thinking_content:
+                                        streaming_msgs.append(
+                                            gr.ChatMessage(
+                                                role="assistant",
+                                                content=thinking_content,
+                                                metadata={
+                                                    "title": "Redenering",
+                                                    "status": "done",
+                                                },
+                                            )
+                                        )
+                                    streaming_msgs.append(
+                                        gr.ChatMessage(
+                                            role="assistant", content=answer_content
+                                        )
+                                    )
+                                    yield (
+                                        history + streaming_msgs,
+                                        message,
+                                        gr.Button(
+                                            value="",
+                                            interactive=False,
+                                            size="sm",
+                                            elem_classes=[
+                                                "agent-workbench-submit-btn",
+                                                "processing",
+                                            ],
+                                            elem_id="submit-btn",
+                                        ),
+                                    )
 
                 except requests.exceptions.Timeout:
-                    ai_response = "Request timed out after 30 seconds"
-                    response_metadata = {}
+                    answer_content = "Verzoek verlopen na 60 seconden"
                 except requests.exceptions.ConnectionError:
-                    ai_response = "Connection failed - is the server running?"
-                    response_metadata = {}
+                    answer_content = "Verbinding mislukt - draait de server?"
                 except Exception as e:
-                    ai_response = f"Unexpected error: {str(e)}"
-                    response_metadata = {}
+                    answer_content = f"Onverwachte fout: {str(e)}"
 
-                # Update history with user message and response (gr.ChatMessage)
-                new_history = history + [
-                    to_chat_message({"role": "user", "content": message}),
-                    to_chat_message(
-                        {
-                            "role": "assistant",
-                            "content": ai_response,
-                            "metadata": response_metadata,
-                        }
-                    ),
-                ]
+                # Build final history entry
+                final_assistant: List[gr.ChatMessage] = []
+                if thinking_content:
+                    final_assistant.append(
+                        gr.ChatMessage(
+                            role="assistant",
+                            content=thinking_content,
+                            metadata={"title": "Redenering", "status": "done"},
+                        )
+                    )
+                final_assistant.append(
+                    gr.ChatMessage(
+                        role="assistant",
+                        content=answer_content or "Geen antwoord ontvangen",
+                    )
+                )
+                new_history = history + [user_msg] + final_assistant
 
                 # State 1: Back to disabled (empty input)
                 yield (
-                    new_history,  # Updated chatbot with response
-                    "",  # Clear textbox
+                    new_history,
+                    "",
                     gr.Button(
                         value="",
                         interactive=False,
@@ -790,28 +871,20 @@ def handle_chat_interface_message(
     history: List[Dict[str, Any]],
     user_state: Optional[Dict[str, Any]],
     settings: Optional[Dict[str, Any]] = None,
-) -> gr.ChatMessage:
+) -> Iterator[List[gr.ChatMessage]]:
+    """Handle chat message submission for gr.ChatInterface.
+
+    Generator: yields token chunks as they arrive from the streaming endpoint.
+    gr.ChatInterface replaces its last yield each time — the final yield is
+    what the user sees as the completed message.
+
+    Yields:
+        List of gr.ChatMessage: [thinking_msg (optional), answer_msg]
     """
-    Handle chat message submission for gr.ChatInterface.
-
-    Args:
-        message: User input text
-        history: Current chat history (messages format)
-        user_state: User session data (from additional_inputs)
-        settings: User settings (model config, etc.)
-
-    Returns:
-        gr.ChatMessage with assistant response and optional metadata.
-
-    Note:
-        gr.ChatInterface automatically adds user message to history and
-        appends the returned response, so we only return the assistant message.
-    """
-
     if not message.strip():
-        return gr.ChatMessage(role="assistant", content="Please enter a message.")
+        yield [gr.ChatMessage(role="assistant", content="Please enter a message.")]
+        return
 
-    # Get model config from settings or use defaults
     if settings and "model_config" in settings:
         model_config = settings["model_config"]
         provider = model_config.get("provider", "openrouter")
@@ -819,58 +892,95 @@ def handle_chat_interface_message(
         temperature = model_config.get("temperature", 0.7)
         max_tokens = model_config.get("max_tokens", 2000)
     else:
-        # Fallback to defaults
         provider = "openrouter"
         model_name = "openai/gpt-4o-mini"
         temperature = 0.7
         max_tokens = 2000
 
-    try:
-        # Call full workflow endpoint for database persistence
-        response = requests.post(
-            "http://localhost:8000/api/v1/chat/workflow",
-            json={
-                "user_message": message,
-                "workflow_mode": "workbench",
-                "llm_config": {
-                    "provider": provider,
-                    "model_name": model_name,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                },
-            },
-            timeout=30,
-        )
+    payload = {
+        "user_message": message,
+        "workflow_mode": "workbench",
+        "llm_config": {
+            "provider": provider,
+            "model_name": model_name,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        },
+    }
 
-        if response.status_code == 200:
-            result = response.json()
-            ai_response = result.get("assistant_response", "No response received")
-            response_metadata = result.get("response_metadata", {})
-            return to_chat_message(
-                {
-                    "role": "assistant",
-                    "content": ai_response,
-                    "metadata": response_metadata,
-                }
-            )
-        else:
-            return gr.ChatMessage(
-                role="assistant",
-                content=f"API Error {response.status_code}: {response.text}",
-            )
+    thinking_content = ""
+    answer_content = ""
+
+    try:
+        with requests.post(
+            "http://localhost:8000/api/v1/chat/workflow/stream",
+            json=payload,
+            stream=True,
+            timeout=60,
+        ) as response:
+            if response.status_code != 200:
+                yield [
+                    gr.ChatMessage(
+                        role="assistant",
+                        content=f"API Error {response.status_code}: {response.text}",
+                    )
+                ]
+                return
+
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                raw = line.decode("utf-8") if isinstance(line, bytes) else line
+                if not raw.startswith("data: "):
+                    continue
+                try:
+                    event = json.loads(raw[6:])
+                except json.JSONDecodeError:
+                    continue
+
+                event_type = event.get("type")
+
+                if event_type == "thinking_chunk":
+                    thinking_content += event.get("content", "")
+                    msgs: List[gr.ChatMessage] = [
+                        gr.ChatMessage(
+                            role="assistant",
+                            content=thinking_content,
+                            metadata={"title": "Reasoning", "status": "thinking"},
+                        )
+                    ]
+                    yield msgs
+
+                elif event_type == "answer_chunk":
+                    answer_content += event.get("content", "")
+                    msgs = []
+                    if thinking_content:
+                        msgs.append(
+                            gr.ChatMessage(
+                                role="assistant",
+                                content=thinking_content,
+                                metadata={"title": "Reasoning", "status": "done"},
+                            )
+                        )
+                    msgs.append(
+                        gr.ChatMessage(role="assistant", content=answer_content)
+                    )
+                    yield msgs
 
     except requests.exceptions.Timeout:
-        return gr.ChatMessage(
-            role="assistant", content="Request timed out after 30 seconds"
-        )
-
+        yield [
+            gr.ChatMessage(
+                role="assistant", content="Request timed out after 60 seconds"
+            )
+        ]
     except requests.exceptions.ConnectionError:
-        return gr.ChatMessage(
-            role="assistant", content="Connection failed - is the server running?"
-        )
-
+        yield [
+            gr.ChatMessage(
+                role="assistant", content="Connection failed - is the server running?"
+            )
+        ]
     except Exception as e:
-        return gr.ChatMessage(role="assistant", content=f"Unexpected error: {str(e)}")
+        yield [gr.ChatMessage(role="assistant", content=f"Unexpected error: {str(e)}")]
 
 
 def handle_chat_message(

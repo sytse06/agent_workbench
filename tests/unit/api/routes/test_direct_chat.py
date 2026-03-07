@@ -19,19 +19,17 @@ from src.agent_workbench.api.routes.simple_chat import (
 @pytest.mark.asyncio
 async def test_direct_chat_success():
     """Test successful direct chat response."""
-    # Mock the SimpleChatWorkflow execution
-    mock_workflow = AsyncMock()
-    mock_workflow.execute = AsyncMock(
-        return_value={
-            "execution_successful": True,
-            "assistant_response": "Hello! This is a test response.",
-        }
+    from agent_workbench.services.agent_service import AgentResponse
+
+    mock_agent = AsyncMock()
+    mock_agent.run = AsyncMock(
+        return_value=AgentResponse(message="Hello! This is a test response.")
     )
 
     with patch(
-        "src.agent_workbench.api.routes.simple_chat.SimpleChatWorkflow"
-    ) as mock_workflow_class:
-        mock_workflow_class.return_value = mock_workflow
+        "src.agent_workbench.api.routes.simple_chat.AgentService"
+    ) as mock_agent_class:
+        mock_agent_class.return_value = mock_agent
 
         request = SimpleChatRequest(
             message="Hello, test message",
@@ -52,14 +50,13 @@ async def test_direct_chat_success():
 @pytest.mark.asyncio
 async def test_direct_chat_failure():
     """Test direct chat error handling."""
-    # Mock the SimpleChatWorkflow to raise an exception
-    mock_workflow = AsyncMock()
-    mock_workflow.execute = AsyncMock(side_effect=Exception("API connection failed"))
+    mock_agent = AsyncMock()
+    mock_agent.run = AsyncMock(side_effect=Exception("API connection failed"))
 
     with patch(
-        "src.agent_workbench.api.routes.simple_chat.SimpleChatWorkflow"
-    ) as mock_workflow_class:
-        mock_workflow_class.return_value = mock_workflow
+        "src.agent_workbench.api.routes.simple_chat.AgentService"
+    ) as mock_agent_class:
+        mock_agent_class.return_value = mock_agent
 
         request = SimpleChatRequest(
             message="Hello, test message",

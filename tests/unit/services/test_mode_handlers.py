@@ -14,14 +14,14 @@ from agent_workbench.services.mode_handlers import (
 
 def make_workbench_handler():
     return WorkbenchModeHandler(
-        llm_service=MagicMock(),
+        agent_service=MagicMock(),
         context_service=MagicMock(),
     )
 
 
 def make_seo_handler():
     return SEOCoachModeHandler(
-        llm_service=MagicMock(),
+        agent_service=MagicMock(),
         context_service=MagicMock(),
     )
 
