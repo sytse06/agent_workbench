@@ -35,6 +35,7 @@ See `docs/project/ARCHITECTURE.md` for the dot on the horizon.
   - Debug `print()` → `logger.debug()` in chat.py and mode_factory_v2.py
   - NOTE: `type="messages"` removal deferred — project pinned to Gradio <6.0.0; belongs in Gradio 6 upgrade PR
 - [x] PR-08b: Gradio 6 upgrade — bump `gradio>=6.0.0`, remove `type="messages"`, adopt `gr.ChatMessage`, `MessageConverter`, `response_metadata` passthrough, Pydantic/LangChain boundary fixes
+- [x] PR-08c: LangChain v1 + LangGraph v1 upgrade — bump core packages, remove dead `langchain-community` dependency, verify breaking changes; positions codebase for Phase 2 `create_agent` + middleware
 - [x] PR-09: Externalize inline JavaScript (246 lines) + stable elem_id selectors
   - Extracted 246-line JS block → static/js/ui-init.js (IIFE, SEO Coach only)
   - Added elem_id= to layout components (aw-main, aw-top-bar, aw-input-bar)
