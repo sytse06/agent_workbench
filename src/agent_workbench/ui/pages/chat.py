@@ -14,7 +14,7 @@ import json
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 import gradio as gr
 import requests  # type: ignore[import-untyped]
@@ -52,6 +52,15 @@ def svg_to_data_uri(svg_path: str) -> str:
 # Load icons as data URIs at module level (replicating Gradio's built-in icon pattern)
 SUBMIT_ICON_DATA_URI = svg_to_data_uri("/static/icons/svg/submit_icon_24.svg")
 PROCESSING_ICON_DATA_URI = svg_to_data_uri("/static/icons/svg/processing_icon_24.svg")
+
+_FILE_TYPES = [".pdf", ".docx", ".txt", ".md"]
+
+
+def _extract_message(input: Union[str, dict]) -> tuple[str, list]:
+    """Extract text and files from MultimodalTextbox input or plain string."""
+    if isinstance(input, dict):
+        return input.get("text", ""), input.get("files", [])
+    return input, []
 
 
 def render(
@@ -92,15 +101,59 @@ def render(
                 type="index",
             )
 
+        pending_files_wb = gr.State([])
+
+        with gr.Group(
+            visible=False, elem_classes=["aw-approval-bar"]
+        ) as approval_group_wb:
+            with gr.Row():
+                approval_filename_wb = gr.Markdown("")
+                approve_btn_wb = gr.Button(
+                    config["labels"].get("file_approve", "Confirm"),
+                    variant="primary",
+                    size="sm",
+                )
+                cancel_btn_wb = gr.Button(
+                    config["labels"].get("file_cancel", "Remove"), size="sm"
+                )
+
         chat_iface = gr.ChatInterface(
             fn=handle_chat_interface_message,
             additional_inputs=[user_state, settings_state],
             save_history=False,
             title="Agent Workbench Chat",
-            textbox=gr.Textbox(
+            textbox=gr.MultimodalTextbox(
                 placeholder=config["labels"]["placeholder"],
-                submit_btn=True,
+                file_types=_FILE_TYPES,
+                file_count="single",
             ),
+        )
+
+        def on_wb_input_change(input_val: Union[str, dict], pending: list) -> tuple:
+            _, files = _extract_message(input_val)
+            if files and files != pending:
+                filename = files[0].get("orig_name", files[0].get("name", "unknown"))
+                return gr.Group(visible=True), pending, f"**{filename}**"
+            if not files and pending:
+                return gr.Group(visible=False), [], ""
+            return gr.Group(visible=False), pending, ""
+
+        chat_iface.textbox.change(
+            fn=on_wb_input_change,
+            inputs=[chat_iface.textbox, pending_files_wb],
+            outputs=[approval_group_wb, pending_files_wb, approval_filename_wb],
+            queue=False,
+        )
+
+        approve_btn_wb.click(
+            fn=lambda inp, _p: (gr.Group(visible=False), _extract_message(inp)[1]),
+            inputs=[chat_iface.textbox, pending_files_wb],
+            outputs=[approval_group_wb, pending_files_wb],
+        )
+
+        cancel_btn_wb.click(
+            fn=lambda: (gr.Group(visible=False), []),
+            outputs=[approval_group_wb, pending_files_wb],
         )
 
         # Save conversation after each message
@@ -240,17 +293,37 @@ def render(
                 value=conversation_state.value if conversation_state.value else [],
             )
 
+            # File upload state + approval bar
+            pending_files_seo = gr.State([])
+
+            with gr.Group(
+                visible=False, elem_classes=["aw-approval-bar"]
+            ) as approval_group_seo:
+                with gr.Row():
+                    approval_filename_seo = gr.Markdown("")
+                    approve_btn_seo = gr.Button(
+                        config["labels"].get("file_approve", "Confirm"),
+                        variant="primary",
+                        size="sm",
+                    )
+                    cancel_btn_seo = gr.Button(
+                        config["labels"].get("file_cancel", "Remove"), size="sm"
+                    )
+
             # Input bar (Task 4.3.1: container with textbox + submit button)
             with gr.Row(
                 elem_id="aw-input-bar", elem_classes=["agent-workbench-input-bar"]
             ):
-                # Message input field (Task 4.3.3: borderless, flex: 1)
-                textbox = gr.Textbox(
+                # Message input field — MultimodalTextbox for file upload + drag-and-drop  # noqa: E501
+                textbox = gr.MultimodalTextbox(
                     placeholder=config["labels"]["placeholder"],
                     show_label=False,
                     container=False,
                     elem_classes=["agent-workbench-message-input"],
-                    scale=1,  # Takes remaining space (flex: 1)
+                    scale=1,
+                    file_types=_FILE_TYPES,
+                    file_count="single",
+                    submit_btn=False,  # external custom submit button used instead
                 )
 
                 # Submit button (Task 4.3.5: three states - disabled/active/processing)
@@ -266,60 +339,74 @@ def render(
 
             # ===== BINDINGS =====
 
-            def update_submit_button_state(text: str) -> gr.Button:
-                """
-                Update button state based on input text (Task 4.3.5 States 1-2).
+            _disabled_btn = gr.Button(
+                value="",
+                interactive=False,
+                size="sm",
+                elem_classes=["agent-workbench-submit-btn"],
+                elem_id="submit-btn",
+            )
 
-                Returns new Button instance with appropriate icon and interactivity.
-                State 1: Empty input - disabled (gray)
-                State 2: Has input - active (black)
+            def on_seo_input_change(
+                input_val: Union[str, dict, None], pending: list
+            ) -> tuple:
+                """Combined handler: updates submit button state + shows approval bar.
 
-                Note: Processing state (State 3) handled in handle_submit generator.
-                Note: Icon shown via CSS background-image.
+                State 1: Empty input — button disabled, approval bar hidden.
+                State 2: Has text — button active.
+                File detected: approval bar shown with filename.
+                File removed: approval bar hidden, pending cleared.
                 """
-                if text.strip():
-                    # State 2: Active (has text)
-                    return gr.Button(
+                if input_val is None:
+                    return _disabled_btn, gr.Group(visible=False), pending, ""
+                text, files = _extract_message(input_val)
+
+                btn = (
+                    gr.Button(
                         value="",
                         interactive=True,
                         size="sm",
                         elem_classes=["agent-workbench-submit-btn", "active"],
                         elem_id="submit-btn",
                     )
-                else:
-                    # State 1: Disabled (empty)
-                    return gr.Button(
+                    if text.strip()
+                    else gr.Button(
                         value="",
                         interactive=False,
                         size="sm",
                         elem_classes=["agent-workbench-submit-btn"],
                         elem_id="submit-btn",
                     )
+                )
+
+                if files and files != pending:
+                    filename = files[0].get(
+                        "orig_name", files[0].get("name", "unknown")
+                    )
+                    return btn, gr.Group(visible=True), pending, f"**{filename}**"
+                if not files and pending:
+                    return btn, gr.Group(visible=False), [], ""
+                return btn, gr.Group(visible=False), pending, ""
 
             def handle_submit(
-                message: str,
+                message: Union[str, dict],
                 history: List[gr.ChatMessage],
                 user_state_val: Optional[Dict[str, Any]],
                 settings_val: Optional[Dict[str, Any]],
             ):
-                """
-                Handle message submission with processing state display.
+                """Handle message submission with processing state display.
 
-                Generator pattern for showing intermediate states:
-                1. Show processing icon (State 3)
-                2. Make API call
-                3. Return to disabled state (State 1)
-
-                Yields:
-                    Tuple of (chatbot, textbox, submit_btn) updates
+                Accepts str (legacy) or dict (gr.MultimodalTextbox).
+                Generator: yields (chatbot, textbox, submit_btn, pending_files).
                 """
-                if not message.strip():
+                text, _ = _extract_message(message)
+                if not text.strip():
                     return
 
                 # State 3: Processing - show animated icon
                 yield (
                     history,  # Keep current history
-                    message,  # Keep message visible during processing
+                    message,  # Keep original value visible during processing
                     gr.Button(
                         value="",
                         interactive=False,
@@ -327,6 +414,7 @@ def render(
                         elem_classes=["agent-workbench-submit-btn", "processing"],
                         elem_id="submit-btn",
                     ),
+                    [],  # pending_files unchanged during processing
                 )
 
                 # Get model config from settings or use defaults
@@ -344,7 +432,7 @@ def render(
                     max_tokens = 2000
 
                 payload = {
-                    "user_message": message,
+                    "user_message": text,
                     "workflow_mode": "seo_coach",
                     "llm_config": {
                         "provider": provider,
@@ -355,7 +443,7 @@ def render(
                 }
 
                 # Streaming: build up the assistant message token by token
-                user_msg = to_chat_message({"role": "user", "content": message})
+                user_msg = to_chat_message({"role": "user", "content": text})
                 answer_content = ""
                 thinking_content = ""
 
@@ -414,6 +502,7 @@ def render(
                                             ],
                                             elem_id="submit-btn",
                                         ),
+                                        [],
                                     )
                                 elif event_type == "answer_chunk":
                                     answer_content += event.get("content", "")
@@ -447,6 +536,7 @@ def render(
                                             ],
                                             elem_id="submit-btn",
                                         ),
+                                        [],
                                     )
 
                 except requests.exceptions.Timeout:
@@ -474,10 +564,10 @@ def render(
                 )
                 new_history = history + [user_msg] + final_assistant
 
-                # State 1: Back to disabled (empty input)
+                # State 1: Back to disabled — clear textbox + pending files
                 yield (
                     new_history,
-                    "",
+                    {"text": "", "files": []},
                     gr.Button(
                         value="",
                         interactive=False,
@@ -485,27 +575,45 @@ def render(
                         elem_classes=["agent-workbench-submit-btn"],
                         elem_id="submit-btn",
                     ),
+                    [],
                 )
 
-            # Wire button state updates (instant, no queue)
+            # Wire combined input change handler (button state + approval bar)
             textbox.change(
-                fn=update_submit_button_state,
-                inputs=[textbox],
-                outputs=[submit_btn],
-                queue=False,  # Instant client-side update
+                fn=on_seo_input_change,
+                inputs=[textbox, pending_files_seo],
+                outputs=[
+                    submit_btn,
+                    approval_group_seo,
+                    pending_files_seo,
+                    approval_filename_seo,
+                ],
+                queue=False,
+            )
+
+            # Wire approval bar buttons
+            approve_btn_seo.click(
+                fn=lambda inp, _p: (gr.Group(visible=False), _extract_message(inp)[1]),
+                inputs=[textbox, pending_files_seo],
+                outputs=[approval_group_seo, pending_files_seo],
+            )
+
+            cancel_btn_seo.click(
+                fn=lambda: (gr.Group(visible=False), []),
+                outputs=[approval_group_seo, pending_files_seo],
             )
 
             # Wire submit handlers (both click and Enter key)
             submit_btn.click(
                 fn=handle_submit,
                 inputs=[textbox, chatbot, user_state, settings_state],
-                outputs=[chatbot, textbox, submit_btn],
+                outputs=[chatbot, textbox, submit_btn, pending_files_seo],
             )
 
             textbox.submit(
                 fn=handle_submit,
                 inputs=[textbox, chatbot, user_state, settings_state],
-                outputs=[chatbot, textbox, submit_btn],
+                outputs=[chatbot, textbox, submit_btn, pending_files_seo],
             )
 
             # JavaScript to toggle logo/chatbot visibility (message count)
@@ -867,13 +975,14 @@ def load_conversation_into_chat(
 
 
 def handle_chat_interface_message(
-    message: str,
+    message: Union[str, dict],
     history: List[Dict[str, Any]],
     user_state: Optional[Dict[str, Any]],
     settings: Optional[Dict[str, Any]] = None,
 ) -> Iterator[List[gr.ChatMessage]]:
     """Handle chat message submission for gr.ChatInterface.
 
+    Accepts str (legacy) or dict (gr.MultimodalTextbox).
     Generator: yields token chunks as they arrive from the streaming endpoint.
     gr.ChatInterface replaces its last yield each time — the final yield is
     what the user sees as the completed message.
@@ -881,7 +990,8 @@ def handle_chat_interface_message(
     Yields:
         List of gr.ChatMessage: [thinking_msg (optional), answer_msg]
     """
-    if not message.strip():
+    text, _ = _extract_message(message)
+    if not text.strip():
         yield [gr.ChatMessage(role="assistant", content="Please enter a message.")]
         return
 
@@ -898,7 +1008,7 @@ def handle_chat_interface_message(
         max_tokens = 2000
 
     payload = {
-        "user_message": message,
+        "user_message": text,
         "workflow_mode": "workbench",
         "llm_config": {
             "provider": provider,
