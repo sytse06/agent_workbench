@@ -9,11 +9,11 @@ WORKDIR /app
 RUN pip install uv
 
 # Copy dependency files and source code
-COPY pyproject.toml .
+COPY pyproject.toml uv.lock ./
 COPY src/ ./src/
 
-# Install dependencies with UV (this will also build the local package)
-RUN uv sync --no-dev
+# Install dependencies with UV (frozen ensures exact lock file versions)
+RUN uv sync --frozen --no-dev
 
 # Runtime stage
 FROM python:3.10-slim-bookworm AS runtime

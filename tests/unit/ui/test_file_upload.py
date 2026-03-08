@@ -1,6 +1,5 @@
 """Unit tests for PR-2.1 file upload UI — both Workbench and SEO Coach modes."""
 
-
 from src.agent_workbench.ui.pages.chat import _extract_message
 
 # ---------------------------------------------------------------------------

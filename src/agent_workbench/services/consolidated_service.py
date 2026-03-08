@@ -1,6 +1,8 @@
 """Main consolidated service integrating LLM-001B with LangGraph workflows."""
 
+import asyncio
 import logging
+import os
 import time
 from typing import Any, Dict, Literal, Optional, Union
 from uuid import UUID, uuid4
@@ -50,6 +52,7 @@ class ConsolidatedWorkbenchService:
         self.mode_detector: Optional[ModeDetector] = None
         self.agent_service: Optional[AgentService] = None
         self.lang_graph_service: Optional[LangGraphService] = None
+        self.file_processing_service: Optional[Any] = None
 
     def _ensure_uuid(
         self, conversation_id: Optional[Union[UUID, str]]
@@ -89,6 +92,14 @@ class ConsolidatedWorkbenchService:
             state_bridge=self.state_bridge,
             agent_service=self.agent_service,
             context_service=self.context_service,
+        )
+
+        # File processing service
+        from .docling_service import _docling_service
+        from .file_processing_service import FileProcessingService
+
+        self.file_processing_service: Optional[FileProcessingService] = (
+            FileProcessingService(docling=_docling_service)
         )
 
     async def execute_workflow(
@@ -134,6 +145,45 @@ class ConsolidatedWorkbenchService:
                     request, effective_mode
                 )
                 logger.info(f"🎯 DEBUG: Created conversation: {conversation_id}")
+
+            # Process pending files if any
+            if request.pending_files and self.file_processing_service:
+                context_parts = []
+                filenames = []
+                for file_info in request.pending_files:
+                    if isinstance(file_info, str):
+                        file_path = file_info
+                        filename = os.path.basename(file_info)
+                    else:
+                        file_path = file_info.get("path") or file_info.get("name", "")
+                        filename = file_info.get("orig_name") or file_info.get(
+                            "name", "document"
+                        )
+                    if not file_path:
+                        continue
+                    try:
+                        chunks = await asyncio.to_thread(
+                            self.file_processing_service.convert, file_path
+                        )
+                        context_block = (
+                            await self.file_processing_service.save_and_build_context(
+                                chunks, filename, str(conversation_id), self.db_session
+                            )
+                        )
+                        if context_block:
+                            context_parts.append(
+                                f"=== Document: {filename} ===\n{context_block}"
+                            )
+                            filenames.append(filename)
+                    except Exception as e:
+                        logger.error(f"File processing failed for {filename}: {e}")
+                if context_parts:
+                    request = request.model_copy(
+                        update={
+                            "document_context": "\n\n".join(context_parts),
+                            "document_filename": ", ".join(filenames),
+                        }
+                    )
 
             # Prepare initial workflow state
             logger.info("🎯 DEBUG: Preparing initial workflow state")
@@ -220,6 +270,45 @@ class ConsolidatedWorkbenchService:
         if not conversation_id:
             conversation_id = await self._create_conversation(request, effective_mode)
 
+        if request.pending_files and self.file_processing_service:
+            context_parts = []
+            filenames = []
+            for file_info in request.pending_files:
+                if isinstance(file_info, str):
+                    file_path = file_info
+                    filename = os.path.basename(file_info)
+                else:
+                    file_path = file_info.get("path") or file_info.get("name", "")
+                    filename = file_info.get("orig_name") or file_info.get(
+                        "name", "document"
+                    )
+                if not file_path:
+                    continue
+                yield {"type": "processing_file", "filename": filename}
+                try:
+                    chunks = await asyncio.to_thread(
+                        self.file_processing_service.convert, file_path
+                    )
+                    context_block = (
+                        await self.file_processing_service.save_and_build_context(
+                            chunks, filename, str(conversation_id), self.db_session
+                        )
+                    )
+                    if context_block:
+                        context_parts.append(
+                            f"=== Document: {filename} ===\n{context_block}"
+                        )
+                        filenames.append(filename)
+                except Exception as e:
+                    logger.error(f"File processing failed for {filename}: {e}")
+            if context_parts:
+                request = request.model_copy(
+                    update={
+                        "document_context": "\n\n".join(context_parts),
+                        "document_filename": ", ".join(filenames),
+                    }
+                )
+
         initial_state = await self._prepare_initial_state(
             request, conversation_id, effective_mode
         )
@@ -264,6 +353,7 @@ class ConsolidatedWorkbenchService:
         # Persist the turn after streaming completes
         if final_response_text:
             from ..models.standard_messages import StandardMessage
+
             history = list(initial_state.get("conversation_history", []))
             history.append(StandardMessage(role="user", content=request.user_message))
             history.append(
@@ -492,6 +582,8 @@ class ConsolidatedWorkbenchService:
             "mcp_tools_active": [],
             "agent_state": None,
             "workflow_data": None,
+            "document_context": request.document_context,
+            "document_filename": request.document_filename,
         }
 
         return initial_state

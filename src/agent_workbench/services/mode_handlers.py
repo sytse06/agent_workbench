@@ -182,6 +182,14 @@ class WorkbenchModeHandler:
                 context_prompt = "Context Information:\n" + "\n".join(context_parts)
                 messages.append(SystemMessage(content=context_prompt))
 
+        # Inject attached document context
+        if state.get("document_context"):
+            fname = state.get("document_filename", "document")
+            doc_ctx = state["document_context"]
+            messages.append(
+                SystemMessage(content=f"[Attached document: {fname}]\n\n{doc_ctx}")
+            )
+
         # Add conversation history (both turns for multi-turn context)
         for msg in state["conversation_history"]:
             if isinstance(msg, dict):
@@ -410,6 +418,14 @@ class SEOCoachModeHandler:
 Coaching fase: {phase}"""
 
             messages.append(SystemMessage(content=context_msg))
+
+        # Inject attached document context
+        if state.get("document_context"):
+            fname = state.get("document_filename", "document")
+            doc_ctx = state["document_context"]
+            messages.append(
+                SystemMessage(content=f"[Bijgevoegd document: {fname}]\n\n{doc_ctx}")
+            )
 
         # Add conversation history (both turns for multi-turn context)
         for msg in state["conversation_history"]:

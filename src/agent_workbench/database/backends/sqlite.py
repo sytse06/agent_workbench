@@ -16,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agent_workbench.models.database import (
     AgentConfigModel,
     ConversationModel,
+    DocumentChunkModel,
+    DocumentModel,
     MessageModel,
     SessionActivityModel,
     UserModel,
@@ -67,6 +69,9 @@ class SQLiteBackend:
             try:
                 return new_loop.run_until_complete(coro_func)
             finally:
+                # Shut down async generators so aiosqlite connections
+                # are properly closed before the loop is destroyed.
+                new_loop.run_until_complete(new_loop.shutdown_asyncgens())
                 new_loop.close()
 
         # Run in thread pool to avoid event loop conflicts
@@ -906,6 +911,117 @@ class SQLiteBackend:
     def delete_user_setting(self, user_id: str, setting_key: str) -> bool:
         """Delete a user setting."""
         return self._run_async(self._async_delete_user_setting(user_id, setting_key))
+
+    # ========================================================================
+    # Document Operations (File Processing Pipeline)
+    # ========================================================================
+
+    def save_document(self, data: Dict[str, Any]) -> str:
+        """Save document metadata."""
+        return self._run_async(self._async_save_document(data))
+
+    async def _async_save_document(self, data: Dict[str, Any]) -> str:
+        """Async implementation of save_document."""
+        async for session in self.session_factory():
+            doc = await DocumentModel.create(
+                session,
+                id=UUID(data["id"]),
+                conversation_id=(
+                    UUID(data["conversation_id"])
+                    if data.get("conversation_id")
+                    else None
+                ),
+                filename=data["filename"],
+                mime_type=data.get("mime_type"),
+                status=data.get("status", "processed"),
+                page_count=data.get("page_count"),
+                total_tokens=data.get("total_tokens"),
+            )
+            return str(doc.id)
+
+        raise RuntimeError("No database session available")
+
+    def get_documents(self, conversation_id: str) -> List[Dict[str, Any]]:
+        """Get all documents for a conversation."""
+        return self._run_async(self._async_get_documents(conversation_id))
+
+    async def _async_get_documents(self, conversation_id: str) -> List[Dict[str, Any]]:
+        """Async implementation of get_documents."""
+        async for session in self.session_factory():
+            docs = await DocumentModel.get_by_conversation(
+                session, UUID(conversation_id)
+            )
+            return [
+                {
+                    "id": str(d.id),
+                    "conversation_id": (
+                        str(d.conversation_id) if d.conversation_id else None
+                    ),
+                    "filename": d.filename,
+                    "mime_type": d.mime_type,
+                    "status": d.status,
+                    "page_count": d.page_count,
+                    "total_tokens": d.total_tokens,
+                    "created_at": d.created_at.isoformat(),
+                    "updated_at": d.updated_at.isoformat(),
+                }
+                for d in docs
+            ]
+
+        raise RuntimeError("No database session available")
+
+    def save_document_chunks(self, chunks: List[Dict[str, Any]]) -> None:
+        """Bulk-insert document chunks."""
+        self._run_async(self._async_save_document_chunks(chunks))
+
+    async def _async_save_document_chunks(self, chunks: List[Dict[str, Any]]) -> None:
+        """Async implementation of save_document_chunks."""
+        async for session in self.session_factory():
+            for chunk in chunks:
+                obj = DocumentChunkModel(
+                    id=UUID(chunk["id"]),
+                    document_id=UUID(chunk["document_id"]),
+                    chunk_index=chunk["chunk_index"],
+                    content=chunk["content"],
+                    heading=chunk.get("heading") or None,
+                    page=chunk.get("page"),
+                    token_count=chunk["token_count"],
+                )
+                session.add(obj)
+            await session.commit()
+            return
+
+        raise RuntimeError("No database session available")
+
+    def get_document_chunks(self, document_id: str) -> List[Dict[str, Any]]:
+        """Get all chunks for a document ordered by chunk_index."""
+        return self._run_async(self._async_get_document_chunks(document_id))
+
+    async def _async_get_document_chunks(
+        self, document_id: str
+    ) -> List[Dict[str, Any]]:
+        """Async implementation of get_document_chunks."""
+        async for session in self.session_factory():
+            result = await session.execute(
+                select(DocumentChunkModel)
+                .where(DocumentChunkModel.document_id == UUID(document_id))
+                .order_by(DocumentChunkModel.chunk_index)
+            )
+            rows = list(result.scalars().all())
+            return [
+                {
+                    "id": str(r.id),
+                    "document_id": str(r.document_id),
+                    "chunk_index": r.chunk_index,
+                    "content": r.content,
+                    "heading": r.heading,
+                    "page": r.page,
+                    "token_count": r.token_count,
+                }
+                for r in rows
+            ]
+
+        raise RuntimeError("No database session available")
 
     async def _async_delete_user_setting(self, user_id: str, setting_key: str) -> bool:
         """Async implementation of delete_user_setting."""

@@ -688,3 +688,23 @@ class DatabaseBackend(Protocol):
             >>> deleted = backend.delete_user_setting("550e8400-...", "old_setting")
         """
         ...
+
+    # ========================================================================
+    # Document Operations (File Processing Pipeline)
+    # ========================================================================
+
+    def save_document(self, data: Dict[str, Any]) -> str:
+        """Save document metadata and return document ID."""
+        ...
+
+    def get_documents(self, conversation_id: str) -> List[Dict[str, Any]]:
+        """Get all documents for a conversation."""
+        ...
+
+    def save_document_chunks(self, chunks: List[Dict[str, Any]]) -> None:
+        """Bulk-insert document chunks."""
+        ...
+
+    def get_document_chunks(self, document_id: str) -> List[Dict[str, Any]]:
+        """Get all chunks for a document ordered by chunk_index."""
+        ...

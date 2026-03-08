@@ -4,8 +4,12 @@ This backend provides a Protocol-compliant interface to HuggingFace Hub database
 for use in HuggingFace Spaces deployment where SQLite persistence is not available.
 """
 
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 
 class HubBackend:
@@ -592,6 +596,27 @@ class HubBackend:
         except Exception as e:
             print(f"❌ Failed to update user setting {setting_key}: {e}")
             return False
+
+    # ========================================================================
+    # Document Operations (File Processing Pipeline)
+    # ========================================================================
+
+    def save_document(self, data: Dict[str, Any]) -> str:
+        """Document storage not supported in Hub backend."""
+        logger.warning("Document storage not supported in Hub backend")
+        return data.get("id", str(uuid4()))
+
+    def get_documents(self, conversation_id: str) -> List[Dict[str, Any]]:
+        """Document retrieval not supported in Hub backend."""
+        return []
+
+    def save_document_chunks(self, chunks: List[Dict[str, Any]]) -> None:
+        """Document chunk storage not supported in Hub backend."""
+        logger.warning("Document chunk storage not supported in Hub backend")
+
+    def get_document_chunks(self, document_id: str) -> List[Dict[str, Any]]:
+        """Document chunk retrieval not supported in Hub backend."""
+        return []
 
     def delete_user_setting(self, user_id: str, setting_key: str) -> bool:
         """Delete a user setting.
