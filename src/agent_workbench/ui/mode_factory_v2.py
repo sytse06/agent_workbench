@@ -90,6 +90,9 @@ def create_workbench_app() -> gr.Blocks:
             # Locked model message (not shown in workbench)
             "model_locked": "Current Model",
             "model_locked_info": "Model selection available in this mode",
+            # File upload
+            "file_approve": "Confirm",
+            "file_cancel": "Remove",
         },
         # Feature flags
         "allow_model_selection": True,  # Show model controls in settings
@@ -152,6 +155,9 @@ def create_seo_app() -> gr.Blocks:
             # Locked model message
             "model_locked": "Huidig model",
             "model_locked_info": "SEO Coach gebruikt het beste model voor jou",
+            # File upload (Dutch)
+            "file_approve": "Bevestigen",
+            "file_cancel": "Verwijder",
         },
         # Feature flags
         "allow_model_selection": False,  # Lock model in settings
