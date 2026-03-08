@@ -12,6 +12,7 @@ controlled by config labels.
 import base64
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
@@ -119,21 +120,25 @@ def render(
 
         chat_iface = gr.ChatInterface(
             fn=handle_chat_interface_message,
-            additional_inputs=[user_state, settings_state],
+            additional_inputs=[user_state, settings_state, pending_files_wb],
             save_history=False,
             title="Agent Workbench Chat",
             textbox=gr.MultimodalTextbox(
                 placeholder=config["labels"]["placeholder"],
                 file_types=_FILE_TYPES,
-                file_count="single",
+                file_count="multiple",
             ),
         )
 
         def on_wb_input_change(input_val: Union[str, dict], pending: list) -> tuple:
             _, files = _extract_message(input_val)
             if files and files != pending:
-                filename = files[0].get("orig_name", files[0].get("name", "unknown"))
-                return gr.Group(visible=True), pending, f"**{filename}**"
+                if len(files) == 1:
+                    f = files[0]
+                    label = os.path.basename(f) if isinstance(f, str) else f.get("orig_name", f.get("name", "unknown"))
+                else:
+                    label = f"{len(files)} files"
+                return gr.Group(visible=True), pending, f"**{label}**"
             if not files and pending:
                 return gr.Group(visible=False), [], ""
             return gr.Group(visible=False), pending, ""
@@ -322,7 +327,7 @@ def render(
                     elem_classes=["agent-workbench-message-input"],
                     scale=1,
                     file_types=_FILE_TYPES,
-                    file_count="single",
+                    file_count="multiple",
                     submit_btn=False,  # external custom submit button used instead
                 )
 
@@ -380,10 +385,12 @@ def render(
                 )
 
                 if files and files != pending:
-                    filename = files[0].get(
-                        "orig_name", files[0].get("name", "unknown")
-                    )
-                    return btn, gr.Group(visible=True), pending, f"**{filename}**"
+                    if len(files) == 1:
+                        f = files[0]
+                        label = os.path.basename(f) if isinstance(f, str) else f.get("orig_name", f.get("name", "unknown"))
+                    else:
+                        label = f"{len(files)} files"
+                    return btn, gr.Group(visible=True), pending, f"**{label}**"
                 if not files and pending:
                     return btn, gr.Group(visible=False), [], ""
                 return btn, gr.Group(visible=False), pending, ""
@@ -393,15 +400,18 @@ def render(
                 history: List[gr.ChatMessage],
                 user_state_val: Optional[Dict[str, Any]],
                 settings_val: Optional[Dict[str, Any]],
+                pending_files: Optional[list] = None,
             ):
                 """Handle message submission with processing state display.
 
                 Accepts str (legacy) or dict (gr.MultimodalTextbox).
                 Generator: yields (chatbot, textbox, submit_btn, pending_files).
                 """
-                text, _ = _extract_message(message)
+                text, msg_files = _extract_message(message)
                 if not text.strip():
                     return
+
+                effective_files = pending_files if pending_files else msg_files
 
                 # State 3: Processing - show animated icon
                 yield (
@@ -440,6 +450,7 @@ def render(
                         "temperature": temperature,
                         "max_tokens": max_tokens,
                     },
+                    "pending_files": effective_files or [],
                 }
 
                 # Streaming: build up the assistant message token by token
@@ -475,14 +486,41 @@ def render(
                                     continue
 
                                 event_type = event.get("type")
-                                if event_type == "thinking_chunk":
+                                if event_type == "processing_file":
+                                    fname = event.get("filename", "document")
+                                    yield (
+                                        history
+                                        + [
+                                            gr.ChatMessage(
+                                                role="assistant",
+                                                content="",
+                                                metadata={
+                                                    "title": f"Processing {fname}…",
+                                                    "status": "pending",
+                                                },
+                                            )
+                                        ],
+                                        message,
+                                        gr.Button(
+                                            value="",
+                                            interactive=False,
+                                            size="sm",
+                                            elem_classes=[
+                                                "agent-workbench-submit-btn",
+                                                "processing",
+                                            ],
+                                            elem_id="submit-btn",
+                                        ),
+                                        [],
+                                    )
+                                elif event_type == "thinking_chunk":
                                     thinking_content += event.get("content", "")
                                     thinking_msg = gr.ChatMessage(
                                         role="assistant",
                                         content=thinking_content,
                                         metadata={
                                             "title": "Redenering",
-                                            "status": "thinking",
+                                            "status": "pending",
                                         },
                                     )
                                     streaming_history = history + [
@@ -606,13 +644,25 @@ def render(
             # Wire submit handlers (both click and Enter key)
             submit_btn.click(
                 fn=handle_submit,
-                inputs=[textbox, chatbot, user_state, settings_state],
+                inputs=[
+                    textbox,
+                    chatbot,
+                    user_state,
+                    settings_state,
+                    pending_files_seo,
+                ],
                 outputs=[chatbot, textbox, submit_btn, pending_files_seo],
             )
 
             textbox.submit(
                 fn=handle_submit,
-                inputs=[textbox, chatbot, user_state, settings_state],
+                inputs=[
+                    textbox,
+                    chatbot,
+                    user_state,
+                    settings_state,
+                    pending_files_seo,
+                ],
                 outputs=[chatbot, textbox, submit_btn, pending_files_seo],
             )
 
@@ -979,6 +1029,7 @@ def handle_chat_interface_message(
     history: List[Dict[str, Any]],
     user_state: Optional[Dict[str, Any]],
     settings: Optional[Dict[str, Any]] = None,
+    pending_files: Optional[list] = None,
 ) -> Iterator[List[gr.ChatMessage]]:
     """Handle chat message submission for gr.ChatInterface.
 
@@ -990,10 +1041,13 @@ def handle_chat_interface_message(
     Yields:
         List of gr.ChatMessage: [thinking_msg (optional), answer_msg]
     """
-    text, _ = _extract_message(message)
+    text, msg_files = _extract_message(message)
     if not text.strip():
         yield [gr.ChatMessage(role="assistant", content="Please enter a message.")]
         return
+
+    # Use approved files if available, otherwise fall back to files in the message
+    effective_files = pending_files if pending_files else msg_files
 
     if settings and "model_config" in settings:
         model_config = settings["model_config"]
@@ -1016,6 +1070,7 @@ def handle_chat_interface_message(
             "temperature": temperature,
             "max_tokens": max_tokens,
         },
+        "pending_files": effective_files or [],
     }
 
     thinking_content = ""
@@ -1050,13 +1105,26 @@ def handle_chat_interface_message(
 
                 event_type = event.get("type")
 
-                if event_type == "thinking_chunk":
+                if event_type == "processing_file":
+                    fname = event.get("filename", "document")
+                    yield [
+                        gr.ChatMessage(
+                            role="assistant",
+                            content="",
+                            metadata={
+                                "title": f"Processing {fname}…",
+                                "status": "pending",
+                            },
+                        )
+                    ]
+
+                elif event_type == "thinking_chunk":
                     thinking_content += event.get("content", "")
                     msgs: List[gr.ChatMessage] = [
                         gr.ChatMessage(
                             role="assistant",
                             content=thinking_content,
-                            metadata={"title": "Reasoning", "status": "thinking"},
+                            metadata={"title": "Reasoning", "status": "pending"},
                         )
                     ]
                     yield msgs

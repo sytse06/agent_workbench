@@ -492,6 +492,81 @@ class UserSessionModel(Base):
         await session.commit()
 
 
+class DocumentModel(Base, TimestampMixin):
+    """SQLAlchemy model for documents table."""
+
+    __tablename__ = "documents"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    conversation_id: Mapped[Optional[UUID]] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    mime_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="processed", nullable=False)
+    page_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    total_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    chunks: Mapped[List["DocumentChunkModel"]] = relationship(
+        "DocumentChunkModel",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+
+    __table_args__ = (Index("idx_documents_conversation_id", "conversation_id"),)
+
+    @classmethod
+    async def create(cls, session: AsyncSession, **kwargs) -> "DocumentModel":
+        doc = cls(**kwargs)
+        session.add(doc)
+        await session.commit()
+        await session.refresh(doc)
+        return doc
+
+    @classmethod
+    async def get_by_conversation(
+        cls, session: AsyncSession, conversation_id: UUID
+    ) -> List["DocumentModel"]:
+        result = await session.execute(
+            select(cls).where(cls.conversation_id == conversation_id)
+        )
+        return list(result.scalars().all())
+
+
+class DocumentChunkModel(Base):
+    """SQLAlchemy model for document_chunks table."""
+
+    __tablename__ = "document_chunks"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    document_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    heading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    page: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    token_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    document: Mapped["DocumentModel"] = relationship(
+        "DocumentModel", back_populates="chunks"
+    )
+
+    __table_args__ = (
+        Index("idx_document_chunks_document_id", "document_id"),
+        Index("idx_document_chunks_order", "document_id", "chunk_index"),
+    )
+
+
 class SessionActivityModel(Base):
     """SQLAlchemy model for session_activities table (granular activity logging)."""
 

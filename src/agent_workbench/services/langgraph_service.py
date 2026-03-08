@@ -85,9 +85,7 @@ class LangGraphService:
 
     # --- nodes ---
 
-    async def _load_conversation_node(
-        self, state: WorkbenchState
-    ) -> WorkbenchState:
+    async def _load_conversation_node(self, state: WorkbenchState) -> WorkbenchState:
         try:
             loaded = await self.state_bridge.load_into_langgraph_state(
                 conversation_id=state["conversation_id"],

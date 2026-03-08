@@ -62,6 +62,10 @@ class WorkbenchState(TypedDict):
     agent_state: Optional[Dict[str, Any]]
     workflow_data: Optional[Dict[str, Any]]
 
+    # File processing (Phase 2.2)
+    document_context: Optional[str]
+    document_filename: Optional[str]
+
 
 class ValidatedWorkbenchState(BaseModel):
     """
@@ -311,6 +315,9 @@ class ConsolidatedWorkflowRequest(BaseModel):
     business_profile: Optional[Dict[str, Any]] = None
     context_data: Optional[Dict[str, Any]] = None
     streaming: bool = False
+    pending_files: Optional[List[Any]] = None  # items may be str paths or dicts
+    document_context: Optional[str] = None
+    document_filename: Optional[str] = None
 
 
 class ConsolidatedWorkflowResponse(BaseModel):
