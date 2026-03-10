@@ -6,7 +6,7 @@ import pytest
 from langchain_core.messages import AIMessageChunk
 
 from agent_workbench.models.schemas import ModelConfig
-from agent_workbench.services.agent_service import AgentResponse, AgentService
+from agent_workbench.services.agent_service import AgentResponse, AgentService, _split_think_tags
 
 
 def _make_config() -> ModelConfig:
@@ -196,3 +196,115 @@ async def test_run_returns_agent_response():
     result = await svc.run([{"role": "user", "content": "hi"}])
     assert isinstance(result, AgentResponse)
     assert result.message == "batch answer"
+
+
+# --- _split_think_tags unit tests ---
+
+def test_split_plain_text_no_tags():
+    segments, in_think = _split_think_tags("Hello world", False)
+    assert segments == [("answer", "Hello world")]
+    assert in_think is False
+
+
+def test_split_full_think_block_in_one_chunk():
+    segments, in_think = _split_think_tags("<think>reasoning</think>answer", False)
+    assert segments == [("thinking", "reasoning"), ("answer", "answer")]
+    assert in_think is False
+
+
+def test_split_open_tag_only():
+    # <think> arrives but </think> in later chunk
+    segments, in_think = _split_think_tags("<think>start of reasoning", False)
+    assert segments == [("thinking", "start of reasoning")]
+    assert in_think is True
+
+
+def test_split_close_tag_only():
+    # already inside think, </think> arrives
+    segments, in_think = _split_think_tags("end of reasoning</think>answer", True)
+    assert segments == [("thinking", "end of reasoning"), ("answer", "answer")]
+    assert in_think is False
+
+
+def test_split_text_before_think_tag():
+    segments, in_think = _split_think_tags("preamble<think>thought</think>answer", False)
+    assert segments == [
+        ("answer", "preamble"),
+        ("thinking", "thought"),
+        ("answer", "answer"),
+    ]
+    assert in_think is False
+
+
+def test_split_empty_think_block():
+    segments, in_think = _split_think_tags("<think></think>answer", False)
+    assert ("answer", "answer") in segments
+    assert in_think is False
+
+
+# --- astream: Ollama <think> tag streaming (Qwen3, deepseek-r1) ---
+
+@pytest.mark.asyncio
+async def test_astream_think_tags_in_text_yields_thinking_and_answer():
+    svc = _mock_service()
+    # Simulate Ollama streaming: <think> and </think> in separate chunks
+    chunks = [
+        AIMessageChunk(content="<think>"),
+        AIMessageChunk(content="Let me reason about this"),
+        AIMessageChunk(content="</think>"),
+        AIMessageChunk(content="The answer is 42"),
+    ]
+
+    async def fake_astream(messages):
+        for c in chunks:
+            yield c
+
+    svc._default_model.astream = fake_astream
+
+    events = []
+    async for event in svc.astream([{"role": "user", "content": "hi"}]):
+        events.append(event)
+
+    thinking_events = [e for e in events if e["type"] == "thinking_chunk"]
+    answer_events = [e for e in events if e["type"] == "answer_chunk"]
+    assert any("Let me reason" in e["content"] for e in thinking_events)
+    assert any("42" in e["content"] for e in answer_events)
+
+
+@pytest.mark.asyncio
+async def test_astream_think_tags_full_block_in_one_chunk():
+    svc = _mock_service()
+    chunks = [AIMessageChunk(content="<think>reasoning</think>answer")]
+
+    async def fake_astream(messages):
+        for c in chunks:
+            yield c
+
+    svc._default_model.astream = fake_astream
+
+    events = []
+    async for event in svc.astream([{"role": "user", "content": "hi"}]):
+        events.append(event)
+
+    assert any(e["type"] == "thinking_chunk" and "reasoning" in e["content"] for e in events)
+    assert any(e["type"] == "answer_chunk" and "answer" in e["content"] for e in events)
+
+
+@pytest.mark.asyncio
+async def test_astream_done_event_reasoning_from_think_tags():
+    svc = _mock_service()
+    chunks = [AIMessageChunk(content="<think>thoughts</think>result")]
+
+    async def fake_astream(messages):
+        for c in chunks:
+            yield c
+
+    svc._default_model.astream = fake_astream
+
+    events = []
+    async for event in svc.astream([{"role": "user", "content": "hi"}]):
+        events.append(event)
+
+    done = events[-1]
+    assert done["response"].reasoning == "thoughts"
+    assert done["response"].message == "result"
