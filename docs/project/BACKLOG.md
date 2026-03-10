@@ -60,20 +60,20 @@ Reference: `docs/phase2/phase2_architecture_plan.md`, `docs/project/ARCHITECTURE
 Auth, PWA, and user management are deferred to Phase 3 — orthogonal to agent
 functionality and would delay the core agent work.
 
-- [ ] Phase 2.0: Agent core
-  - Wire `create_agent` (LangChain v1) — replaces simple_chat_workflow
-  - Wire `langgraph_service.py` + `workflow_nodes.py` into StateGraph
-  - CRITICAL: agent uses `task_id` (not `conversation_id`) for working memory
-  - Connect multi-turn history from DB (wire `_get_conversation_history()` stub)
-  - Stream thinking tokens via LangChain v1 `content_blocks` → `gr.ChatMessage`
-- [ ] Phase 2.1: File UI
-  - File upload component in chatbot
-  - Approval dialog (auto-approve stub)
-- [ ] Phase 2.2: File processing
-  - Docling conversion pipeline (PDF, DOCX, HTML → structured text)
-  - File handling in context and state
-- [ ] Phase 2.3: ContentRetriever Tool
-  - LangChain `@tool` wrapping vector store query
+- [x] Phase 2.0: Agent core (PR-20)
+  - `AgentService` with `run()` + `astream()`, extended thinking blocks, SSE streaming
+  - `ConsolidatedWorkbenchService` orchestrator, mode handlers, LangGraph bridge
+- [x] Phase 2.1: File UI (PR-21)
+  - `MultimodalTextbox`, drag-and-drop, approval bar
+- [x] Phase 2.2: File processing (PR-22)
+  - Docling → chunks → DB → SystemMessage context injection
+  - Multi-file support, `documents` + `document_chunks` tables
+- [ ] Phase 2.2b: Standard content blocks + Gradio mapping layer (PR-22b)
+  - `agent_service.py`: replace manual block parsing with `chunk.content_blocks`
+  - `message_converter.py`: `_BLOCK_LABELS` symbol registry + `streaming_event_to_chat_messages()`
+  - `chat.py`: remove duplicated `gr.ChatMessage` construction from both handlers
+- [ ] Phase 2.3: ContentRetriever Tool (PR-23)
+  - LangChain `BaseTool` wrapping vector store query
   - Depends on Docling pipeline from 2.2
 - [ ] Phase 2.4: Firecrawl MCP Tool
   - Web content retrieval as agent tool
