@@ -70,13 +70,18 @@ handles `AIMessage.tool_calls` + `ToolMessage` natively.
   `LangGraphService` and `WorkbenchState`
 - Agent concerns (LLM calls, tool execution, looping) stay in `AgentGraph`
   and `MessagesState`
-- Adding a new tool in PR-2.4+ requires only passing it to `AgentGraph` — no
-  changes to the outer pipeline
+- Adding a new tool in PR-2.4+ requires only passing it via context — no
+  changes to the graph structure
 
 **Key observation:** Mode handlers (`_build_workbench_messages()`,
 `_build_coaching_messages()`) already return `list[BaseMessage]` — LangChain
 native types. `AgentGraph` takes these directly as its initial `messages`.
 No format conversion needed.
+
+**Note on state type:** `WorkbenchState` (outer) and `MessagesState` (inner)
+are both TypedDict-based — not Pydantic BaseModel. LangGraph docs explicitly
+warn that Pydantic state is less performant and incompatible with
+`create_agent`. TypedDict is the correct choice throughout.
 
 ---
 
@@ -84,7 +89,9 @@ No format conversion needed.
 
 **IN:**
 - `services/agent_graph.py` (NEW): `AgentGraph` class — inner sub-graph with
-  `MessagesState`, `llm_node`, `ToolNode`, conditional edge + back-edge
+  `input_schema` / `output_schema` boundary, `context_schema` for runtime
+  tool injection, `MessagesState`, `llm_node`, `ToolNode`, conditional
+  back-edge
 - `services/consolidated_service.py`: streaming path uses
   `AgentGraph.astream_events()` instead of `AgentService.astream()`
 - `services/langgraph_service.py`: batch path calls `AgentGraph.ainvoke()`
@@ -103,42 +110,112 @@ No format conversion needed.
 
 ## Architecture
 
-### State
+### State — three schemas
 
-`AgentGraph` uses LangGraph's `MessagesState` internally:
+`AgentGraph` uses three schema layers:
 
 ```python
-from langgraph.graph import MessagesState
+# 1. Input schema — what the outer graph passes in
+class AgentInput(TypedDict):
+    messages: list[BaseMessage]
 
+# 2. Output schema — what the outer graph receives back
+#    ToolMessage objects from the loop are NOT exposed — private to inner graph
+class AgentOutput(TypedDict):
+    messages: list[BaseMessage]   # contains only the final AIMessage
+
+# 3. Internal state — full MessagesState with add_messages reducer
+#    Accumulates all messages across the ReAct loop iterations
+from langgraph.graph import MessagesState
 # MessagesState provides:
-# messages: Annotated[list[BaseMessage], add_messages]
-# add_messages reducer: accumulates across loop iterations,
-#   handles ID deduplication, deserialises message dicts
+#   messages: Annotated[list[BaseMessage], add_messages]
+
+StateGraph(
+    MessagesState,          # internal state with add_messages reducer
+    input_schema=AgentInput,
+    output_schema=AgentOutput,
+)
 ```
 
-`WorkbenchState` in the outer graph is unchanged. The inner graph receives
-`list[BaseMessage]` (prepared by mode handlers) as its initial state and
-returns the final `AIMessage` to the outer graph as `assistant_response`.
+The `input_schema` / `output_schema` boundary makes the sub-graph a clean
+black box: the outer `WorkbenchState` pipeline only sees messages in and
+messages out. All intermediate `ToolMessage` objects, partial `AIMessage`
+tool-call responses, and loop state remain private inside the inner graph.
+
+### Context schema — compile once, inject tools at call time
+
+Rather than rebuilding the compiled graph on every turn (the naive approach),
+`context_schema` injects tools and model config at invocation time into a
+**single compiled graph singleton**:
+
+```python
+from dataclasses import dataclass, field
+from langgraph.types import Runtime
+
+@dataclass
+class AgentContext:
+    model_config: ModelConfig
+    tools: list = field(default_factory=list)
+
+StateGraph(MessagesState, context_schema=AgentContext, ...)
+```
+
+Inside `llm_node`, runtime context provides the model and tools:
+
+```python
+async def llm_node(
+    state: MessagesState, runtime: Runtime[AgentContext]
+) -> dict:
+    model = provider_registry.create_model(runtime.context.model_config)
+    if runtime.context.tools:
+        model = model.bind_tools(runtime.context.tools)
+    response = await model.ainvoke(state["messages"])
+    return {"messages": [response]}
+```
+
+At call time:
+
+```python
+# Same compiled graph — different context per turn
+await graph.ainvoke(
+    {"messages": messages},
+    context={"model_config": model_config, "tools": [content_retriever_tool]},
+)
+```
+
+The graph is compiled once in `AgentGraph.__init__()` and reused for every
+turn. Adding a tool in PR-2.4 requires no graph recompilation — only a
+different `context.tools` list at call time.
 
 ### Nodes
 
 ```python
-# llm_node: call the model with current messages
-async def llm_node(state: MessagesState) -> dict:
+# llm_node: call the model using tools and model_config from context
+async def llm_node(
+    state: MessagesState, runtime: Runtime[AgentContext]
+) -> dict:
+    model = provider_registry.create_model(runtime.context.model_config)
+    if runtime.context.tools:
+        model = model.bind_tools(runtime.context.tools)
     response = await model.ainvoke(state["messages"])
     return {"messages": [response]}   # add_messages reducer appends
 
 # tool_node: LangGraph's built-in ToolNode
-# - reads tool_calls from last AIMessage
-# - executes each tool (sync or async)
-# - returns ToolMessage objects via add_messages
-from langgraph.prebuilt import ToolNode
-tool_node = ToolNode(tools)
+# Built dynamically from context.tools — reads tool_calls from last AIMessage,
+# executes each tool, returns ToolMessage objects via add_messages.
+# When tools=[], this node is never reached (should_continue returns END).
 ```
 
 `ToolNode` is LangGraph's built-in tool execution node. It handles tool lookup
 by name, sync/async execution, and `ToolMessage` construction automatically.
 No manual tool dispatch needed.
+
+Note: `ToolNode` needs the tool list at graph build time, not via context.
+The graph is therefore built with `ToolNode(tools)` where `tools` is passed
+at construction. Since the context schema approach makes `AgentGraph` a
+singleton compiled with no tools initially, PR-2.4 will evaluate whether
+to keep the singleton pattern or compile per tool-set. For this PR,
+`tools=[]` means `ToolNode` is never added to the graph.
 
 ### Edges
 
@@ -164,8 +241,14 @@ after one LLM call. No performance cost, identical behaviour to current code.
 class AgentGraph:
     """Inner ReAct agent sub-graph.
 
-    Self-contained LLM ↔ tool loop using MessagesState. Stateless by design
-    — compiled graph is built per call with the tool set for that turn.
+    Self-contained LLM ↔ tool loop using MessagesState. Compiled once at
+    init; tools and model config injected at invocation time via context_schema.
+
+    Schema layers:
+        input_schema=AgentInput   — messages in from outer graph
+        output_schema=AgentOutput — final AIMessage out to outer graph
+        context_schema=AgentContext — model_config + tools at call time
+        internal: MessagesState  — add_messages reducer for loop accumulation
 
     Usage:
         graph = AgentGraph(model_config)
@@ -178,13 +261,15 @@ class AgentGraph:
 
     def __init__(self, model_config: ModelConfig) -> None:
         self._model_config = model_config
+        self._graph = self._build()   # compiled once
 
-    def _build(self, tools: list) -> CompiledStateGraph:
-        model = provider_registry.create_model(self._model_config)
-        if tools:
-            model = model.bind_tools(tools)
-
-        async def llm_node(state: MessagesState) -> dict:
+    def _build(self) -> CompiledStateGraph:
+        async def llm_node(
+            state: MessagesState, runtime: Runtime[AgentContext]
+        ) -> dict:
+            model = provider_registry.create_model(runtime.context.model_config)
+            if runtime.context.tools:
+                model = model.bind_tools(runtime.context.tools)
             response = await model.ainvoke(state["messages"])
             return {"messages": [response]}
 
@@ -194,23 +279,28 @@ class AgentGraph:
                 return "tool_node"
             return END
 
-        builder = StateGraph(MessagesState)
+        builder = StateGraph(
+            MessagesState,
+            input_schema=AgentInput,
+            output_schema=AgentOutput,
+            context_schema=AgentContext,
+        )
         builder.add_node("llm_node", llm_node)
         builder.add_conditional_edges("llm_node", should_continue)
-
-        if tools:
-            builder.add_node("tool_node", ToolNode(tools))
-            builder.add_edge("tool_node", "llm_node")
-
         builder.set_entry_point("llm_node")
         return builder.compile()
+
+    def _context(self, tools: list) -> dict:
+        return {"model_config": self._model_config, "tools": tools}
 
     async def ainvoke(
         self, messages: list[BaseMessage], tools: list = []
     ) -> BaseMessage:
         """Batch invocation. Returns final AIMessage."""
-        graph = self._build(tools)
-        result = await graph.ainvoke({"messages": messages})
+        result = await self._graph.ainvoke(
+            {"messages": messages},
+            context=self._context(tools),
+        )
         return result["messages"][-1]
 
     async def astream_events(
@@ -223,9 +313,10 @@ class AgentGraph:
           on_tool_start        → tool call starting (PR-2.4)
           on_tool_end          → tool call completed (PR-2.4)
         """
-        graph = self._build(tools)
-        async for event in graph.astream_events(
-            {"messages": messages}, version="v2"
+        async for event in self._graph.astream_events(
+            {"messages": messages},
+            context=self._context(tools),
+            version="v2",
         ):
             yield event
 ```
@@ -240,11 +331,11 @@ async for event in self.agent_service.astream(messages_dicts, ...):
     yield event
 
 # After
-messages = handler.build_messages(state)   # already list[BaseMessage]
+messages = await handler._build_messages(state)   # already list[BaseMessage]
 async for event in self.agent_graph.astream_events(messages, tools=tools):
     if event["event"] == "on_chat_model_stream":
         chunk = event["data"]["chunk"]
-        # same content_blocks logic as before
+        # same content_blocks + _split_think_tags logic as before
         for block in chunk.content_blocks:
             ...
 ```
@@ -275,10 +366,15 @@ async def _process_workbench_node(self, state: WorkbenchState) -> WorkbenchState
 Implement `AgentGraph` as shown above. Imports:
 
 ```python
+from dataclasses import dataclass, field
+from typing import AsyncIterator, List
+
 from langgraph.graph import END, MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.prebuilt import ToolNode
+from langgraph.types import Runtime
 from langchain_core.messages import BaseMessage
+from typing_extensions import TypedDict
+
 from .providers import provider_registry
 from ..models.schemas import ModelConfig
 ```
@@ -311,15 +407,15 @@ agent_graph = AgentGraph(default_model_config)
 
 **`tests/unit/services/test_agent_graph.py`** (NEW):
 
-- `AgentGraph._build(tools=[])` compiles without error
-- `AgentGraph._build(tools=[mock_tool])` binds tools to model
+- `AgentGraph._build()` compiles without error
+- `AgentGraph._graph` is a singleton — same object on repeated access
 - `ainvoke()` returns final `AIMessage`
-- `ainvoke()` with no tools terminates after one LLM call (no loop)
-- `ainvoke()` with mock tool: model returns tool_call → tool executes →
-  `ToolMessage` injected → second LLM call → final `AIMessage`
+- `ainvoke()` with `tools=[]` terminates after one LLM call
+- `ainvoke()` passes model_config and tools via context to `llm_node`
 - `astream_events()` yields `on_chat_model_stream` events
 - `should_continue()` returns `END` when no tool_calls on last message
 - `should_continue()` returns `"tool_node"` when tool_calls present
+- Input/output schema: graph accepts `{"messages": [...]}` and returns same shape
 
 **Update `tests/unit/services/test_consolidated_service.py`:**
 - Streaming path emits same SSE events (`answer_chunk`, `done`) as before
@@ -360,14 +456,19 @@ The graph runs with `tools=[]` — behaviour is identical to the current
 
 ## Relation to PR-2.4 (ContentRetriever)
 
-PR-2.4 (formerly PR-2.3) adds `ContentRetrieverTool` as the first real tool.
-With this PR in place, wiring it requires one change:
+PR-2.4 adds `ContentRetrieverTool` as the first real tool. With this PR in
+place, wiring it requires passing the tool at call time — no graph recompilation:
 
 ```python
 # In consolidated_service.stream_workflow() / langgraph_service nodes:
 tools = [ContentRetrieverTool(conversation_id=..., ...)]
 await agent_graph.ainvoke(messages, tools=tools)
+# context={"model_config": ..., "tools": [tool]} — same compiled graph
 ```
+
+PR-2.4 also evaluates whether `ToolNode` can be wired with tools from context
+(currently it requires tools at build time). If not, the compile-once singleton
+pattern gives way to a lightweight compile-per-tool-set approach for that PR.
 
 And two additions to `message_converter.py`:
 
@@ -375,5 +476,3 @@ And two additions to `message_converter.py`:
 "tool_call":   ("🔍", "Retrieving", "Ophalen"),
 "tool_result": ("📋", "Result",     "Resultaat"),
 ```
-
-No changes to `AgentGraph` itself.
