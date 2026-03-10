@@ -236,11 +236,14 @@ class ModelRegistry:
             else os.getenv("OPENAI_API_KEY")
         )
 
+        extra = getattr(model_config, "extra_params", {}) or {}
         return ChatOpenAI(
             model=model_config.model_name,
             temperature=model_config.temperature,
             max_tokens=model_config.max_tokens,
             api_key=api_key,
+            base_url=extra.get("base_url"),
+            model_kwargs=extra.get("model_kwargs", {}),
         )
 
     def _create_anthropic_model(self, model_config: BaseModel) -> BaseChatModel:
