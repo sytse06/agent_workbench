@@ -318,6 +318,7 @@ class ConsolidatedWorkflowRequest(BaseModel):
     pending_files: Optional[List[Any]] = None  # items may be str paths or dicts
     document_context: Optional[str] = None
     document_filename: Optional[str] = None
+    active_tools: List[str] = Field(default_factory=list)
 
 
 class ConsolidatedWorkflowResponse(BaseModel):

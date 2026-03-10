@@ -26,9 +26,7 @@ class AgentResponse(BaseModel):
     task_id: Optional[str] = None
 
 
-def _split_think_tags(
-    text: str, in_think: bool
-) -> tuple[List[tuple[str, str]], bool]:
+def _split_think_tags(text: str, in_think: bool) -> tuple[List[tuple[str, str]], bool]:
     """Split a text chunk on <think>/<think> tag boundaries.
 
     Handles the streaming case where tags may arrive in separate chunks.
@@ -47,7 +45,7 @@ def _split_think_tags(
                 if end > 0:
                     segments.append(("thinking", remaining[:end]))
                 in_think = False
-                remaining = remaining[end + len("</think>"):]
+                remaining = remaining[end + len("</think>") :]
         else:
             start = remaining.find("<think>")
             if start == -1:
@@ -57,7 +55,7 @@ def _split_think_tags(
                 if start > 0:
                     segments.append(("answer", remaining[:start]))
                 in_think = True
-                remaining = remaining[start + len("<think>"):]
+                remaining = remaining[start + len("<think>") :]
     return segments, in_think
 
 
