@@ -20,7 +20,10 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 import gradio as gr
 import requests  # type: ignore[import-untyped]
 
-from ..components.message_converter import to_chat_message
+from ..components.message_converter import (
+    streaming_event_to_chat_messages,
+    to_chat_message,
+)
 from ..components.sidebar import render_sidebar
 
 logger = logging.getLogger(__name__)
@@ -135,7 +138,11 @@ def render(
             if files and files != pending:
                 if len(files) == 1:
                     f = files[0]
-                    label = os.path.basename(f) if isinstance(f, str) else f.get("orig_name", f.get("name", "unknown"))
+                    label = (
+                        os.path.basename(f)
+                        if isinstance(f, str)
+                        else f.get("orig_name", f.get("name", "unknown"))
+                    )
                 else:
                     label = f"{len(files)} files"
                 return gr.Group(visible=True), pending, f"**{label}**"
@@ -387,7 +394,11 @@ def render(
                 if files and files != pending:
                     if len(files) == 1:
                         f = files[0]
-                        label = os.path.basename(f) if isinstance(f, str) else f.get("orig_name", f.get("name", "unknown"))
+                        label = (
+                            os.path.basename(f)
+                            if isinstance(f, str)
+                            else f.get("orig_name", f.get("name", "unknown"))
+                        )
                     else:
                         label = f"{len(files)} files"
                     return btn, gr.Group(visible=True), pending, f"**{label}**"
@@ -486,96 +497,41 @@ def render(
                                     continue
 
                                 event_type = event.get("type")
-                                if event_type == "processing_file":
-                                    fname = event.get("filename", "document")
-                                    yield (
-                                        history
-                                        + [
-                                            gr.ChatMessage(
-                                                role="assistant",
-                                                content="",
-                                                metadata={
-                                                    "title": f"Processing {fname}…",
-                                                    "status": "pending",
-                                                },
-                                            )
-                                        ],
-                                        message,
-                                        gr.Button(
-                                            value="",
-                                            interactive=False,
-                                            size="sm",
-                                            elem_classes=[
-                                                "agent-workbench-submit-btn",
-                                                "processing",
-                                            ],
-                                            elem_id="submit-btn",
-                                        ),
-                                        [],
+                                if event_type in (
+                                    "thinking_chunk",
+                                    "answer_chunk",
+                                    "processing_file",
+                                ):
+                                    if event_type == "thinking_chunk":
+                                        thinking_content += event.get("content", "")
+                                    elif event_type == "answer_chunk":
+                                        answer_content += event.get("content", "")
+                                    msgs = streaming_event_to_chat_messages(
+                                        event,
+                                        thinking_content,
+                                        answer_content,
+                                        locale="nl",
                                     )
-                                elif event_type == "thinking_chunk":
-                                    thinking_content += event.get("content", "")
-                                    thinking_msg = gr.ChatMessage(
-                                        role="assistant",
-                                        content=thinking_content,
-                                        metadata={
-                                            "title": "Redenering",
-                                            "status": "pending",
-                                        },
-                                    )
-                                    streaming_history = history + [
-                                        user_msg,
-                                        thinking_msg,
-                                    ]
-                                    yield (
-                                        streaming_history,
-                                        message,
-                                        gr.Button(
-                                            value="",
-                                            interactive=False,
-                                            size="sm",
-                                            elem_classes=[
-                                                "agent-workbench-submit-btn",
-                                                "processing",
-                                            ],
-                                            elem_id="submit-btn",
-                                        ),
-                                        [],
-                                    )
-                                elif event_type == "answer_chunk":
-                                    answer_content += event.get("content", "")
-                                    streaming_msgs: List[gr.ChatMessage] = [user_msg]
-                                    if thinking_content:
-                                        streaming_msgs.append(
-                                            gr.ChatMessage(
-                                                role="assistant",
-                                                content=thinking_content,
-                                                metadata={
-                                                    "title": "Redenering",
-                                                    "status": "done",
-                                                },
-                                            )
+                                    if msgs:
+                                        if event_type == "processing_file":
+                                            new_history = history + msgs
+                                        else:
+                                            new_history = history + [user_msg] + msgs
+                                        yield (
+                                            new_history,
+                                            message,
+                                            gr.Button(
+                                                value="",
+                                                interactive=False,
+                                                size="sm",
+                                                elem_classes=[
+                                                    "agent-workbench-submit-btn",
+                                                    "processing",
+                                                ],
+                                                elem_id="submit-btn",
+                                            ),
+                                            [],
                                         )
-                                    streaming_msgs.append(
-                                        gr.ChatMessage(
-                                            role="assistant", content=answer_content
-                                        )
-                                    )
-                                    yield (
-                                        history + streaming_msgs,
-                                        message,
-                                        gr.Button(
-                                            value="",
-                                            interactive=False,
-                                            size="sm",
-                                            elem_classes=[
-                                                "agent-workbench-submit-btn",
-                                                "processing",
-                                            ],
-                                            elem_id="submit-btn",
-                                        ),
-                                        [],
-                                    )
 
                 except requests.exceptions.Timeout:
                     answer_content = "Verzoek verlopen na 60 seconden"
@@ -1105,45 +1061,16 @@ def handle_chat_interface_message(
 
                 event_type = event.get("type")
 
-                if event_type == "processing_file":
-                    fname = event.get("filename", "document")
-                    yield [
-                        gr.ChatMessage(
-                            role="assistant",
-                            content="",
-                            metadata={
-                                "title": f"Processing {fname}…",
-                                "status": "pending",
-                            },
-                        )
-                    ]
-
-                elif event_type == "thinking_chunk":
-                    thinking_content += event.get("content", "")
-                    msgs: List[gr.ChatMessage] = [
-                        gr.ChatMessage(
-                            role="assistant",
-                            content=thinking_content,
-                            metadata={"title": "Reasoning", "status": "pending"},
-                        )
-                    ]
-                    yield msgs
-
-                elif event_type == "answer_chunk":
-                    answer_content += event.get("content", "")
-                    msgs = []
-                    if thinking_content:
-                        msgs.append(
-                            gr.ChatMessage(
-                                role="assistant",
-                                content=thinking_content,
-                                metadata={"title": "Reasoning", "status": "done"},
-                            )
-                        )
-                    msgs.append(
-                        gr.ChatMessage(role="assistant", content=answer_content)
+                if event_type in ("thinking_chunk", "answer_chunk", "processing_file"):
+                    if event_type == "thinking_chunk":
+                        thinking_content += event.get("content", "")
+                    elif event_type == "answer_chunk":
+                        answer_content += event.get("content", "")
+                    msgs = streaming_event_to_chat_messages(
+                        event, thinking_content, answer_content, locale="en"
                     )
-                    yield msgs
+                    if msgs:
+                        yield msgs
 
     except requests.exceptions.Timeout:
         yield [

@@ -104,28 +104,30 @@ class AgentService:
         thinking_acc = ""
 
         async for chunk in model.astream(self._to_lc(messages)):
-            content = chunk.content
+            for block in chunk.content_blocks:
+                block_type = block.get("type")
 
-            # List content = Anthropic extended thinking blocks
-            if isinstance(content, list):
-                for block in content:
-                    if not isinstance(block, dict):
-                        continue
-                    block_type = block.get("type")
-                    if block_type == "thinking":
-                        text = block.get("thinking", "")
+                if block_type == "text":
+                    text = block.get("text", "")
+                    if text:
+                        answer_acc += text
+                        yield {"type": "answer_chunk", "content": text}
+
+                elif block_type == "reasoning":
+                    # OpenAI o-series, Gemini (standardized in langchain-core 1.x)
+                    data = block.get("data", "")
+                    if data:
+                        thinking_acc += data
+                        yield {"type": "thinking_chunk", "content": data}
+
+                elif block_type == "non_standard":
+                    # Anthropic extended thinking (not yet normalized in 1.2.17)
+                    inner = block.get("value", {})
+                    if inner.get("type") == "thinking":
+                        text = inner.get("thinking", "")
                         if text:
                             thinking_acc += text
                             yield {"type": "thinking_chunk", "content": text}
-                    elif block_type == "text":
-                        text = block.get("text", "")
-                        if text:
-                            answer_acc += text
-                            yield {"type": "answer_chunk", "content": text}
-
-            elif isinstance(content, str) and content:
-                answer_acc += content
-                yield {"type": "answer_chunk", "content": content}
 
         yield {
             "type": "done",
