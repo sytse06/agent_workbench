@@ -5,6 +5,7 @@ import gradio as gr
 from agent_workbench.models.standard_messages import StandardMessage
 from agent_workbench.ui.components.message_converter import (
     _GRADIO_META_KEYS,
+    streaming_event_to_chat_messages,
     to_chat_message,
 )
 
@@ -98,3 +99,78 @@ def test_full_gradio_metadata_passthrough():
     msg = {"role": "assistant", "content": "result", "metadata": meta}
     result = to_chat_message(msg)
     assert result.metadata == meta
+
+
+# --- streaming_event_to_chat_messages ---
+
+
+def test_processing_file_en():
+    event = {"type": "processing_file", "filename": "report.pdf"}
+    msgs = streaming_event_to_chat_messages(event, locale="en")
+    assert len(msgs) == 1
+    assert "📄" in msgs[0].metadata["title"]
+    assert "report.pdf" in msgs[0].metadata["title"]
+    assert msgs[0].metadata["status"] == "pending"
+
+
+def test_processing_file_nl():
+    event = {"type": "processing_file", "filename": "rapport.pdf"}
+    msgs = streaming_event_to_chat_messages(event, locale="nl")
+    assert len(msgs) == 1
+    assert "📄" in msgs[0].metadata["title"]
+    assert "Verwerken" in msgs[0].metadata["title"]
+
+
+def test_thinking_chunk_en():
+    event = {"type": "thinking_chunk", "content": "some reasoning"}
+    msgs = streaming_event_to_chat_messages(
+        event, thinking_content="some reasoning", locale="en"
+    )
+    assert len(msgs) == 1
+    assert "🧠" in msgs[0].metadata["title"]
+    assert msgs[0].metadata["status"] == "pending"
+    assert msgs[0].content == "some reasoning"
+
+
+def test_thinking_chunk_nl():
+    event = {"type": "thinking_chunk", "content": "redenering"}
+    msgs = streaming_event_to_chat_messages(
+        event, thinking_content="redenering", locale="nl"
+    )
+    assert "Denken" in msgs[0].metadata["title"]
+
+
+def test_answer_chunk_without_thinking():
+    event = {"type": "answer_chunk", "content": "The answer"}
+    msgs = streaming_event_to_chat_messages(
+        event, thinking_content="", answer_content="The answer"
+    )
+    assert len(msgs) == 1
+    assert msgs[0].content == "The answer"
+    assert msgs[0].metadata == {}
+
+
+def test_answer_chunk_with_prior_thinking():
+    event = {"type": "answer_chunk", "content": "Answer"}
+    msgs = streaming_event_to_chat_messages(
+        event, thinking_content="My thoughts", answer_content="Answer"
+    )
+    assert len(msgs) == 2
+    thinking_msg = msgs[0]
+    answer_msg = msgs[1]
+    assert thinking_msg.metadata["status"] == "done"
+    assert "🧠" in thinking_msg.metadata["title"]
+    assert answer_msg.content == "Answer"
+    assert answer_msg.metadata == {}
+
+
+def test_unknown_event_type_returns_empty():
+    event = {"type": "unknown_event", "content": "x"}
+    msgs = streaming_event_to_chat_messages(event)
+    assert msgs == []
+
+
+def test_done_event_returns_empty():
+    event = {"type": "done"}
+    msgs = streaming_event_to_chat_messages(event)
+    assert msgs == []

@@ -26,6 +26,41 @@ class AgentResponse(BaseModel):
     task_id: Optional[str] = None
 
 
+def _split_think_tags(
+    text: str, in_think: bool
+) -> tuple[List[tuple[str, str]], bool]:
+    """Split a text chunk on <think>/<think> tag boundaries.
+
+    Handles the streaming case where tags may arrive in separate chunks.
+    Returns (segments, updated_in_think) where each segment is
+    ("thinking" | "answer", content).
+    """
+    segments: List[tuple[str, str]] = []
+    remaining = text
+    while remaining:
+        if in_think:
+            end = remaining.find("</think>")
+            if end == -1:
+                segments.append(("thinking", remaining))
+                remaining = ""
+            else:
+                if end > 0:
+                    segments.append(("thinking", remaining[:end]))
+                in_think = False
+                remaining = remaining[end + len("</think>"):]
+        else:
+            start = remaining.find("<think>")
+            if start == -1:
+                segments.append(("answer", remaining))
+                remaining = ""
+            else:
+                if start > 0:
+                    segments.append(("answer", remaining[:start]))
+                in_think = True
+                remaining = remaining[start + len("<think>"):]
+    return segments, in_think
+
+
 class AgentService:
     """Single execution engine for all chat modes.
 
@@ -38,9 +73,12 @@ class AgentService:
         override config for mode-specific settings (e.g. SEO Coach uses a different
         model and system prompt).
 
-        Extended thinking (Anthropic): when the model emits content_blocks of type
-        "thinking", astream() yields "thinking_chunk" events before "answer_chunk"
-        events. Non-Anthropic models omit thinking blocks gracefully.
+        Thinking content is extracted from three sources:
+        - content_blocks type "non_standard" — Anthropic extended thinking
+        - content_blocks type "reasoning"    — OpenAI o-series, Gemini
+        - <think>...</think> tags in text    — Ollama/Qwen3 and compatible models
+        All three emit "thinking_chunk" events; non-thinking providers stream
+        "answer_chunk" events only.
     """
 
     def __init__(self, model_config: ModelConfig) -> None:
@@ -102,30 +140,41 @@ class AgentService:
         model = self._get_model(model_config)
         answer_acc = ""
         thinking_acc = ""
+        in_think = False  # tracks <think> tag state across chunks
 
         async for chunk in model.astream(self._to_lc(messages)):
-            content = chunk.content
+            for block in chunk.content_blocks:
+                block_type = block.get("type")
 
-            # List content = Anthropic extended thinking blocks
-            if isinstance(content, list):
-                for block in content:
-                    if not isinstance(block, dict):
-                        continue
-                    block_type = block.get("type")
-                    if block_type == "thinking":
-                        text = block.get("thinking", "")
+                if block_type == "text":
+                    text = block.get("text", "")
+                    if text:
+                        segments, in_think = _split_think_tags(text, in_think)
+                        for seg_type, seg_text in segments:
+                            if not seg_text:
+                                continue
+                            if seg_type == "thinking":
+                                thinking_acc += seg_text
+                                yield {"type": "thinking_chunk", "content": seg_text}
+                            else:
+                                answer_acc += seg_text
+                                yield {"type": "answer_chunk", "content": seg_text}
+
+                elif block_type == "reasoning":
+                    # OpenAI o-series, Gemini (standardized in langchain-core 1.x)
+                    data = block.get("data", "")
+                    if data:
+                        thinking_acc += data
+                        yield {"type": "thinking_chunk", "content": data}
+
+                elif block_type == "non_standard":
+                    # Anthropic extended thinking (not yet normalized in 1.2.17)
+                    inner = block.get("value", {})
+                    if inner.get("type") == "thinking":
+                        text = inner.get("thinking", "")
                         if text:
                             thinking_acc += text
                             yield {"type": "thinking_chunk", "content": text}
-                    elif block_type == "text":
-                        text = block.get("text", "")
-                        if text:
-                            answer_acc += text
-                            yield {"type": "answer_chunk", "content": text}
-
-            elif isinstance(content, str) and content:
-                answer_acc += content
-                yield {"type": "answer_chunk", "content": content}
 
         yield {
             "type": "done",
