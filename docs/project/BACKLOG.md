@@ -80,6 +80,8 @@ functionality and would delay the core agent work.
 - [ ] Phase 2.4: ContentRetriever Tool (formerly PR-2.3)
   - `ContentRetrieverTool` as first `BaseTool` wired through `AgentGraph`
   - Embeddings, semantic search, `document_retrieval` tool
+  - Decide: keep `AgentGraph` compile-once singleton or compile-per-tool-set
+    (`ToolNode` requires tools at build time, not via `context_schema`)
 - [ ] Phase 2.5: Firecrawl MCP Tool
   - Web content retrieval as agent tool
 - [ ] Phase 2.6: Middleware
