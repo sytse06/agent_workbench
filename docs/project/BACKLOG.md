@@ -68,16 +68,21 @@ functionality and would delay the core agent work.
 - [x] Phase 2.2: File processing (PR-22)
   - Docling → chunks → DB → SystemMessage context injection
   - Multi-file support, `documents` + `document_chunks` tables
-- [ ] Phase 2.2b: Standard content blocks + Gradio mapping layer (PR-22b)
+- [x] Phase 2.2b: Standard content blocks + Gradio mapping layer (PR-22b)
   - `agent_service.py`: replace manual block parsing with `chunk.content_blocks`
   - `message_converter.py`: `_BLOCK_LABELS` symbol registry + `streaming_event_to_chat_messages()`
   - `chat.py`: remove duplicated `gr.ChatMessage` construction from both handlers
-- [ ] Phase 2.3: ContentRetriever Tool (PR-23)
-  - LangChain `BaseTool` wrapping vector store query
-  - Depends on Docling pipeline from 2.2
-- [ ] Phase 2.4: Firecrawl MCP Tool
+  - `<think>` tag parsing for Ollama/Qwen3 reasoning models
+- [ ] Phase 2.3: LangGraph ReAct agent sub-graph (PR-23)
+  - Inner `AgentGraph` with `MessagesState`, `llm_node`, `ToolNode`, conditional back-edge
+  - Outer `WorkbenchState` pipeline unchanged — clean separation of concerns
+  - Runs `tools=[]` in this PR (identical behaviour); tool-ready for PR-2.4
+- [ ] Phase 2.4: ContentRetriever Tool (formerly PR-2.3)
+  - `ContentRetrieverTool` as first `BaseTool` wired through `AgentGraph`
+  - Embeddings, semantic search, `document_retrieval` tool
+- [ ] Phase 2.5: Firecrawl MCP Tool
   - Web content retrieval as agent tool
-- [ ] Phase 2.5: Middleware
+- [ ] Phase 2.6: Middleware
   - Built-in first: PII redaction, summarization, human-in-the-loop
   - Custom: context, memory, execution tracking
 
