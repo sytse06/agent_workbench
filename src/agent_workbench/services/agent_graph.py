@@ -2,9 +2,11 @@
 
 import logging
 from dataclasses import dataclass, field
-from typing import AsyncGenerator, List, Optional
+from typing import Any, AsyncGenerator, List, Optional
 
 from langchain_core.messages import BaseMessage
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.runtime import Runtime
@@ -42,17 +44,27 @@ class AgentGraph:
         context_schema=AgentContext — model_config + tools at call time
         internal: MessagesState  — add_messages reducer for loop accumulation
 
+    Checkpointing:
+        Pass thread_id (= conversation_id) to ainvoke/astream to enable per-thread
+        state persistence. The checkpointer accumulates MessagesState across turns,
+        enabling time-travel and state management for PR-2.6a Thread Management.
+
     Usage:
         graph = AgentGraph(model_config)
         # Batch
-        result = await graph.ainvoke(messages, tools=[])
+        result = await graph.ainvoke(messages, tools=[], thread_id="conv-uuid")
         # Streaming
-        async for chunk in graph.astream(messages, tools=[]):
+        async for chunk in graph.astream(messages, tools=[], thread_id="conv-uuid"):
             ...
     """
 
-    def __init__(self, model_config: ModelConfig) -> None:
+    def __init__(
+        self,
+        model_config: ModelConfig,
+        checkpointer: Optional[BaseCheckpointSaver] = None,
+    ) -> None:
         self._model_config = model_config
+        self._checkpointer: BaseCheckpointSaver = checkpointer or MemorySaver()
         self._graph: CompiledStateGraph = self._build()
 
     def _build(self) -> CompiledStateGraph:
@@ -78,7 +90,7 @@ class AgentGraph:
         builder.add_node("llm_node", llm_node)
         builder.add_conditional_edges("llm_node", should_continue)
         builder.set_entry_point("llm_node")
-        return builder.compile()
+        return builder.compile(checkpointer=self._checkpointer)
 
     def _context(self, tools: list, model_config: Optional[ModelConfig] = None) -> dict:
         return {
@@ -86,15 +98,28 @@ class AgentGraph:
             "tools": tools,
         }
 
+    def _config(self, thread_id: Optional[str]) -> dict:
+        if thread_id:
+            return {"configurable": {"thread_id": thread_id}}
+        return {}
+
+    async def get_state(self, thread_id: str) -> Optional[Any]:
+        """Return the latest checkpointed state for thread_id, or None."""
+        config = {"configurable": {"thread_id": thread_id}}
+        state = await self._graph.aget_state(config)
+        return state if state and state.values else None
+
     async def ainvoke(
         self,
         messages: List[BaseMessage],
         tools: list = [],
         model_config: Optional[ModelConfig] = None,
+        thread_id: Optional[str] = None,
     ) -> BaseMessage:
         """Batch invocation. Returns final AIMessage."""
         result = await self._graph.ainvoke(
             {"messages": messages},
+            config=self._config(thread_id),
             context=self._context(tools, model_config),
         )
         return result["messages"][-1]
@@ -104,6 +129,7 @@ class AgentGraph:
         messages: List[BaseMessage],
         tools: list = [],
         model_config: Optional[ModelConfig] = None,
+        thread_id: Optional[str] = None,
     ) -> AsyncGenerator[dict, None]:
         """Stream chunks from the agent loop using LangGraph v2 streaming format.
 
@@ -113,6 +139,7 @@ class AgentGraph:
         """
         async for chunk in self._graph.astream(
             {"messages": messages},
+            config=self._config(thread_id),
             context=self._context(tools, model_config),
             stream_mode=["messages", "custom"],
             version="v2",
