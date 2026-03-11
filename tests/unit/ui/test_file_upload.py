@@ -1,6 +1,7 @@
 """Unit tests for PR-2.1 file upload UI — both Workbench and SEO Coach modes."""
 
 import pytest
+
 from src.agent_workbench.ui.pages.chat import _extract_message
 
 # ---------------------------------------------------------------------------
@@ -58,7 +59,7 @@ class TestWorkbenchFileUpload:
 
         async def empty_lines():
             return
-            yield  # noqa: unreachable — makes this an async generator
+            yield  # unreachable — makes this an async generator
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -93,7 +94,7 @@ class TestWorkbenchFileUpload:
 
         async def empty_lines():
             return
-            yield  # noqa: unreachable
+            yield  # unreachable — makes this an async generator
 
         mock_response = MagicMock()
         mock_response.status_code = 200
