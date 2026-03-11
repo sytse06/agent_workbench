@@ -27,6 +27,7 @@ from .api.routes import (
     simple_chat,
 )
 from .database import init_adaptive_database
+from .services.consolidated_service import close_checkpointer, init_checkpointer
 from .services.model_config_service import model_config_service
 
 
@@ -92,8 +93,17 @@ async def lifespan(app: FastAPI):
         app.adaptive_db = None
         app.get_session = lambda: None
 
-    # Initialize services that will be used by Gradio interface
-    # These will be accessed directly by Gradio handlers
+    # Initialize LangGraph checkpointer (AsyncSqliteSaver for cross-restart persistence)
+    try:
+        checkpoint_db = os.getenv(
+            "LANGGRAPH_CHECKPOINT_DB", "data/langgraph_checkpoints.db"
+        )
+        await init_checkpointer(checkpoint_db)
+        print(f"✅ LangGraph checkpointer initialized at {checkpoint_db}")
+    except Exception as e:
+        print(f"⚠️ LangGraph checkpointer initialization failed: {e}")
+        print("🔧 Continuing with in-memory checkpointer (state lost on restart)...")
+
     print("✅ FastAPI lifespan services initialized")
 
     # Create and mount Gradio interfaces
@@ -130,6 +140,7 @@ async def lifespan(app: FastAPI):
     # Cleanup
     print("🔧 Cleaning up FastAPI lifespan services...")
     await app.requests_client.aclose()
+    await close_checkpointer()
     print("✅ FastAPI lifespan cleanup complete")
 
 
