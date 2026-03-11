@@ -1,5 +1,6 @@
 """Unit tests for PR-2.1 file upload UI — both Workbench and SEO Coach modes."""
 
+import pytest
 from src.agent_workbench.ui.pages.chat import _extract_message
 
 # ---------------------------------------------------------------------------
@@ -48,53 +49,87 @@ class TestExtractMessage:
 class TestWorkbenchFileUpload:
     """Tests for Workbench mode file upload behaviour."""
 
-    def test_handle_chat_interface_message_accepts_plain_string(self):
-        """Backwards compat: plain str input still works."""
-        from unittest.mock import MagicMock, patch
+    @pytest.mark.asyncio
+    async def test_handle_chat_interface_message_accepts_plain_string(self):
+        """Plain str input streams without error (empty SSE response)."""
+        from unittest.mock import AsyncMock, MagicMock, patch
 
         from src.agent_workbench.ui.pages.chat import handle_chat_interface_message
 
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.__enter__ = lambda s: s
-        mock_resp.__exit__ = MagicMock(return_value=False)
-        mock_resp.iter_lines.return_value = []
+        async def empty_lines():
+            return
+            yield  # noqa: unreachable — makes this an async generator
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.aiter_lines = empty_lines
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_client = MagicMock()
+        mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
-            "src.agent_workbench.ui.pages.chat.requests.post",
-            return_value=mock_resp,
+            "src.agent_workbench.ui.pages.chat.httpx.AsyncClient",
+            return_value=mock_client,
         ):
-            gen = handle_chat_interface_message("hello", [], None)
-            # Generator should be exhaustible without raising
-            list(gen)
+            results = []
+            async for chunk in handle_chat_interface_message("hello", [], None):
+                results.append(chunk)
+        # Empty SSE stream → no chat message chunks yielded
 
-    def test_handle_chat_interface_message_accepts_dict_input(self):
-        """Dict input (from gr.MultimodalTextbox) is handled."""
-        from unittest.mock import MagicMock, patch
+    @pytest.mark.asyncio
+    async def test_handle_chat_interface_message_accepts_dict_input(self):
+        """Dict input (from gr.MultimodalTextbox) streams without error."""
+        from unittest.mock import AsyncMock, MagicMock, patch
 
         from src.agent_workbench.ui.pages.chat import handle_chat_interface_message
 
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.__enter__ = lambda s: s
-        mock_resp.__exit__ = MagicMock(return_value=False)
-        mock_resp.iter_lines.return_value = []
+        async def empty_lines():
+            return
+            yield  # noqa: unreachable
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.aiter_lines = empty_lines
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_client = MagicMock()
+        mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
-            "src.agent_workbench.ui.pages.chat.requests.post",
-            return_value=mock_resp,
+            "src.agent_workbench.ui.pages.chat.httpx.AsyncClient",
+            return_value=mock_client,
         ):
-            gen = handle_chat_interface_message(
+            results = []
+            async for chunk in handle_chat_interface_message(
                 {"text": "hello", "files": []}, [], None
-            )
-            list(gen)
+            ):
+                results.append(chunk)
 
-    def test_handle_chat_interface_message_empty_dict_yields_prompt(self):
+    @pytest.mark.asyncio
+    async def test_handle_chat_interface_message_empty_dict_yields_prompt(self):
         """Empty dict text yields the 'please enter a message' response."""
         from src.agent_workbench.ui.pages.chat import handle_chat_interface_message
 
-        gen = handle_chat_interface_message({"text": "", "files": []}, [], None)
-        results = list(gen)
+        results = []
+        async for chunk in handle_chat_interface_message(
+            {"text": "", "files": []}, [], None
+        ):
+            results.append(chunk)
         assert len(results) == 1
         assert "Please enter a message" in results[0][0].content
 
