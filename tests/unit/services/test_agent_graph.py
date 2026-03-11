@@ -115,31 +115,32 @@ async def test_ainvoke_passes_model_config_override():
         assert ctx["model_config"] is override
 
 
-# --- astream_events ---
+# --- astream ---
 
 
 @pytest.mark.asyncio
-async def test_astream_events_yields_events():
+async def test_astream_yields_chunks():
     with patch("agent_workbench.services.agent_graph.provider_registry"):
         graph = AgentGraph(_make_config())
 
-    fake_events = [
-        {"event": "on_chain_start", "name": "LangGraph"},
-        {"event": "on_chat_model_stream", "data": {"chunk": MagicMock()}},
-        {"event": "on_chain_end", "name": "LangGraph"},
+    fake_chunks = [
+        {"type": "messages", "ns": (), "data": (MagicMock(), {})},
+        {"type": "messages", "ns": (), "data": (MagicMock(), {})},
+        {"type": "custom", "ns": (), "data": {"progress": "done"}},
     ]
 
     async def fake_stream(*args, **kwargs):
-        for e in fake_events:
-            yield e
+        for c in fake_chunks:
+            yield c
 
-    with patch.object(graph._graph, "astream_events", fake_stream):
-        events = []
-        async for event in graph.astream_events([HumanMessage("hi")], tools=[]):
-            events.append(event)
+    with patch.object(graph._graph, "astream", fake_stream):
+        chunks = []
+        async for chunk in graph.astream([HumanMessage("hi")], tools=[]):
+            chunks.append(chunk)
 
-    assert len(events) == 3
-    assert events[1]["event"] == "on_chat_model_stream"
+    assert len(chunks) == 3
+    assert chunks[0]["type"] == "messages"
+    assert chunks[2]["type"] == "custom"
 
 
 # --- should_continue edge logic ---

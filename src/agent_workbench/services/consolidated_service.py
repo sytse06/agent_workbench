@@ -349,12 +349,12 @@ class ConsolidatedWorkbenchService:
         seo_model_config = model_config if effective_mode == "seo_coach" else None
 
         if self.agent_graph is not None:
-            async for event in self.agent_graph.astream_events(
+            async for chunk in self.agent_graph.astream(
                 messages, tools=[], model_config=seo_model_config
             ):
-                if event["event"] == "on_chat_model_stream":
-                    chunk = event["data"]["chunk"]
-                    for block in chunk.content_blocks:
+                if chunk["type"] == "messages":
+                    message_chunk, _meta = chunk["data"]
+                    for block in message_chunk.content_blocks:
                         block_type = block.get("type")
                         if block_type == "text":
                             text = block.get("text", "")
