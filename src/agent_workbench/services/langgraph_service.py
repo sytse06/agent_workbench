@@ -1,7 +1,7 @@
 """LangGraph workflow service — mode-independent execution engine."""
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from langgraph.graph import END, START, StateGraph
 
@@ -41,10 +41,12 @@ class LangGraphService:
         agent_service: AgentService,
         context_service: ContextService,
         model_config: Optional[ModelConfig] = None,
+        agent_graph: Optional[Any] = None,
     ) -> None:
         self.state_bridge = state_bridge
         self.agent_service = agent_service
         self.context_service = context_service
+        self.agent_graph = agent_graph
         self.workbench_handler = WorkbenchModeHandler(agent_service, context_service)
         self.seo_coach_handler = SEOCoachModeHandler(agent_service, context_service)
         self.workflow = self._build_workflow()
@@ -98,7 +100,7 @@ class LangGraphService:
             merged["workflow_steps"] = state.get("workflow_steps", []) + [
                 "Conversation loaded"
             ]
-            return WorkbenchState(**merged)  # type: ignore[return-value]
+            return WorkbenchState(**merged)  # type: ignore[return-value, typeddict-item]
 
         except Exception as e:
             logger.error(f"Failed to load conversation: {e}")
@@ -146,6 +148,18 @@ class LangGraphService:
 
     async def _process_workbench_node(self, state: WorkbenchState) -> WorkbenchState:
         try:
+            if self.agent_graph is not None:
+                model_config = state["model_config"]
+                messages = await self.workbench_handler._build_workbench_messages(
+                    state, model_config
+                )
+                result = await self.agent_graph.ainvoke(messages, tools=[])
+                return {
+                    **state,
+                    "assistant_response": result.content,
+                    "workflow_steps": state.get("workflow_steps", [])
+                    + ["Workbench processing completed"],
+                }
             return await self.workbench_handler.process_message(state)
         except Exception as e:
             logger.error(f"Workbench processing failed: {e}")
@@ -159,6 +173,20 @@ class LangGraphService:
 
     async def _process_seo_coach_node(self, state: WorkbenchState) -> WorkbenchState:
         try:
+            if self.agent_graph is not None:
+                dutch_config = self.seo_coach_handler._get_dutch_coaching_config(state)
+                messages = await self.seo_coach_handler._build_coaching_messages(
+                    state, dutch_config
+                )
+                result = await self.agent_graph.ainvoke(
+                    messages, tools=[], model_config=dutch_config
+                )
+                return {
+                    **state,
+                    "assistant_response": result.content,
+                    "workflow_steps": state.get("workflow_steps", [])
+                    + ["SEO coaching completed"],
+                }
             return await self.seo_coach_handler.process_message(state)
         except Exception as e:
             logger.error(f"SEO coach processing failed: {e}")
@@ -243,7 +271,7 @@ class LangGraphService:
     async def execute_workflow(self, initial_state: WorkbenchState) -> WorkbenchState:
         try:
             result = await self.workflow.ainvoke(initial_state)
-            return WorkbenchState(**result)  # type: ignore[return-value]
+            return WorkbenchState(**result)  # type: ignore[return-value, typeddict-item]
         except Exception as e:
             logger.error(f"Workflow execution failed: {e}")
             return {

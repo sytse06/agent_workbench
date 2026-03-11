@@ -1,7 +1,7 @@
 # Multi-stage Docker build for Agent Workbench with UV
 
 # Build stage
-FROM python:3.10-slim-bookworm AS builder
+FROM python:3.12-slim-bookworm AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ COPY src/ ./src/
 RUN uv sync --frozen --no-dev
 
 # Runtime stage
-FROM python:3.10-slim-bookworm AS runtime
+FROM python:3.12-slim-bookworm AS runtime
 
 WORKDIR /app
 

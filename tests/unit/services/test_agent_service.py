@@ -6,7 +6,11 @@ import pytest
 from langchain_core.messages import AIMessageChunk
 
 from agent_workbench.models.schemas import ModelConfig
-from agent_workbench.services.agent_service import AgentResponse, AgentService, _split_think_tags
+from agent_workbench.services.agent_service import (
+    AgentResponse,
+    AgentService,
+    _split_think_tags,
+)
 
 
 def _make_config() -> ModelConfig:
@@ -200,6 +204,7 @@ async def test_run_returns_agent_response():
 
 # --- _split_think_tags unit tests ---
 
+
 def test_split_plain_text_no_tags():
     segments, in_think = _split_think_tags("Hello world", False)
     assert segments == [("answer", "Hello world")]
@@ -227,7 +232,9 @@ def test_split_close_tag_only():
 
 
 def test_split_text_before_think_tag():
-    segments, in_think = _split_think_tags("preamble<think>thought</think>answer", False)
+    segments, in_think = _split_think_tags(
+        "preamble<think>thought</think>answer", False
+    )
     assert segments == [
         ("answer", "preamble"),
         ("thinking", "thought"),
@@ -243,6 +250,7 @@ def test_split_empty_think_block():
 
 
 # --- astream: Ollama <think> tag streaming (Qwen3, deepseek-r1) ---
+
 
 @pytest.mark.asyncio
 async def test_astream_think_tags_in_text_yields_thinking_and_answer():
@@ -286,7 +294,9 @@ async def test_astream_think_tags_full_block_in_one_chunk():
     async for event in svc.astream([{"role": "user", "content": "hi"}]):
         events.append(event)
 
-    assert any(e["type"] == "thinking_chunk" and "reasoning" in e["content"] for e in events)
+    assert any(
+        e["type"] == "thinking_chunk" and "reasoning" in e["content"] for e in events
+    )
     assert any(e["type"] == "answer_chunk" and "answer" in e["content"] for e in events)
 
 

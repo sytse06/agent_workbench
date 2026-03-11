@@ -83,6 +83,8 @@ class LangGraphStateBridge:
                 "mcp_tools_active": [],
                 "agent_state": None,
                 "workflow_data": None,
+                "document_context": None,
+                "document_filename": None,
             }
 
             return lg_state
@@ -182,6 +184,8 @@ class LangGraphStateBridge:
                 "mcp_tools_active": [],
                 "agent_state": None,
                 "workflow_data": None,
+                "document_context": None,
+                "document_filename": None,
             }
 
             # Save migrated state
@@ -317,6 +321,8 @@ class LangGraphStateBridge:
             "mcp_tools_active": [],
             "agent_state": None,
             "workflow_data": None,
+            "document_context": None,
+            "document_filename": None,
         }
 
         return lg_state

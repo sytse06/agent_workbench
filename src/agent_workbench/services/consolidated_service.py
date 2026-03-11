@@ -17,7 +17,8 @@ from ..models.consolidated_state import (
     WorkbenchState,
 )
 from ..models.schemas import ModelConfig
-from .agent_service import AgentService
+from .agent_graph import AgentGraph
+from .agent_service import AgentResponse, AgentService, _split_think_tags
 from .context_service import ContextService
 from .conversation_service import ConversationService
 from .langgraph_bridge import LangGraphStateBridge
@@ -52,6 +53,7 @@ class ConsolidatedWorkbenchService:
         self.mode_detector: Optional[ModeDetector] = None
         self.agent_service: Optional[AgentService] = None
         self.lang_graph_service: Optional[LangGraphService] = None
+        self.agent_graph: Optional[AgentGraph] = None
         self.file_processing_service: Optional[Any] = None
 
     def _ensure_uuid(
@@ -84,6 +86,7 @@ class ConsolidatedWorkbenchService:
 
         # Agent + LangGraph service
         self.agent_service = AgentService(self.default_model_config)
+        self.agent_graph = AgentGraph(self.default_model_config)
         self.state_bridge = LangGraphStateBridge(
             self.state_manager, self.context_service
         )
@@ -92,15 +95,14 @@ class ConsolidatedWorkbenchService:
             state_bridge=self.state_bridge,
             agent_service=self.agent_service,
             context_service=self.context_service,
+            agent_graph=self.agent_graph,
         )
 
         # File processing service
         from .docling_service import _docling_service
         from .file_processing_service import FileProcessingService
 
-        self.file_processing_service: Optional[FileProcessingService] = (
-            FileProcessingService(docling=_docling_service)
-        )
+        self.file_processing_service = FileProcessingService(docling=_docling_service)
 
     async def execute_workflow(
         self, request: ConsolidatedWorkflowRequest
@@ -315,6 +317,8 @@ class ConsolidatedWorkbenchService:
 
         # Load history into state
         try:
+            if self.state_bridge is None:
+                raise AttributeError("state_bridge not initialized")
             loaded = await self.state_bridge.load_into_langgraph_state(
                 conversation_id=conversation_id,
                 user_message=request.user_message,
@@ -327,28 +331,82 @@ class ConsolidatedWorkbenchService:
 
         # Build messages using the appropriate mode handler
         if effective_mode == "seo_coach":
-            handler = self.lang_graph_service.seo_coach_handler
-            model_config = handler._get_dutch_coaching_config(initial_state)
-            messages = await handler._build_coaching_messages(
+            seo_handler = self.lang_graph_service.seo_coach_handler
+            model_config = seo_handler._get_dutch_coaching_config(initial_state)
+            messages = await seo_handler._build_coaching_messages(
                 initial_state, model_config
             )
         else:
-            handler = self.lang_graph_service.workbench_handler
+            wb_handler = self.lang_graph_service.workbench_handler
             model_config = initial_state["model_config"]
-            messages = await handler._build_workbench_messages(
+            messages = await wb_handler._build_workbench_messages(
                 initial_state, model_config
             )
 
-        messages_dicts = [{"role": m.type, "content": m.content} for m in messages]
+        answer_acc = ""
+        thinking_acc = ""
+        in_think = False
+        seo_model_config = model_config if effective_mode == "seo_coach" else None
 
-        final_response_text = ""
-        async for event in self.agent_service.astream(
-            messages=messages_dicts,
-            model_config=model_config if effective_mode == "seo_coach" else None,
-        ):
-            yield event
-            if event["type"] == "done":
-                final_response_text = event["response"].message
+        if self.agent_graph is not None:
+            async for event in self.agent_graph.astream_events(
+                messages, tools=[], model_config=seo_model_config
+            ):
+                if event["event"] == "on_chat_model_stream":
+                    chunk = event["data"]["chunk"]
+                    for block in chunk.content_blocks:
+                        block_type = block.get("type")
+                        if block_type == "text":
+                            text = block.get("text", "")
+                            if text:
+                                segments, in_think = _split_think_tags(text, in_think)
+                                for seg_type, seg_text in segments:
+                                    if not seg_text:
+                                        continue
+                                    if seg_type == "thinking":
+                                        thinking_acc += seg_text
+                                        yield {
+                                            "type": "thinking_chunk",
+                                            "content": seg_text,
+                                        }
+                                    else:
+                                        answer_acc += seg_text
+                                        yield {
+                                            "type": "answer_chunk",
+                                            "content": seg_text,
+                                        }
+                        elif block_type == "reasoning":
+                            data = block.get("data", "")
+                            if data:
+                                thinking_acc += data
+                                yield {"type": "thinking_chunk", "content": data}
+                        elif block_type == "non_standard":
+                            inner = block.get("value", {})
+                            if inner.get("type") == "thinking":
+                                text = inner.get("thinking", "")
+                                if text:
+                                    thinking_acc += text
+                                    yield {"type": "thinking_chunk", "content": text}
+        else:
+            # Fallback: use agent_service if agent_graph not initialized
+            messages_dicts = [{"role": m.type, "content": m.content} for m in messages]
+            async for event in self.agent_service.astream(
+                messages=messages_dicts,
+                model_config=seo_model_config,
+            ):
+                yield event
+                if event["type"] == "done":
+                    answer_acc = event["response"].message
+
+        yield {
+            "type": "done",
+            "response": AgentResponse(
+                message=answer_acc,
+                reasoning=thinking_acc or None,
+                task_id=None,
+            ),
+        }
+        final_response_text = answer_acc
 
         # Persist the turn after streaming completes
         if final_response_text:
@@ -360,7 +418,7 @@ class ConsolidatedWorkbenchService:
                 StandardMessage(role="assistant", content=final_response_text)
             )
             save_state = {**initial_state, "conversation_history": history}  # type: ignore[assignment]
-            await self.lang_graph_service.save_turn(save_state)
+            await self.lang_graph_service.save_turn(save_state)  # type: ignore[arg-type]
 
     async def get_conversation_state(self, conversation_id: UUID) -> WorkbenchState:
         """
@@ -408,6 +466,8 @@ class ConsolidatedWorkbenchService:
                     mcp_tools_active=[],
                     agent_state=None,
                     workflow_data=None,
+                    document_context=None,
+                    document_filename=None,
                 )
         except Exception as e:
             logger.error(f"Failed to get conversation state: {str(e)}")

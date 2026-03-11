@@ -105,7 +105,7 @@ async def lifespan(app: FastAPI):
         app.state.gradio_interface = create_fastapi_mounted_gradio_interface()
         app.state.gradio_interface.queue()
         # Set max_file_size so Gradio's upload handler doesn't AttributeError.
-        # Blocks.launch() normally sets this; we skip launch() in the FastAPI-mount pattern.
+        # Blocks.launch() sets this; skipped in FastAPI-mount pattern.
         if not hasattr(app.state.gradio_interface, "max_file_size"):
             app.state.gradio_interface.max_file_size = None
         if hasattr(app.state.gradio_interface, "run_startup_events"):

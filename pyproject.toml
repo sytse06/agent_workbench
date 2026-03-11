@@ -2,7 +2,7 @@
 name = "agent-workbench"
 version = "0.1.0"
 description = "Agent Workbench - PRD-driven development"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
@@ -57,7 +57,7 @@ line-length = 88
 lint.select = ["E", "W", "F", "I"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true  # Enforce strict typing
