@@ -40,6 +40,23 @@ def test_agent_graph_singleton_compiled_once():
     assert first is second
 
 
+def test_agent_graph_uses_custom_checkpointer():
+    from langgraph.checkpoint.memory import MemorySaver
+
+    checkpointer = MemorySaver()
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config(), checkpointer=checkpointer)
+    assert graph._checkpointer is checkpointer
+
+
+def test_agent_graph_defaults_to_memory_saver():
+    from langgraph.checkpoint.memory import MemorySaver
+
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config())
+    assert isinstance(graph._checkpointer, MemorySaver)
+
+
 # --- context ---
 
 
@@ -115,7 +132,62 @@ async def test_ainvoke_passes_model_config_override():
         assert ctx["model_config"] is override
 
 
+@pytest.mark.asyncio
+async def test_ainvoke_passes_thread_id_in_config():
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config())
+        with patch.object(graph, "_graph") as mock_compiled:
+            ai_msg = AIMessage(content="ok")
+            mock_compiled.ainvoke = AsyncMock(return_value={"messages": [ai_msg]})
+            await graph.ainvoke(
+                [HumanMessage(content="hi")], tools=[], thread_id="conv-123"
+            )
+        call_kwargs = mock_compiled.ainvoke.call_args
+        cfg = call_kwargs[1]["config"]
+        assert cfg == {"configurable": {"thread_id": "conv-123"}}
+
+
+@pytest.mark.asyncio
+async def test_ainvoke_empty_config_when_no_thread_id():
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config())
+        with patch.object(graph, "_graph") as mock_compiled:
+            ai_msg = AIMessage(content="ok")
+            mock_compiled.ainvoke = AsyncMock(return_value={"messages": [ai_msg]})
+            await graph.ainvoke([HumanMessage(content="hi")], tools=[])
+        call_kwargs = mock_compiled.ainvoke.call_args
+        cfg = call_kwargs[1]["config"]
+        assert cfg == {}
+
+
+# --- get_state ---
+
+
+@pytest.mark.asyncio
+async def test_get_state_returns_none_for_unknown_thread():
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config())
+    # MemorySaver has no data → aget_state returns a StateSnapshot with empty values
+    result = await graph.get_state("nonexistent-thread")
+    assert result is None
+
+
 # --- astream ---
+
+
+@pytest.mark.asyncio
+async def test_astream_passes_thread_id_in_config():
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config())
+
+    async def fake_stream(*args, **kwargs):
+        assert kwargs.get("config") == {"configurable": {"thread_id": "t-1"}}
+        return
+        yield  # make it an async generator
+
+    with patch.object(graph._graph, "astream", fake_stream):
+        async for _ in graph.astream([HumanMessage("hi")], tools=[], thread_id="t-1"):
+            pass
 
 
 @pytest.mark.asyncio

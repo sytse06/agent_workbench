@@ -82,12 +82,13 @@ functionality and would delay the core agent work.
   - `AgentGraph.astream_events()` → `astream()` — yields typed `StreamPart` dicts
   - `consolidated_service.py` dispatches on `chunk["type"]` instead of LangChain event bus
   - `"custom"` mode pre-wired; `get_stream_writer()` calls from nodes/tools flow through automatically (PR-2.4+)
-- [ ] Phase 2.3c: Native LangGraph Infrastructure (PR-23c)
-  - Wire `AsyncSqliteSaver` checkpointer into `AgentGraph` (keyed by `thread_id = conversation_id`)
-  - Wrap `llm_node` LLM call in `@task(mode="exit")` for durable execution
-  - Wrap `FileProcessingService.process()` in `@task(mode="async")` — Docling is expensive, cache on resume
-  - Simplifies `LangGraphStateBridge` (checkpointer owns short-term state; bridge becomes thinner)
-  - **Prerequisite for PR-2.6a Thread Management**
+- [x] Phase 2.3c: Native LangGraph Infrastructure (PR-23c)
+  - `MemorySaver` checkpointer wired into `AgentGraph` (module-level singleton → persists across requests)
+  - `AgentGraph.ainvoke()` / `astream()` accept `thread_id` → keyed by `conversation_id`
+  - `consolidated_service.py` passes `thread_id`; avoids message duplication via `get_state()` check
+  - `langgraph-checkpoint-sqlite>=3.0.3` added to deps (swap `MemorySaver` → `AsyncSqliteSaver` for cross-restart persistence — PR-2.6a concern)
+  - NOTE: `@task(mode="exit/async")` dropped — those params don't exist; StateGraph checkpointer provides equivalent durability automatically
+  - `LangGraphStateBridge` simplification deferred (complex interaction with history injection; tackle in PR-2.6a)
 - [ ] Phase 2.4: ContentRetriever Tool (formerly PR-2.3)
   - `ContentRetrieverTool` as first `BaseTool` wired through `AgentGraph`
   - Embeddings, semantic search, `document_retrieval` tool

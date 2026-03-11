@@ -7,6 +7,7 @@ import time
 from typing import Any, Dict, Literal, Optional, Union
 from uuid import UUID, uuid4
 
+from langgraph.checkpoint.memory import MemorySaver
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.database import get_session
@@ -27,6 +28,10 @@ from .mode_detector import ModeDetector
 from .state_manager import StateManager
 
 logger = logging.getLogger(__name__)
+
+# Module-level singleton: persists across requests within a process.
+# Swap for AsyncSqliteSaver in PR-2.6a for cross-restart persistence.
+_agent_checkpointer: MemorySaver = MemorySaver()
 
 
 class ConsolidatedWorkbenchService:
@@ -86,7 +91,9 @@ class ConsolidatedWorkbenchService:
 
         # Agent + LangGraph service
         self.agent_service = AgentService(self.default_model_config)
-        self.agent_graph = AgentGraph(self.default_model_config)
+        self.agent_graph = AgentGraph(
+            self.default_model_config, checkpointer=_agent_checkpointer
+        )
         self.state_bridge = LangGraphStateBridge(
             self.state_manager, self.context_service
         )
@@ -348,9 +355,26 @@ class ConsolidatedWorkbenchService:
         in_think = False
         seo_model_config = model_config if effective_mode == "seo_coach" else None
 
+        # Determine which messages to pass to AgentGraph.
+        # If the checkpointer already has history for this thread (from a previous
+        # turn in the same process run), pass only the new user message to avoid
+        # duplicating context in MessagesState. Otherwise pass the full message list
+        # built by the mode handler (first turn or after a server restart).
+        thread_id = str(conversation_id) if conversation_id else None
+        agent_messages = messages
+        if thread_id and self.agent_graph is not None:
+            existing = await self.agent_graph.get_state(thread_id)
+            if existing is not None:
+                from langchain_core.messages import HumanMessage as _HumanMessage
+
+                agent_messages = [_HumanMessage(content=request.user_message)]
+
         if self.agent_graph is not None:
             async for chunk in self.agent_graph.astream(
-                messages, tools=[], model_config=seo_model_config
+                agent_messages,
+                tools=[],
+                model_config=seo_model_config,
+                thread_id=thread_id,
             ):
                 if chunk["type"] == "messages":
                     message_chunk, _meta = chunk["data"]
