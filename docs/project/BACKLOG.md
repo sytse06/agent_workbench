@@ -89,6 +89,11 @@ functionality and would delay the core agent work.
   - `langgraph-checkpoint-sqlite>=3.0.3` added to deps (swap `MemorySaver` → `AsyncSqliteSaver` for cross-restart persistence — PR-2.6a concern)
   - NOTE: `@task(mode="exit/async")` dropped — those params don't exist; StateGraph checkpointer provides equivalent durability automatically
   - `LangGraphStateBridge` simplification deferred (complex interaction with history injection; tackle in PR-2.6a)
+- [ ] Phase 2.3d: Durable execution follow-ups (deferred from PR-2.3c)
+  - Swap `MemorySaver` → `AsyncSqliteSaver` for cross-restart persistence; manage connection lifecycle at app startup
+  - Wrap `llm_node` LLM call in `@task` (functional API) for cached durable execution — requires refactoring `AgentGraph` to `@entrypoint` style
+  - Wrap `FileProcessingService.process()` in `@task` — Docling is expensive; cache result on thread resume
+  - Simplify `LangGraphStateBridge` — once checkpointer owns turn history, bridge no longer needs to load/save messages from DB
 - [ ] Phase 2.4: ContentRetriever Tool (formerly PR-2.3)
   - `ContentRetrieverTool` as first `BaseTool` wired through `AgentGraph`
   - Embeddings, semantic search, `document_retrieval` tool
