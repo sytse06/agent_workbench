@@ -15,9 +15,10 @@ import logging
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import gradio as gr
+import httpx
 import requests  # type: ignore[import-untyped]
 
 from ..components.message_converter import (
@@ -980,29 +981,23 @@ def load_conversation_into_chat(
     return chatbot_history, chatbot_history
 
 
-def handle_chat_interface_message(
+async def handle_chat_interface_message(
     message: Union[str, dict],
     history: List[Dict[str, Any]],
     user_state: Optional[Dict[str, Any]],
     settings: Optional[Dict[str, Any]] = None,
     pending_files: Optional[list] = None,
-) -> Iterator[List[gr.ChatMessage]]:
-    """Handle chat message submission for gr.ChatInterface.
+):
+    """Handle chat message submission for gr.ChatInterface (async streaming).
 
-    Accepts str (legacy) or dict (gr.MultimodalTextbox).
-    Generator: yields token chunks as they arrive from the streaming endpoint.
-    gr.ChatInterface replaces its last yield each time — the final yield is
-    what the user sees as the completed message.
-
-    Yields:
-        List of gr.ChatMessage: [thinking_msg (optional), answer_msg]
+    Async generator: yields List[gr.ChatMessage] chunks.
+    gr.ChatInterface replaces its last yield each time.
     """
     text, msg_files = _extract_message(message)
     if not text.strip():
         yield [gr.ChatMessage(role="assistant", content="Please enter a message.")]
         return
 
-    # Use approved files if available, otherwise fall back to files in the message
     effective_files = pending_files if pending_files else msg_files
 
     if settings and "model_config" in settings:
@@ -1033,52 +1028,59 @@ def handle_chat_interface_message(
     answer_content = ""
 
     try:
-        with requests.post(
-            "http://localhost:8000/api/v1/chat/workflow/stream",
-            json=payload,
-            stream=True,
-            timeout=60,
-        ) as response:
-            if response.status_code != 200:
-                yield [
-                    gr.ChatMessage(
-                        role="assistant",
-                        content=f"API Error {response.status_code}: {response.text}",
-                    )
-                ]
-                return
+        async with httpx.AsyncClient() as client:
+            async with client.stream(
+                "POST",
+                "http://localhost:8000/api/v1/chat/workflow/stream",
+                json=payload,
+                timeout=60,
+            ) as response:
+                if response.status_code != 200:
+                    body = await response.aread()
+                    error_text = body.decode()
+                    yield [
+                        gr.ChatMessage(
+                            role="assistant",
+                            content=(f"API Error {response.status_code}: {error_text}"),
+                        )
+                    ]
+                    return
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+                    if not line.startswith("data: "):
+                        continue
+                    try:
+                        event = json.loads(line[6:])
+                    except json.JSONDecodeError:
+                        continue
 
-            for line in response.iter_lines():
-                if not line:
-                    continue
-                raw = line.decode("utf-8") if isinstance(line, bytes) else line
-                if not raw.startswith("data: "):
-                    continue
-                try:
-                    event = json.loads(raw[6:])
-                except json.JSONDecodeError:
-                    continue
+                    event_type = event.get("type")
+                    if event_type in (
+                        "thinking_chunk",
+                        "answer_chunk",
+                        "processing_file",
+                    ):
+                        if event_type == "thinking_chunk":
+                            thinking_content += event.get("content", "")
+                        elif event_type == "answer_chunk":
+                            answer_content += event.get("content", "")
+                        msgs = streaming_event_to_chat_messages(
+                            event,
+                            thinking_content,
+                            answer_content,
+                            locale="en",
+                        )
+                        if msgs:
+                            yield msgs
 
-                event_type = event.get("type")
-
-                if event_type in ("thinking_chunk", "answer_chunk", "processing_file"):
-                    if event_type == "thinking_chunk":
-                        thinking_content += event.get("content", "")
-                    elif event_type == "answer_chunk":
-                        answer_content += event.get("content", "")
-                    msgs = streaming_event_to_chat_messages(
-                        event, thinking_content, answer_content, locale="en"
-                    )
-                    if msgs:
-                        yield msgs
-
-    except requests.exceptions.Timeout:
+    except httpx.TimeoutException:
         yield [
             gr.ChatMessage(
                 role="assistant", content="Request timed out after 60 seconds"
             )
         ]
-    except requests.exceptions.ConnectionError:
+    except httpx.ConnectError:
         yield [
             gr.ChatMessage(
                 role="assistant", content="Connection failed - is the server running?"

@@ -102,9 +102,7 @@ class ConsolidatedWorkbenchService:
         from .docling_service import _docling_service
         from .file_processing_service import FileProcessingService
 
-        self.file_processing_service: Optional[FileProcessingService] = (
-            FileProcessingService(docling=_docling_service)
-        )
+        self.file_processing_service = FileProcessingService(docling=_docling_service)
 
     async def execute_workflow(
         self, request: ConsolidatedWorkflowRequest
@@ -319,6 +317,8 @@ class ConsolidatedWorkbenchService:
 
         # Load history into state
         try:
+            if self.state_bridge is None:
+                raise AttributeError("state_bridge not initialized")
             loaded = await self.state_bridge.load_into_langgraph_state(
                 conversation_id=conversation_id,
                 user_message=request.user_message,
@@ -331,15 +331,15 @@ class ConsolidatedWorkbenchService:
 
         # Build messages using the appropriate mode handler
         if effective_mode == "seo_coach":
-            handler = self.lang_graph_service.seo_coach_handler
-            model_config = handler._get_dutch_coaching_config(initial_state)
-            messages = await handler._build_coaching_messages(
+            seo_handler = self.lang_graph_service.seo_coach_handler
+            model_config = seo_handler._get_dutch_coaching_config(initial_state)
+            messages = await seo_handler._build_coaching_messages(
                 initial_state, model_config
             )
         else:
-            handler = self.lang_graph_service.workbench_handler
+            wb_handler = self.lang_graph_service.workbench_handler
             model_config = initial_state["model_config"]
-            messages = await handler._build_workbench_messages(
+            messages = await wb_handler._build_workbench_messages(
                 initial_state, model_config
             )
 
@@ -418,7 +418,7 @@ class ConsolidatedWorkbenchService:
                 StandardMessage(role="assistant", content=final_response_text)
             )
             save_state = {**initial_state, "conversation_history": history}  # type: ignore[assignment]
-            await self.lang_graph_service.save_turn(save_state)
+            await self.lang_graph_service.save_turn(save_state)  # type: ignore[arg-type]
 
     async def get_conversation_state(self, conversation_id: UUID) -> WorkbenchState:
         """
@@ -466,6 +466,8 @@ class ConsolidatedWorkbenchService:
                     mcp_tools_active=[],
                     agent_state=None,
                     workflow_data=None,
+                    document_context=None,
+                    document_filename=None,
                 )
         except Exception as e:
             logger.error(f"Failed to get conversation state: {str(e)}")

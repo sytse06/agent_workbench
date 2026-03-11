@@ -100,7 +100,7 @@ class LangGraphService:
             merged["workflow_steps"] = state.get("workflow_steps", []) + [
                 "Conversation loaded"
             ]
-            return WorkbenchState(**merged)  # type: ignore[return-value]
+            return WorkbenchState(**merged)  # type: ignore[return-value, typeddict-item]
 
         except Exception as e:
             logger.error(f"Failed to load conversation: {e}")
@@ -271,7 +271,7 @@ class LangGraphService:
     async def execute_workflow(self, initial_state: WorkbenchState) -> WorkbenchState:
         try:
             result = await self.workflow.ainvoke(initial_state)
-            return WorkbenchState(**result)  # type: ignore[return-value]
+            return WorkbenchState(**result)  # type: ignore[return-value, typeddict-item]
         except Exception as e:
             logger.error(f"Workflow execution failed: {e}")
             return {
