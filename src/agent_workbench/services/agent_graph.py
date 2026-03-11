@@ -99,22 +99,22 @@ class AgentGraph:
         )
         return result["messages"][-1]
 
-    async def astream_events(
+    async def astream(
         self,
         messages: List[BaseMessage],
         tools: list = [],
         model_config: Optional[ModelConfig] = None,
     ) -> AsyncGenerator[dict, None]:
-        """Stream events from the agent loop.
+        """Stream chunks from the agent loop using LangGraph v2 streaming format.
 
-        Yields LangGraph v2 events. Callers filter by event name:
-          on_chat_model_stream — token chunks (answer_chunk / thinking_chunk)
-          on_tool_start        — tool call starting (PR-2.4)
-          on_tool_end          — tool call completed (PR-2.4)
+        Yields StreamPart dicts. Callers dispatch on chunk["type"]:
+          "messages" — (AIMessageChunk, metadata) token chunks
+          "custom"   — get_stream_writer() payloads from nodes/tools (PR-2.4+)
         """
-        async for event in self._graph.astream_events(
+        async for chunk in self._graph.astream(
             {"messages": messages},
             context=self._context(tools, model_config),
+            stream_mode=["messages", "custom"],
             version="v2",
         ):
-            yield event
+            yield chunk

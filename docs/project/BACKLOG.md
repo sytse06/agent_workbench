@@ -73,10 +73,21 @@ functionality and would delay the core agent work.
   - `message_converter.py`: `_BLOCK_LABELS` symbol registry + `streaming_event_to_chat_messages()`
   - `chat.py`: remove duplicated `gr.ChatMessage` construction from both handlers
   - `<think>` tag parsing for Ollama/Qwen3 reasoning models
-- [ ] Phase 2.3: LangGraph ReAct agent sub-graph (PR-23)
+- [x] Phase 2.3: LangGraph ReAct agent sub-graph (PR-23)
   - Inner `AgentGraph` with `MessagesState`, `llm_node`, `ToolNode`, conditional back-edge
   - Outer `WorkbenchState` pipeline unchanged — clean separation of concerns
   - Runs `tools=[]` in this PR (identical behaviour); tool-ready for PR-2.4
+- [x] Phase 2.3b: LangGraph v2 streaming + LangGraph 1.1 bump (PR-23b)
+  - Bump `langgraph>=1.1.0`; adopt native `stream_mode=["messages","custom"]` with `version="v2"`
+  - `AgentGraph.astream_events()` → `astream()` — yields typed `StreamPart` dicts
+  - `consolidated_service.py` dispatches on `chunk["type"]` instead of LangChain event bus
+  - `"custom"` mode pre-wired; `get_stream_writer()` calls from nodes/tools flow through automatically (PR-2.4+)
+- [ ] Phase 2.3c: Native LangGraph Infrastructure (PR-23c)
+  - Wire `AsyncSqliteSaver` checkpointer into `AgentGraph` (keyed by `thread_id = conversation_id`)
+  - Wrap `llm_node` LLM call in `@task(mode="exit")` for durable execution
+  - Wrap `FileProcessingService.process()` in `@task(mode="async")` — Docling is expensive, cache on resume
+  - Simplifies `LangGraphStateBridge` (checkpointer owns short-term state; bridge becomes thinner)
+  - **Prerequisite for PR-2.6a Thread Management**
 - [ ] Phase 2.4: ContentRetriever Tool (formerly PR-2.3)
   - `ContentRetrieverTool` as first `BaseTool` wired through `AgentGraph`
   - Embeddings, semantic search, `document_retrieval` tool
@@ -84,9 +95,17 @@ functionality and would delay the core agent work.
     (`ToolNode` requires tools at build time, not via `context_schema`)
 - [ ] Phase 2.5: Firecrawl MCP Tool
   - Web content retrieval as agent tool
-- [ ] Phase 2.6: Middleware
-  - Built-in first: PII redaction, summarization, human-in-the-loop
-  - Custom: context, memory, execution tracking
+- [ ] Phase 2.6a: Thread Management (PR-26a)
+  - **Requires PR-2.3c** (checkpointer prerequisite)
+  - Summarization node: replaces oldest messages with a summary when context window pressure detected
+  - Time travel: `GET /threads/{id}/history` + `POST /threads/{id}/revert/{checkpoint_id}` endpoints
+  - Thread deletion: `DELETE /threads/{id}` removes checkpointer state + DB conversation record
+  - Gradio controls: revert button, delete thread, conversation browser sidebar (see design decisions)
+  - Long-term memory Store (`InMemoryStore` dev / `AsyncSqliteStore` prod) for cross-session user data
+    — SEO Coach `BusinessProfile` → semantic memory; Workbench agent instructions → procedural memory
+- [ ] Phase 2.6b: Middleware
+  - Built-in first: PII redaction, human-in-the-loop
+  - Custom: context injection, execution tracking
 
 ---
 
@@ -123,7 +142,8 @@ Deferred from Phase 2 — implement after agent functionality is stable.
 - [ ] WorkbenchState: switch from TypedDict to Pydantic model?
 - [ ] PWA: wire service worker registration or defer/remove?
 - [ ] State pipeline: one format instead of three?
-- [ ] Conversation browser sidebar (workbench-first, feature-flagged) — see `docs/phase2/Feat-dev-plan-chat-history-in-sidebar-in-chatpage.md`
+- [ ] Conversation browser sidebar — moved to PR-2.6a Thread Management (revert/delete controls + history view)
+- [ ] State pipeline: consolidate to one format instead of three? (WorkbenchState TypedDict → Pydantic?)
 
 ---
 
@@ -131,8 +151,8 @@ Deferred from Phase 2 — implement after agent functionality is stable.
 
 - [ ] SEO Coach production deployment to HuggingFace Spaces
 - [ ] Multi-agent coordination via LangGraph (Phase 3+)
-- [ ] Agent memory and learning
-- [x] Streaming support — wired in Phase 2.0 via `AgentService.astream()` + Gradio generator handlers
+- [x] Agent memory and learning — planned in PR-2.6a (short-term via checkpointer, long-term via Store)
+- [x] Streaming support — upgraded to LangGraph v2 native streaming in PR-2.3b
 
 ---
 
