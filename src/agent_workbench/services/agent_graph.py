@@ -47,7 +47,7 @@ class AgentGraph:
         # Batch
         result = await graph.ainvoke(messages, tools=[])
         # Streaming
-        async for event in graph.astream_events(messages, tools=[]):
+        async for chunk in graph.astream(messages, tools=[]):
             ...
     """
 
