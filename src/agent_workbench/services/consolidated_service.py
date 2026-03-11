@@ -7,7 +7,10 @@ import time
 from typing import Any, Dict, Literal, Optional, Union
 from uuid import UUID, uuid4
 
+import aiosqlite
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.database import get_session
@@ -29,9 +32,33 @@ from .state_manager import StateManager
 
 logger = logging.getLogger(__name__)
 
-# Module-level singleton: persists across requests within a process.
-# Swap for AsyncSqliteSaver in PR-2.6a for cross-restart persistence.
-_agent_checkpointer: MemorySaver = MemorySaver()
+# Module-level checkpointer. Starts as MemorySaver (in-process only).
+# init_checkpointer() swaps it to AsyncSqliteSaver at app startup for
+# cross-restart persistence. Falls back to MemorySaver on init failure.
+_checkpointer: BaseCheckpointSaver = MemorySaver()
+_checkpointer_conn: Optional[aiosqlite.Connection] = None
+
+
+async def init_checkpointer(
+    db_path: str = "data/langgraph_checkpoints.db",
+) -> None:
+    """Open AsyncSqliteSaver at app startup. Call from FastAPI lifespan."""
+    global _checkpointer, _checkpointer_conn
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+    _checkpointer_conn = await aiosqlite.connect(db_path)
+    saver = AsyncSqliteSaver(_checkpointer_conn)
+    await saver.setup()
+    _checkpointer = saver
+    logger.info("LangGraph AsyncSqliteSaver initialized at %s", db_path)
+
+
+async def close_checkpointer() -> None:
+    """Close the checkpointer connection at app shutdown."""
+    global _checkpointer_conn
+    if _checkpointer_conn is not None:
+        await _checkpointer_conn.close()
+        _checkpointer_conn = None
+        logger.info("LangGraph checkpointer connection closed")
 
 
 class ConsolidatedWorkbenchService:
@@ -92,7 +119,7 @@ class ConsolidatedWorkbenchService:
         # Agent + LangGraph service
         self.agent_service = AgentService(self.default_model_config)
         self.agent_graph = AgentGraph(
-            self.default_model_config, checkpointer=_agent_checkpointer
+            self.default_model_config, checkpointer=_checkpointer
         )
         self.state_bridge = LangGraphStateBridge(
             self.state_manager, self.context_service
