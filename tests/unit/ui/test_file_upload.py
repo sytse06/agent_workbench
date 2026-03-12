@@ -132,7 +132,8 @@ class TestWorkbenchFileUpload:
         ):
             results.append(chunk)
         assert len(results) == 1
-        assert "Please enter a message" in results[0][0].content
+        msgs, _state = results[0]
+        assert "Please enter a message" in msgs[0].content
 
     def test_wb_input_change_shows_approval_on_new_file(self):
         """on_wb_input_change returns visible Group when new file arrives."""

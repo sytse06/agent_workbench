@@ -107,6 +107,7 @@ def render(
             )
 
         pending_files_wb = gr.State([])
+        conv_id_state_wb = gr.State(None)
 
         with gr.Group(
             visible=False, elem_classes=["aw-approval-bar"]
@@ -124,7 +125,13 @@ def render(
 
         chat_iface = gr.ChatInterface(
             fn=handle_chat_interface_message,
-            additional_inputs=[user_state, settings_state, pending_files_wb],
+            additional_inputs=[
+                user_state,
+                settings_state,
+                pending_files_wb,
+                conv_id_state_wb,
+            ],
+            additional_outputs=[conv_id_state_wb],
             save_history=False,
             title="Agent Workbench Chat",
             textbox=gr.MultimodalTextbox(
@@ -192,8 +199,8 @@ def render(
 
         # New chat clears the chatbot and state
         new_chat_btn.click(
-            fn=lambda: ([], []),
-            outputs=[chat_iface.chatbot, conversation_state],
+            fn=lambda: ([], [], None),
+            outputs=[chat_iface.chatbot, conversation_state, conv_id_state_wb],
         )
 
         # Return storage + dataset so mode_factory wires the page-load event
@@ -987,15 +994,18 @@ async def handle_chat_interface_message(
     user_state: Optional[Dict[str, Any]],
     settings: Optional[Dict[str, Any]] = None,
     pending_files: Optional[list] = None,
+    conv_id: Optional[str] = None,
 ):
     """Handle chat message submission for gr.ChatInterface (async streaming).
 
-    Async generator: yields List[gr.ChatMessage] chunks.
+    Async generator: yields (List[gr.ChatMessage], conv_id_update) tuples.
     gr.ChatInterface replaces its last yield each time.
     """
     text, msg_files = _extract_message(message)
     if not text.strip():
-        yield [gr.ChatMessage(role="assistant", content="Please enter a message.")]
+        yield [
+            gr.ChatMessage(role="assistant", content="Please enter a message.")
+        ], gr.update()
         return
 
     effective_files = pending_files if pending_files else msg_files
@@ -1023,9 +1033,13 @@ async def handle_chat_interface_message(
         },
         "pending_files": effective_files or [],
     }
+    if conv_id:
+        payload["conversation_id"] = conv_id
 
     thinking_content = ""
     answer_content = ""
+    current_conv_id = conv_id
+    last_msgs: list = []
 
     try:
         async with httpx.AsyncClient() as client:
@@ -1043,7 +1057,7 @@ async def handle_chat_interface_message(
                             role="assistant",
                             content=(f"API Error {response.status_code}: {error_text}"),
                         )
-                    ]
+                    ], gr.update()
                     return
                 async for line in response.aiter_lines():
                     if not line:
@@ -1072,22 +1086,35 @@ async def handle_chat_interface_message(
                             locale="en",
                         )
                         if msgs:
-                            yield msgs
+                            last_msgs = msgs
+                            yield msgs, gr.update()
+                    elif event_type == "done":
+                        resp = event.get("response", {})
+                        if isinstance(resp, dict):
+                            current_conv_id = (
+                                resp.get("conversation_id") or current_conv_id
+                            )
+                        # Yield last messages again to update conv_id state.
+                        # gr.ChatInterface replaces (not appends) on each yield,
+                        # so re-yielding last_msgs causes no visual duplication.
+                        yield last_msgs, current_conv_id
 
     except httpx.TimeoutException:
         yield [
             gr.ChatMessage(
                 role="assistant", content="Request timed out after 60 seconds"
             )
-        ]
+        ], gr.update()
     except httpx.ConnectError:
         yield [
             gr.ChatMessage(
                 role="assistant", content="Connection failed - is the server running?"
             )
-        ]
+        ], gr.update()
     except Exception as e:
-        yield [gr.ChatMessage(role="assistant", content=f"Unexpected error: {str(e)}")]
+        yield [
+            gr.ChatMessage(role="assistant", content=f"Unexpected error: {str(e)}")
+        ], gr.update()
 
 
 def handle_chat_message(

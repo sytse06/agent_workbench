@@ -1,7 +1,7 @@
-# PR-2.3: ContentRetriever Tool
+# PR-2.4: ContentRetriever Tool
 
 **Branch:** `feature/content-retriever`
-**Status:** Planning
+**Status:** In Progress (phase 1 landed — see Current State)
 
 ---
 
@@ -9,198 +9,177 @@
 
 PR-2.2 injects document content as a system message with a hard token budget (24k). For
 short documents this works well. For large documents the budget truncates content and the
-agent has no way to query what was cut. The agent is passive — it gets what fits and nothing
+agent has no way to query what was cut. The agent is passive — it gets what fits, nothing
 more.
 
-This PR makes the agent active: it receives a `ContentRetrieverTool` it can call at any
-point in a conversation to retrieve semantically relevant chunks from documents that were
-previously processed in this session. The tool uses cosine similarity on stored embeddings —
-the same semantic search pattern as `docs/showcases/content_retriever_tool.py`, rewritten
-as a LangChain `BaseTool` and wired into `AgentService`.
+This PR makes the agent active: it receives a `document_retrieval` tool it can call at
+any point in the conversation to retrieve semantically relevant chunks from documents
+attached to the session.
 
 ---
 
-## Scope
+## Current State (after phase 1)
 
-**IN:**
-- Alembic migration: add `embedding` column (JSON float array) to `document_chunks`
-- `EmbeddingService`: wraps `SentenceTransformer("all-MiniLM-L6-v2")`; lazy init
-- `FileProcessingService` updated: embed chunks at processing time; store in `embedding` column
-- `ContentRetrieverTool` (`BaseTool`): takes `query` + `conversation_id`; returns top-k chunks via cosine similarity
-- `AgentService` updated: `tools=[content_retriever_tool]` (replaces `tools=[]` from PR-2.0)
-- Truncation suffix in PR-2.2 context block updated: "Use the document retrieval tool to query specific sections"
-- `sentence-transformers` added as required dependency
+Phase 1 landed the structural wiring without semantic quality:
 
-**OUT (subsequent PRs):**
-- Multi-document retrieval across conversations — Phase 3
-- Re-ranking, hybrid BM25+vector search — Phase 3
-- URL/web content retrieval (Firecrawl) — PR-2.4
-- Custom embedding models / provider-based embeddings — Phase 3
+- `AgentGraph` now accepts `tools: list` at compile time; `ToolNode` added when non-empty
+- `ContentRetrieverTool` exists (`services/content_retriever_tool.py`) with:
+  - `DocumentRetrievalContext` — isolated Pydantic context (never enters `MessagesState`)
+  - TF-IDF keyword ranking ← **to be replaced by semantic search in phase 2**
+  - LLM synthesis step — secondary model call returns a focused, cited answer
+  - `_fetch_chunks()` — fetches raw text chunks from DB via `session_factory`
+- `consolidated_service.py` wires the tool as singleton into `AgentGraph` at startup
+- `conversation_id` read from `config["configurable"]["thread_id"]` at runtime
 
----
-
-## Current State (post PR-2.2)
-
-```
-document_chunks:
-  id, document_id, chunk_index, content, heading, page, token_count
-  # embedding column absent — placeholder noted in PR-2.2 migration comments
-
-AgentService:
-  self.agent = create_agent(model, tools=[], ...)
-  # no tools wired — Phase 2.3 was called out explicitly in PR-2.0 scope
-
-FileProcessingService.process():
-  chunks = docling.convert(path)
-  db.save_document_chunks(chunks)     # text only
-  context_block = docling.build_context_block(chunks)
-  # no embeddings generated
-```
+What phase 1 does **not** have:
+- Semantic retrieval (TF-IDF misses paraphrases, synonyms, cross-language queries)
+- Multi-turn efficiency (chunks re-fetched and re-ranked on every tool call)
 
 ---
 
-## Architecture Decisions
+## Phase 2 Design
 
-### Decision 1: Embed at processing time, retrieve at query time
+### Core decisions
 
-Embeddings are generated once when the file is processed (in `FileProcessingService.process()`),
-stored in `document_chunks.embedding` as a JSON float array. At query time, `ContentRetrieverTool`
-embeds only the query string and computes cosine similarity against stored chunk embeddings.
+**Decision 1: Semantic retrieval via `EmbeddingService`, not TF-IDF.**
 
-This is the correct split: processing is a one-time cost; retrieval should be fast and
-independent of Docling.
+`all-MiniLM-L6-v2` — 384-dim, ~80MB, CPU-friendly, multilingual. Cosine similarity against
+batch-embedded chunk vectors. This enables Dutch-language queries in SEO Coach mode to
+match English document content and vice versa. TF-IDF cannot do this.
 
-### Decision 2: `all-MiniLM-L6-v2` as the embedding model
+**Decision 2: Vectorization happens inside a `DocumentContextGraph` subgraph — not in the DB.**
 
-384-dimensional, ~80MB, CPU-friendly, no GPU required. This is the same model used in
-`docs/showcases/content_retriever_tool.py`. Fast enough for real-time query embedding
-(< 50ms per query on CPU). Can be swapped by changing one constant.
+The original project doc proposed storing embeddings in a `document_chunks.embedding` column
+(requiring an Alembic migration). This was rejected because:
+- It couples a compute artifact to the storage schema
+- Embeddings are a pure function of text — they can always be recomputed
+- It adds ~300KB of float data to the DB per document
 
-### Decision 3: `ContentRetrieverTool` is a LangChain `BaseTool`, not smolagents `Tool`
+Instead: a `DocumentContextGraph` (inner `StateGraph`) computes and caches embeddings in
+its own LangGraph state. The DB stays clean.
 
-`AgentService` wraps a LangChain agent (PR-2.0). The tool must be a `BaseTool` subclass.
-The retrieval logic is adapted directly from `_process_with_docling()` in
-`docs/showcases/content_retriever_tool.py`:
-- Embed query
-- Cosine similarity against all chunk embeddings for the conversation
-- Softmax-weighted cumulative threshold selection (threshold: 0.2)
-- Return top-k chunks with heading context
+**Decision 3: Embedding vectors live in `DocumentContextGraph` state with a `MemorySaver` checkpointer.**
 
-The smolagents interface (`forward()`, `inputs`, `output_type`) is replaced with
-LangChain's `_run()` and `args_schema`.
-
-### Decision 4: Tool receives `conversation_id` as a bound parameter
-
-`ContentRetrieverTool` is instantiated per-conversation-turn (or per-agent-invocation)
-with `conversation_id` bound at construction time. The agent does not need to pass
-`conversation_id` — it only passes `query`. This avoids leaking internal IDs into the
-agent's tool interface.
-
-```python
-tool = ContentRetrieverTool(
-    conversation_id=conversation_id,
-    embedding_service=embedding_service,
-    db=db,
-)
-agent = create_agent(model=..., tools=[tool], ...)
-```
-
-This means `AgentService` receives the tool instance (or factory) at call time, not at
-init time — a small change to the `run()` / `astream()` signatures.
-
-### Decision 5: PR-2.2 context block retained for immediate context
-
-The full-text injection from PR-2.2 is kept as-is. For documents that fit within the 24k
-budget, the agent gets the full text upfront and likely won't need to call the tool.
-For truncated documents, the suffix now reads:
+The outer `AgentGraph` uses `AsyncSqliteSaver` (PR-2.3d) for durable conversation history.
+The inner `DocumentContextGraph` uses a separate `MemorySaver` — embeddings persist
+in-process across multiple tool calls within the same conversation, without being written
+to SQLite.
 
 ```
-[Document truncated — 24,000 of 51,200 estimated tokens shown.
- Use the document_retrieval tool to query specific sections by topic.]
+Turn 1: "What does section 3 say?"
+  → load_chunks_node: fetch from DB (chunks empty in state)
+  → embed_chunks_node: embed_batch(all chunks) — stored in MemorySaver state
+  → retrieve_node: embed query, cosine similarity → top-K
+  → synthesize_node: LLM call → answer
+
+Turn 2: "What about section 5?"
+  → load_chunks_node: SKIP (chunks already in state)
+  → embed_chunks_node: SKIP (embeddings already in state)
+  → retrieve_node: embed query only — 50ms vs. full batch
+  → synthesize_node: LLM call → answer
 ```
 
-The agent learns from the system message that the tool exists for deep retrieval.
+On restart the MemorySaver is empty; the subgraph re-embeds on first call. Whether to
+persist embeddings to disk is a PR-2.6a checkpoint policy decision.
+
+**Decision 4: `ContentRetrieverTool` becomes a thin wrapper over `DocumentContextGraph`.**
+
+The tool's responsibility shrinks to: extract `conversation_id` from `config`, invoke
+the subgraph with `thread_id = conversation_id`, return the answer string. All retrieval
+logic lives in the subgraph.
+
+**Decision 5: Context isolation pattern is kept.**
+
+The `DocumentRetrievalContext` Pydantic model survives as the retrieval context within
+`retrieve_node`. It is never passed to the outer `AgentGraph`'s `MessagesState` — the
+agent sees only the synthesized answer string as a `ToolMessage`.
+
+**Decision 6: No DB migration.**
+
+No changes to `document_chunks`, `DocumentChunkModel`, or `DatabaseBackend` protocol.
+Chunks are fetched as raw text; embeddings are ephemeral.
 
 ---
 
-## Data Model Change
+## Architecture
 
-### Alembic migration: `embedding` column
-
-```python
-# alembic/versions/xxxx_add_embedding_to_chunks.py
-def upgrade() -> None:
-    op.add_column(
-        "document_chunks",
-        sa.Column("embedding", sa.JSON, nullable=True),
-        # nullable=True: existing rows from PR-2.2 have no embedding;
-        # they are skipped during retrieval (embedding IS NOT NULL filter)
-    )
+```
+AgentGraph (outer)
+  MessagesState, thread_id = conversation_id, AsyncSqliteSaver
+  │
+  └── ToolNode → ContentRetrieverTool._arun(query, config)
+                    │
+                    └── DocumentContextGraph (inner subgraph)
+                          DocumentContextState, thread_id = conversation_id, MemorySaver
+                          │
+                          ├── load_chunks_node   (skip if chunks already in state)
+                          ├── embed_chunks_node  (skip if embeddings already in state)
+                          ├── retrieve_node      (embed query, cosine sim, DocumentRetrievalContext)
+                          └── synthesize_node    (LLM call → answer str)
 ```
 
-### Updated `DocumentChunkModel`
+### `DocumentContextState`
 
 ```python
-embedding = mapped_column(JSON, nullable=True)  # list[float], 384 dims
+class DocumentContextState(TypedDict):
+    conversation_id: str
+    query: str
+    chunks: list[RetrievedChunk]         # loaded once from DB
+    chunk_embeddings: list[list[float]]  # computed once, cached in MemorySaver
+    answer: str
 ```
 
-### Updated `DatabaseBackend` protocol
-
-```python
-def get_document_chunks_with_embeddings(self, conversation_id: str) -> List[Dict]: ...
-# Returns all chunks across all documents in the conversation where embedding IS NOT NULL
-# Used by ContentRetrieverTool for cross-document retrieval within a session
-```
+`chunk_embeddings` is large (N_chunks × 384 floats) but is never serialized to disk —
+it lives only in the `MemorySaver` dict. At PR-2.6a, decide whether to promote it to
+`AsyncSqliteSaver` with a TTL policy.
 
 ---
 
 ## Step-by-Step Implementation
 
 ### Step 1: Add `sentence-transformers` dependency
-**File:** `pyproject.toml`
 
 ```toml
+# pyproject.toml
 dependencies = [
     ...
     "sentence-transformers>=3.0.0",
 ]
 ```
 
-Run `uv sync`. Verify: `uv run python -c "from sentence_transformers import SentenceTransformer; print('ok')"`.
+Run `uv sync`.
 
 ### Step 2: `EmbeddingService`
+
 **New file:** `src/agent_workbench/services/embedding_service.py`
 
 ```python
+"""EmbeddingService — lazy-loaded SentenceTransformer wrapper."""
 import logging
-from typing import Optional
 import numpy as np
 
 logger = logging.getLogger(__name__)
-
 _MODEL_NAME = "all-MiniLM-L6-v2"
 
 
 class EmbeddingService:
     def __init__(self, model_name: str = _MODEL_NAME) -> None:
         self._model_name = model_name
-        self._model = None   # lazy init — model download on first use
+        self._model = None  # lazy — downloads ~80MB on first use
 
     def _ensure_init(self) -> None:
         if self._model is None:
             from sentence_transformers import SentenceTransformer
             self._model = SentenceTransformer(self._model_name)
-            logger.info("EmbeddingService initialised with model: %s", self._model_name)
+            logger.info("EmbeddingService loaded: %s", self._model_name)
 
     def embed(self, text: str) -> list[float]:
         self._ensure_init()
-        vector = self._model.encode(text, convert_to_numpy=True)
-        return vector.tolist()
+        return self._model.encode(text, convert_to_numpy=True).tolist()
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         self._ensure_init()
-        vectors = self._model.encode(texts, convert_to_numpy=True)
-        return vectors.tolist()
+        return self._model.encode(texts, convert_to_numpy=True).tolist()
 
     def cosine_similarity(
         self, query_vec: list[float], chunk_vecs: list[list[float]]
@@ -212,252 +191,275 @@ class EmbeddingService:
         return (c_norm @ q_norm).tolist()
 ```
 
-### Step 3: Alembic migration
-**New file:** `alembic/versions/xxxx_add_embedding_to_chunks.py`
+### Step 3: `DocumentContextGraph`
 
-Add `embedding` column (nullable JSON) to `document_chunks`. See Data Model section.
-
-Run `uv run alembic upgrade head`.
-
-### Step 4: Update `DocumentChunkModel` and `DatabaseBackend`
-
-**File:** `src/agent_workbench/models/database.py`
-
-Add `embedding = mapped_column(JSON, nullable=True)` to `DocumentChunkModel`.
-
-**File:** `src/agent_workbench/database/protocol.py`
-
-Add `get_document_chunks_with_embeddings(conversation_id: str) -> List[Dict]`.
-
-**File:** `src/agent_workbench/database/backends/sqlite.py`
-
-Implement: join `document_chunks` → `documents` on `conversation_id`, filter
-`embedding IS NOT NULL`, return all matching chunks.
-
-**File:** `src/agent_workbench/database/backends/hub.py`
-
-Stub: return `[]` (consistent with PR-2.2 no-op pattern).
-
-### Step 5: Update `FileProcessingService` to embed chunks
-**File:** `src/agent_workbench/services/file_processing_service.py`
-
-Add `embedding_service: EmbeddingService` to `__init__`. In `process()`, after
-converting chunks, generate embeddings in batch before saving:
+**New file:** `src/agent_workbench/services/document_context_graph.py`
 
 ```python
-texts = [c.content for c in chunks]
-embeddings = self.embedding_service.embed_batch(texts)
-
-self.db.save_document_chunks([
-    {
-        ...existing fields...,
-        "embedding": embeddings[i],
-    }
-    for i, c in enumerate(chunks)
-])
-```
-
-Also update the truncation suffix in `DoclingService.build_context_block()`:
-
-```python
-suffix = (
-    f"\n\n[Document truncated — {used:,} of {sum(c.token_count for c in chunks):,}"
-    f" estimated tokens shown."
-    f" Use the document_retrieval tool to query specific sections by topic.]"
-    if len(selected) < len(chunks)
-    else ""
-)
-```
-
-### Step 6: `ContentRetrieverTool`
-**New file:** `src/agent_workbench/services/content_retriever_tool.py`
-
-```python
+"""DocumentContextGraph — inner subgraph for multi-turn document retrieval."""
 import logging
-from typing import Type
-import numpy as np
-from pydantic import BaseModel, Field
-from langchain_core.tools import BaseTool
+from typing import Callable, Optional
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
+from typing_extensions import TypedDict
 
 from .embedding_service import EmbeddingService
-from ..database.protocol import DatabaseBackend
+from .content_retriever_tool import (
+    DocumentRetrievalContext,
+    RetrievedChunk,
+    _RETRIEVAL_TOKEN_BUDGET,
+    _SYNTHESIS_SYSTEM,
+)
+from ..models.schemas import ModelConfig
+from .providers import provider_registry
 
 logger = logging.getLogger(__name__)
 
-_THRESHOLD = 0.2   # cumulative softmax probability threshold (from ContentRetrieverTool)
-_MAX_CHUNKS = 10   # hard cap on returned chunks
+# Module-level MemorySaver — separate from the outer AsyncSqliteSaver.
+# Keeps chunk embeddings in-process without writing float vectors to SQLite.
+# Checkpoint policy (persist vs. evict) deferred to PR-2.6a.
+_doc_checkpointer = MemorySaver()
 
 
-class RetrievalInput(BaseModel):
-    query: str = Field(description="Search query to find relevant sections in attached documents")
-
-
-class ContentRetrieverTool(BaseTool):
-    name: str = "document_retrieval"
-    description: str = (
-        "Retrieve relevant sections from documents attached in this conversation. "
-        "Use this when the user asks about specific content in an uploaded file, "
-        "or when you need more detail than was provided in the initial document context."
-    )
-    args_schema: Type[BaseModel] = RetrievalInput
-
-    # Bound at construction time — not passed by the agent
+class DocumentContextState(TypedDict):
     conversation_id: str
-    embedding_service: EmbeddingService
-    db: DatabaseBackend
+    query: str
+    chunks: list[RetrievedChunk]
+    chunk_embeddings: list[list[float]]  # cached after first embed; not serialized to disk
+    answer: str
 
-    class Config:
-        arbitrary_types_allowed = True
 
-    def _run(self, query: str) -> str:
-        chunks = self.db.get_document_chunks_with_embeddings(self.conversation_id)
-        if not chunks:
-            return "No documents with stored embeddings found for this conversation."
+class DocumentContextGraph:
+    """Inner subgraph: load chunks → embed (cached) → retrieve → synthesize."""
 
-        query_vec = self.embedding_service.embed(query)
-        chunk_vecs = [c["embedding"] for c in chunks]
-        similarities = self.embedding_service.cosine_similarity(query_vec, chunk_vecs)
+    def __init__(
+        self,
+        session_factory: Callable,
+        embedding_service: EmbeddingService,
+        model_config: ModelConfig,
+    ) -> None:
+        self._session_factory = session_factory
+        self._embedding_service = embedding_service
+        self._model_config = model_config
+        self._graph: CompiledStateGraph = self._build()
 
-        # Softmax-weighted cumulative threshold selection (from ContentRetrieverTool)
-        exp_scores = np.exp(similarities)
-        probs = exp_scores / exp_scores.sum()
-        sorted_indices = np.argsort(probs)[::-1]
+    def _build(self) -> CompiledStateGraph:
+        session_factory = self._session_factory
+        embedding_service = self._embedding_service
+        model_config = self._model_config
 
-        selected = []
-        cumulative = 0.0
-        for idx in sorted_indices:
-            cumulative += probs[idx]
-            selected.append(int(idx))
-            if cumulative >= _THRESHOLD or len(selected) >= _MAX_CHUNKS:
-                break
+        async def load_chunks_node(state: DocumentContextState) -> dict:
+            if state.get("chunks"):
+                return {}  # already loaded — skip
+            chunks = await _fetch_chunks(session_factory, state["conversation_id"])
+            return {"chunks": chunks}
 
-        selected.sort()   # restore document order
-        parts = []
-        for idx in selected:
-            chunk = chunks[idx]
-            heading = chunk.get("heading") or ""
-            content = chunk.get("content", "")
-            parts.append(f"{heading}\n{content}".strip() if heading else content)
+        async def embed_chunks_node(state: DocumentContextState) -> dict:
+            if state.get("chunk_embeddings"):
+                return {}  # already embedded — skip (multi-turn reuse)
+            chunks = state.get("chunks", [])
+            if not chunks:
+                return {"chunk_embeddings": []}
+            texts = [c.content for c in chunks]
+            embeddings = await asyncio.to_thread(embedding_service.embed_batch, texts)
+            logger.info(
+                "DocumentContextGraph: embedded %d chunks for conversation %s",
+                len(embeddings), state["conversation_id"],
+            )
+            return {"chunk_embeddings": embeddings}
 
-        logger.info(
-            "ContentRetrieverTool: query=%r → %d/%d chunks selected",
-            query[:60],
-            len(selected),
-            len(chunks),
+        async def retrieve_node(state: DocumentContextState) -> dict:
+            chunks = state.get("chunks", [])
+            embeddings = state.get("chunk_embeddings", [])
+            if not chunks or not embeddings:
+                return {"answer": "No documents have been attached to this conversation."}
+            query_vec = await asyncio.to_thread(
+                embedding_service.embed, state["query"]
+            )
+            scores = embedding_service.cosine_similarity(query_vec, embeddings)
+            # Attach scores to chunks; select within token budget
+            for chunk, score in zip(chunks, scores):
+                chunk.score = score
+            ranked = sorted(chunks, key=lambda c: c.score, reverse=True)
+            selected, used = [], 0
+            for chunk in ranked:
+                if used + chunk.token_count > _RETRIEVAL_TOKEN_BUDGET:
+                    continue
+                selected.append(chunk)
+                used += chunk.token_count
+            selected = selected or chunks[:5]
+            # Restore document order
+            selected.sort(key=lambda c: c.chunk_index)
+            ctx = DocumentRetrievalContext(
+                query=state["query"],
+                conversation_id=state["conversation_id"],
+                chunks=selected,
+                total_tokens=used,
+            )
+            answer = await _synthesize(ctx, model_config)
+            return {"answer": answer}
+
+        builder = StateGraph(DocumentContextState)
+        builder.add_node("load_chunks", load_chunks_node)
+        builder.add_node("embed_chunks", embed_chunks_node)
+        builder.add_node("retrieve", retrieve_node)
+        builder.set_entry_point("load_chunks")
+        builder.add_edge("load_chunks", "embed_chunks")
+        builder.add_edge("embed_chunks", "retrieve")
+        builder.add_edge("retrieve", END)
+        return builder.compile(checkpointer=_doc_checkpointer)
+
+    async def ainvoke(self, query: str, conversation_id: str) -> str:
+        config = {"configurable": {"thread_id": conversation_id}}
+        result = await self._graph.ainvoke(
+            {"query": query, "conversation_id": conversation_id},
+            config=config,
         )
-        return "\n\n".join(parts) if parts else "No relevant sections found for this query."
+        return result.get("answer", "No answer produced.")
 
-    async def _arun(self, query: str) -> str:
-        return self._run(query)   # embedding is CPU-bound; no async benefit
+
+async def _fetch_chunks(session_factory: Callable, conversation_id: str) -> list[RetrievedChunk]:
+    from uuid import UUID
+    from sqlalchemy import select
+    from ..models.database import DocumentChunkModel, DocumentModel
+
+    chunks: list[RetrievedChunk] = []
+    async for session in session_factory():
+        result = await session.execute(
+            select(DocumentChunkModel, DocumentModel.filename)
+            .join(DocumentModel)
+            .where(DocumentModel.conversation_id == UUID(conversation_id))
+            .order_by(DocumentChunkModel.chunk_index)
+        )
+        for chunk_row, filename in result:
+            chunks.append(RetrievedChunk(
+                chunk_index=chunk_row.chunk_index,
+                content=chunk_row.content,
+                filename=filename,
+                heading=chunk_row.heading,
+                page=chunk_row.page,
+                token_count=chunk_row.token_count,
+            ))
+    return chunks
+
+
+async def _synthesize(ctx: DocumentRetrievalContext, model_config: ModelConfig) -> str:
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    parts = []
+    for c in ctx.chunks:
+        ref = c.filename
+        if c.page:
+            ref += f", p.{c.page}"
+        if c.heading:
+            ref += f", Section: {c.heading}"
+        parts.append(f"[{ref}]\n{c.content}")
+
+    model = provider_registry.create_model(model_config)
+    response = await model.ainvoke([
+        SystemMessage(content=_SYNTHESIS_SYSTEM),
+        HumanMessage(content=(
+            f"Document excerpts:\n\n{chr(10).join(parts)}\n\nQuery: {ctx.query}"
+        )),
+    ])
+    return str(response.content)
 ```
 
-### Step 7: Update `AgentService` to accept tools
-**File:** `src/agent_workbench/services/agent_service.py`
+### Step 4: Rewrite `ContentRetrieverTool` as thin wrapper
 
-`AgentService.__init__` currently calls `create_agent(model, tools=[], ...)`. The tool
-instance is conversation-scoped (it needs `conversation_id`), so tools cannot be bound
-at service init time.
+**File:** `src/agent_workbench/services/content_retriever_tool.py`
 
-Change `run()` and `astream()` to accept an optional `tools` parameter:
+Remove `_tfidf_select`. Keep `RetrievedChunk`, `DocumentRetrievalContext`,
+`_RETRIEVAL_TOKEN_BUDGET`, and `_SYNTHESIS_SYSTEM` (imported by `DocumentContextGraph`).
+Rewrite `_arun`:
 
 ```python
-async def run(
+async def _arun(
     self,
-    messages: list[dict],
-    task_id: str,
-    tools: Optional[list] = None,
-) -> AgentResponse:
-    agent = create_agent(
-        model=self._model,
-        tools=tools or [],
-        structured_output=AgentResponse,
-        checkpointer=MemorySaver(),
+    query: str,
+    config: Optional[RunnableConfig] = None,
+    **kwargs: Any,
+) -> str:
+    conversation_id = (config or {}).get("configurable", {}).get("thread_id", "")
+    if not conversation_id:
+        return "No active conversation — cannot retrieve documents."
+    return await self._doc_graph.ainvoke(query, conversation_id)
+```
+
+Construction:
+
+```python
+def __init__(
+    self,
+    session_factory: Callable,
+    model_config: ModelConfig,
+    embedding_service: EmbeddingService,
+    **data: Any,
+) -> None:
+    super().__init__(**data)
+    from .document_context_graph import DocumentContextGraph
+    doc_graph = DocumentContextGraph(
+        session_factory=session_factory,
+        embedding_service=embedding_service,
+        model_config=model_config,
     )
-    config = {"configurable": {"thread_id": task_id}}
-    result = await agent.ainvoke({"messages": messages}, config=config)
-    return result["structured_response"]
+    object.__setattr__(self, "_doc_graph", doc_graph)
 ```
 
-Same pattern for `astream()`. If `tools=[]`, behaviour is identical to PR-2.0.
-
-### Step 8: Wire tool in UI handler
-**File:** `src/agent_workbench/ui/pages/chat.py`
-
-After `FileProcessingService.process()` is called and `conversation_id` is known,
-construct the tool and pass it through the API payload — or, more practically, pass it
-via a thread-local / request-scoped mechanism.
-
-The cleanest approach: add `tools` to the `ConsolidatedWorkflowRequest` as a list of
-tool names (strings), and instantiate the actual tool objects in `ConsolidatedWorkbenchService`
-before calling `agent_service.run()`. `"document_retrieval"` is the only registered tool
-name in PR-2.3; the service resolves it to a `ContentRetrieverTool` instance with the
-correct `conversation_id`.
+### Step 5: Wire `EmbeddingService` in `consolidated_service.py`
 
 ```python
-# In ConsolidatedWorkflowRequest
-active_tools: List[str] = Field(default_factory=list)
-# e.g. ["document_retrieval"] when a file was processed this turn
+from .embedding_service import EmbeddingService
+
+# Module-level singleton — lazy, loads model on first embed() call.
+# Warmup call in FastAPI lifespan recommended to avoid cold-start on first request.
+_embedding_service = EmbeddingService()
 ```
 
-```python
-# In ConsolidatedWorkbenchService.execute_workflow() / stream_workflow()
-tools = []
-if "document_retrieval" in request.active_tools:
-    tools.append(ContentRetrieverTool(
-        conversation_id=str(request.conversation_id),
-        embedding_service=self.embedding_service,
-        db=self.db,
-    ))
-response = await self.agent_service.run(messages, task_id, tools=tools)
-```
-
-### Step 9: Wire `EmbeddingService` and `ContentRetrieverTool` in `main.py`
-**File:** `src/agent_workbench/main.py`
+In `initialize()`:
 
 ```python
-from .services.embedding_service import EmbeddingService
-from .services.content_retriever_tool import ContentRetrieverTool
+from .content_retriever_tool import ContentRetrieverTool
 
-embedding_service = EmbeddingService()   # lazy — model loads on first embed()
-
-file_processing_service = FileProcessingService(
-    docling=docling_service,
-    embedding_service=embedding_service,   # added
-    db=state_manager.db,
+retriever = ContentRetrieverTool(
+    session_factory=get_session,
+    model_config=self.default_model_config,
+    embedding_service=_embedding_service,
+)
+self.agent_graph = AgentGraph(
+    self.default_model_config,
+    tools=[retriever],
+    checkpointer=_checkpointer,
 )
 ```
 
-Inject `embedding_service` and `db` into `ConsolidatedWorkbenchService` so it can
-construct `ContentRetrieverTool` on demand.
+### Step 6: Tests
 
-### Step 10: Tests
 **New file:** `tests/unit/services/test_embedding_service.py`
 
-- `EmbeddingService` instantiates without loading model (lazy init)
-- `embed()` returns a list of floats with length 384 (mocked model)
-- `embed_batch()` returns N lists for N inputs
-- `cosine_similarity()` returns 1.0 for identical vectors
-- `cosine_similarity()` returns 0.0 for orthogonal vectors
+- `EmbeddingService` instantiates without loading model (lazy init — `_model is None`)
+- `embed()` returns `list[float]` of length 384 (mocked `SentenceTransformer`)
+- `embed_batch()` returns N lists for N texts
+- `cosine_similarity()` returns `[1.0]` for identical vectors (within float tolerance)
+- `cosine_similarity()` returns `[0.0]` for orthogonal vectors
 
-**New file:** `tests/unit/services/test_content_retriever_tool.py`
+**New file:** `tests/unit/services/test_document_context_graph.py`
 
-- `_run()` returns "No documents" message when DB returns empty list
-- `_run()` calls `embedding_service.embed()` with the query string
-- `_run()` returns chunks sorted by document order (not similarity rank)
-- `_run()` selects only chunks within cumulative threshold
-- `_run()` does not exceed `_MAX_CHUNKS` limit
-- `arun()` returns same result as `_run()`
+- `load_chunks_node` skipped when `chunks` already in state
+- `embed_chunks_node` skipped when `chunk_embeddings` already in state (multi-turn cache hit)
+- `embed_chunks_node` calls `embed_batch()` on first call (cache miss)
+- `retrieve_node` returns "No documents" when chunks empty
+- `retrieve_node` respects `_RETRIEVAL_TOKEN_BUDGET`
+- `retrieve_node` restores document order after ranking by score
+- `ainvoke` returns `str`
 
-**Update:** `tests/unit/services/test_agent_service.py`
+**Update:** `tests/unit/services/test_content_retriever_tool.py`
 
-- `run()` accepts `tools=[]` without error (no regression)
-- `run()` passes tools to `create_agent` (mocked)
-- `astream()` accepts `tools=[mock_tool]` and yields events as before
-
-**Update:** `tests/unit/services/test_consolidated_service.py`
-
-- `ConsolidatedWorkflowRequest` accepts `active_tools=["document_retrieval"]`
-- `active_tools=[]` behaves identically to current (no regression)
+- Replace TF-IDF tests with subgraph delegation tests:
+  - `test_arun_delegates_to_doc_graph` — mock `_doc_graph.ainvoke`, assert called with query + conversation_id
+  - `test_arun_no_conversation_id_returns_message` — unchanged
+  - Remove `test_tfidf_*` tests
 
 ---
 
@@ -466,48 +468,47 @@ construct `ContentRetrieverTool` on demand.
 | File | Change |
 |---|---|
 | `pyproject.toml` | Add `sentence-transformers>=3.0.0` |
-| `alembic/versions/xxxx_add_embedding_to_chunks.py` | **NEW** — `embedding` column on `document_chunks` |
-| `src/agent_workbench/models/database.py` | Add `embedding` to `DocumentChunkModel` |
-| `src/agent_workbench/database/protocol.py` | Add `get_document_chunks_with_embeddings()` |
-| `src/agent_workbench/database/backends/sqlite.py` | Implement `get_document_chunks_with_embeddings()` |
-| `src/agent_workbench/database/backends/hub.py` | Stub `get_document_chunks_with_embeddings()` |
 | `src/agent_workbench/services/embedding_service.py` | **NEW** — `EmbeddingService` |
-| `src/agent_workbench/services/file_processing_service.py` | Add embedding generation; update truncation suffix |
-| `src/agent_workbench/services/docling_service.py` | Update truncation suffix text |
-| `src/agent_workbench/services/content_retriever_tool.py` | **NEW** — `ContentRetrieverTool` |
-| `src/agent_workbench/services/agent_service.py` | `run()` / `astream()` accept `tools` parameter |
-| `src/agent_workbench/models/consolidated_state.py` | Add `active_tools: List[str]` to request |
-| `src/agent_workbench/services/consolidated_service.py` | Instantiate + pass tool when `"document_retrieval"` in `active_tools` |
-| `src/agent_workbench/main.py` | Instantiate `EmbeddingService`; inject into services |
-| `src/agent_workbench/ui/pages/chat.py` | Set `active_tools=["document_retrieval"]` when file was processed |
+| `src/agent_workbench/services/document_context_graph.py` | **NEW** — `DocumentContextGraph` subgraph |
+| `src/agent_workbench/services/content_retriever_tool.py` | Remove `_tfidf_select`; rewrite `_arun` + `__init__` to use `DocumentContextGraph` |
+| `src/agent_workbench/services/consolidated_service.py` | Add `_embedding_service` singleton; pass to `ContentRetrieverTool` |
 | `tests/unit/services/test_embedding_service.py` | **NEW** |
-| `tests/unit/services/test_content_retriever_tool.py` | **NEW** |
+| `tests/unit/services/test_document_context_graph.py` | **NEW** |
+| `tests/unit/services/test_content_retriever_tool.py` | Replace TF-IDF tests with subgraph delegation tests |
+
+No DB migrations. No changes to `AgentGraph`, `database.py`, or DB backends.
+
+---
+
+## Deferred
+
+| Item | Where |
+|---|---|
+| Persist `chunk_embeddings` to disk with TTL/LRU | PR-2.6a checkpoint policy |
+| Warmup call (`_embedding_service.embed("warmup")`) in FastAPI lifespan | PR-2.6a or ops concern |
+| Swap `all-MiniLM-L6-v2` → `paraphrase-multilingual-MiniLM-L12-v2` for Dutch retrieval tuning | Later, if quality gap observed |
+| Re-ranking (BM25 + vector hybrid) | Phase 3 |
+| Firecrawl / web content retrieval | PR-2.5 |
 
 ---
 
 ## Verification
 
-### Pre-merge checklist
+```bash
+# Unit tests
+make test-unit-only
 
-- [ ] `make pre-commit` passes
-- [ ] `uv run alembic upgrade head` — `embedding` column present in `document_chunks`
-- [ ] `uv run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"` — model downloads cleanly
-- [ ] Existing file upload tests still pass (PR-2.2 path: `active_tools=[]`)
+# Full quality check
+make pre-commit
 
-### Workbench mode
-
-- [ ] `make start-app` — attach a large PDF (> 24k token estimate) → approve → submit
-- [ ] Truncation suffix visible in LLM context (check logs or ask LLM "were you given the full document?")
-- [ ] LLM references the tool to answer a follow-up question about a section not in the initial context
-- [ ] Tool call visible in streaming events (thinking block or log line)
-- [ ] Short PDF (< 24k tokens) → no tool call needed; LLM answers from system message context
-- [ ] Submit without file → `active_tools=[]` → tool not registered → no regression
-
-### SEO Coach mode
-
-- [ ] `APP_MODE=seo_coach make start-app` — attach a product page PDF → submit
-- [ ] Ask "wat staat er op pagina 3?" (what's on page 3?) → LLM calls tool → Dutch response with page 3 content
-- [ ] Tool works correctly in Dutch context (query embedding is language-agnostic; `all-MiniLM-L6-v2` is multilingual-capable for common Western languages)
+# Smoke test
+make start-app
+# 1. Attach a large PDF, approve, ask a question about a section not in the 24k context
+# 2. Agent should call document_retrieval tool (visible in streaming)
+# 3. Turn 2: ask a follow-up — embed_chunks_node should be skipped (check logs)
+# 4. APP_MODE=seo_coach make start-app — Dutch query against English PDF content
+#    should still retrieve the right sections
+```
 
 ---
 
@@ -515,9 +516,8 @@ construct `ContentRetrieverTool` on demand.
 
 | Risk | Mitigation |
 |---|---|
-| `create_agent` reconstructed on every `run()` / `astream()` call (one per turn) — performance | `MemorySaver` is lightweight; `create_agent` is fast to construct. Monitor in prod; cache compiled graph if needed |
-| `all-MiniLM-L6-v2` downloads ~80MB on first use — blocks first request | Warmup in `main.py` startup: call `embedding_service.embed("warmup")` after server starts |
-| Existing `document_chunks` rows from PR-2.2 have `embedding=NULL` — skipped during retrieval | Correct and expected; migration is nullable. Add a one-off backfill script if needed |
-| LangChain `BaseTool` with Pydantic `model_fields` conflicts with instance attributes (`conversation_id`, `embedding_service`, `db`) | Use `model_config = ConfigDict(arbitrary_types_allowed=True)` — already shown in Step 6 |
-| `_THRESHOLD = 0.2` may select too few or too many chunks depending on document structure | Tunable constant; expose as config param if retrieval quality is poor in practice |
-| `all-MiniLM-L6-v2` quality on Dutch text | Model is multilingual (trained on 50+ languages). Acceptable for PR-2.3; swap to `paraphrase-multilingual-MiniLM-L12-v2` if Dutch retrieval quality is poor |
+| `all-MiniLM-L6-v2` downloads ~80MB on first use — blocks first tool call | Warmup call in lifespan (deferred to PR-2.6a; acceptable for now) |
+| `embed_batch()` is CPU-bound — blocks async event loop | Wrapped in `asyncio.to_thread()` in `embed_chunks_node` |
+| `MemorySaver` grows unbounded with conversations | Checkpoint policy (TTL/LRU) deferred to PR-2.6a; acceptable for dev/staging |
+| `all-MiniLM-L6-v2` quality on Dutch text | Multilingual-capable; monitor in SEO Coach mode |
+| `chunk_embeddings` lost on restart — first post-restart call re-embeds | Expected and acceptable; no data loss, just latency |
