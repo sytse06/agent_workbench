@@ -96,13 +96,22 @@ functionality and would delay the core agent work.
   - Deferred: `@task` for `llm_node` — zero benefit until tool loops exist (PR-2.4+); tools aren't serializable so `@task` can't bind tools anyway
   - Deferred: `FileProcessingService` in `@task` — not inside a graph context; needs `@entrypoint` restructuring
   - Deferred: `LangGraphStateBridge` simplification — PR-2.6a design concern (checkpointer + UI history coexist)
-- [ ] Phase 2.4: ContentRetriever Tool (formerly PR-2.3)
+- [x] Phase 2.4: ContentRetriever Tool (PR-24)
   - `ContentRetrieverTool` as first `BaseTool` wired through `AgentGraph`
-  - Embeddings, semantic search, `document_retrieval` tool
-  - Decide: keep `AgentGraph` compile-once singleton or compile-per-tool-set
-    (`ToolNode` requires tools at build time, not via `context_schema`)
-- [ ] Phase 2.5: Firecrawl MCP Tool
-  - Web content retrieval as agent tool
+  - `AgentGraph` compile-once singleton; tools fixed at build time via `tools: list` param
+  - `DocumentContextGraph` inner subgraph: load_chunks → embed_chunks → retrieve → synthesize
+  - `EmbeddingService` lazy-loads `all-MiniLM-L6-v2`; multi-turn cache via module-level dicts
+  - Multi-turn bug fixed: `conversation_id` round-tripped through Gradio `additional_outputs`
+  - NOTE: embedding + cosine selection logic is inline in `DocumentContextGraph` —
+    to be extracted into shared `SemanticRetriever` in PR-2.5a
+- [ ] Phase 2.5: WebResearch Skills (PR-25) — see `docs/project/PR-25-webresearch-skills.md`
+  - Hierarchical skill routing: one domain tool → subgraph selects skill from `SKILLS.md` catalog
+  - PR-2.5a: Extract `SemanticRetriever` from `DocumentContextGraph` (shared retrieval pipeline)
+    — refactors ContentRetrieverTool to use it; no behavior change, proven before new code added
+  - PR-2.5b: `SkillLoader` + `WebResearchGraph` skeleton (execute_node stubbed, SemanticRetriever wired)
+  - PR-2.5c: `FirecrawlClient` (httpx, direct REST API) + wire into `consolidated_service`
+  - Multi-turn web cache: `_web_chunk_cache` / `_web_embedding_cache` by (conv_id, url)
+  - Graceful degradation: no `FIRECRAWL_API_KEY` → web_research tool disabled, app still works
 - [ ] Phase 2.6a: Thread Management (PR-26a)
   - **Requires PR-2.3c** (checkpointer prerequisite)
   - Summarization node: replaces oldest messages with a summary when context window pressure detected
