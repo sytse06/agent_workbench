@@ -24,6 +24,7 @@ class AgentResponse(BaseModel):
     status: str = "success"
     reasoning: Optional[str] = None
     task_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
 
 def _split_think_tags(text: str, in_think: bool) -> tuple[List[tuple[str, str]], bool]:

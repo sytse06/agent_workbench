@@ -38,6 +38,12 @@ logger = logging.getLogger(__name__)
 _checkpointer: BaseCheckpointSaver = MemorySaver()
 _checkpointer_conn: Optional[aiosqlite.Connection] = None
 
+# Module-level EmbeddingService singleton. Lazy-loads all-MiniLM-L6-v2 (~80MB)
+# on first embed() call. Shared across all requests — stateless after init.
+from .embedding_service import EmbeddingService  # noqa: E402
+
+_embedding_service: EmbeddingService = EmbeddingService()
+
 
 async def init_checkpointer(
     db_path: str = "data/langgraph_checkpoints.db",
@@ -117,9 +123,18 @@ class ConsolidatedWorkbenchService:
         self.context_service = ContextService()
 
         # Agent + LangGraph service
+        from .content_retriever_tool import ContentRetrieverTool
+
+        retriever = ContentRetrieverTool(
+            session_factory=get_session,
+            model_config=self.default_model_config,
+            embedding_service=_embedding_service,
+        )
         self.agent_service = AgentService(self.default_model_config)
         self.agent_graph = AgentGraph(
-            self.default_model_config, checkpointer=_checkpointer
+            self.default_model_config,
+            tools=[retriever],
+            checkpointer=_checkpointer,
         )
         self.state_bridge = LangGraphStateBridge(
             self.state_manager, self.context_service
@@ -399,7 +414,6 @@ class ConsolidatedWorkbenchService:
         if self.agent_graph is not None:
             async for chunk in self.agent_graph.astream(
                 agent_messages,
-                tools=[],
                 model_config=seo_model_config,
                 thread_id=thread_id,
             ):
@@ -455,6 +469,7 @@ class ConsolidatedWorkbenchService:
                 message=answer_acc,
                 reasoning=thinking_acc or None,
                 task_id=None,
+                conversation_id=str(conversation_id) if conversation_id else None,
             ),
         }
         final_response_text = answer_acc

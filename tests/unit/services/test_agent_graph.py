@@ -64,9 +64,9 @@ def test_context_uses_stored_model_config():
     config = _make_config()
     with patch("agent_workbench.services.agent_graph.provider_registry"):
         graph = AgentGraph(config)
-    ctx = graph._context(tools=[])
+    ctx = graph._context()
     assert ctx["model_config"] is config
-    assert ctx["tools"] == []
+    assert "tools" not in ctx
 
 
 def test_context_accepts_override_model_config():
@@ -74,8 +74,27 @@ def test_context_accepts_override_model_config():
     override_config = ModelConfig(provider="openai", model_name="gpt-4o")
     with patch("agent_workbench.services.agent_graph.provider_registry"):
         graph = AgentGraph(default_config)
-    ctx = graph._context(tools=[], model_config=override_config)
+    ctx = graph._context(model_config=override_config)
     assert ctx["model_config"] is override_config
+
+
+def test_agent_graph_with_tools_adds_tool_node():
+    from langchain_core.tools import tool
+
+    @tool
+    def fake_search(query: str) -> str:
+        """Search tool."""
+        return query
+
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config(), tools=[fake_search])
+    assert "tool_node" in graph._graph.get_graph().nodes
+
+
+def test_agent_graph_without_tools_no_tool_node():
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config())
+    assert "tool_node" not in graph._graph.get_graph().nodes
 
 
 # --- ainvoke ---
@@ -93,7 +112,7 @@ async def test_ainvoke_returns_final_ai_message():
         mock_compiled.ainvoke = AsyncMock(
             return_value={"messages": [HumanMessage(content="hi"), ai_response]}
         )
-        result = await graph.ainvoke([HumanMessage(content="hi")], tools=[])
+        result = await graph.ainvoke([HumanMessage(content="hi")])
 
     assert result is ai_response
 
@@ -110,9 +129,9 @@ async def test_ainvoke_with_empty_tools_calls_model_without_bind_tools():
         # Invoke directly (graph will call llm_node which calls provider_registry)
         with patch.object(graph, "_graph") as mock_compiled:
             mock_compiled.ainvoke = AsyncMock(return_value={"messages": [ai_response]})
-            await graph.ainvoke([HumanMessage(content="hi")], tools=[])
+            await graph.ainvoke([HumanMessage(content="hi")])
 
-    # bind_tools should NOT be called when tools=[]
+    # bind_tools should NOT be called when no tools at build time
     mock_model.bind_tools.assert_not_called()
 
 
@@ -124,9 +143,7 @@ async def test_ainvoke_passes_model_config_override():
         with patch.object(graph, "_graph") as mock_compiled:
             ai_msg = AIMessage(content="ok")
             mock_compiled.ainvoke = AsyncMock(return_value={"messages": [ai_msg]})
-            await graph.ainvoke(
-                [HumanMessage(content="hi")], tools=[], model_config=override
-            )
+            await graph.ainvoke([HumanMessage(content="hi")], model_config=override)
         call_kwargs = mock_compiled.ainvoke.call_args
         ctx = call_kwargs[1]["context"]
         assert ctx["model_config"] is override
@@ -139,9 +156,7 @@ async def test_ainvoke_passes_thread_id_in_config():
         with patch.object(graph, "_graph") as mock_compiled:
             ai_msg = AIMessage(content="ok")
             mock_compiled.ainvoke = AsyncMock(return_value={"messages": [ai_msg]})
-            await graph.ainvoke(
-                [HumanMessage(content="hi")], tools=[], thread_id="conv-123"
-            )
+            await graph.ainvoke([HumanMessage(content="hi")], thread_id="conv-123")
         call_kwargs = mock_compiled.ainvoke.call_args
         cfg = call_kwargs[1]["config"]
         assert cfg == {"configurable": {"thread_id": "conv-123"}}
@@ -154,7 +169,7 @@ async def test_ainvoke_empty_config_when_no_thread_id():
         with patch.object(graph, "_graph") as mock_compiled:
             ai_msg = AIMessage(content="ok")
             mock_compiled.ainvoke = AsyncMock(return_value={"messages": [ai_msg]})
-            await graph.ainvoke([HumanMessage(content="hi")], tools=[])
+            await graph.ainvoke([HumanMessage(content="hi")])
         call_kwargs = mock_compiled.ainvoke.call_args
         cfg = call_kwargs[1]["config"]
         assert cfg == {}
@@ -186,7 +201,7 @@ async def test_astream_passes_thread_id_in_config():
         yield  # make it an async generator
 
     with patch.object(graph._graph, "astream", fake_stream):
-        async for _ in graph.astream([HumanMessage("hi")], tools=[], thread_id="t-1"):
+        async for _ in graph.astream([HumanMessage("hi")], thread_id="t-1"):
             pass
 
 
@@ -207,7 +222,7 @@ async def test_astream_yields_chunks():
 
     with patch.object(graph._graph, "astream", fake_stream):
         chunks = []
-        async for chunk in graph.astream([HumanMessage("hi")], tools=[]):
+        async for chunk in graph.astream([HumanMessage("hi")]):
             chunks.append(chunk)
 
     assert len(chunks) == 3
