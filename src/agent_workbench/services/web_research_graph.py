@@ -27,6 +27,11 @@ logger = logging.getLogger(__name__)
 
 VALID_SKILLS = {"scrape", "search", "crawl", "extract"}
 
+# Raw content from Firecrawl is trimmed before chunking to prevent oversized inputs.
+# Rough estimate: 4 chars ≈ 1 token.
+_WEB_TOKEN_BUDGET = 12_000
+_WEB_CHAR_BUDGET = _WEB_TOKEN_BUDGET * 4
+
 _WEB_SYNTHESIS_SYSTEM = (
     "You are a precise web research assistant. Answer the query using ONLY "
     "the provided web content. Be concise. Cite sources as [source](url) "
@@ -142,20 +147,20 @@ class WebResearchGraph:
                 return {"chunks": _web_chunk_cache[conv_id][key]}
 
             if firecrawl_client is None:
-                # Stub — replaced by real dispatch in PR-2.5c
                 raw = (
-                    "This is placeholder web content returned by the stubbed "
-                    "execute_node.\n\n"
-                    "In PR-2.5c this will be replaced with real Firecrawl API "
-                    "responses.\n\n"
-                    "The retrieval pipeline (chunking, embedding, cosine "
-                    "selection, synthesis) is fully active and processing this "
-                    "stub content."
+                    "No web content available — FIRECRAWL_API_KEY is not set. "
+                    "The web_research tool requires a Firecrawl API key to fetch "
+                    "live content."
                 )
-                logger.info("WebResearchGraph.execute: using stub content")
+                logger.warning("WebResearchGraph.execute: firecrawl_client is None")
             else:
-                # Real dispatch implemented in PR-2.5c
                 raw = await _dispatch(firecrawl_client, state)
+                if len(raw) > _WEB_CHAR_BUDGET:
+                    raw = raw[:_WEB_CHAR_BUDGET]
+                    logger.info(
+                        "WebResearchGraph.execute: trimmed raw to %d chars",
+                        _WEB_CHAR_BUDGET,
+                    )
 
             chunks = semantic_retriever.chunk_text(raw, filename=key or "web")
             logger.info("WebResearchGraph.execute: chunked into %d chunks", len(chunks))
@@ -246,11 +251,19 @@ class WebResearchGraph:
 
 
 async def _dispatch(firecrawl_client: Any, state: WebResearchState) -> str:
-    """Dispatch to the correct FirecrawlClient method based on matched_skill.
+    """Dispatch to the correct FirecrawlClient method based on matched_skill."""
+    skill = state.get("matched_skill", "search")
+    url = state.get("url") or ""
+    query = state.get("query", "")
 
-    Implemented in PR-2.5c when FirecrawlClient is available.
-    """
-    raise NotImplementedError("FirecrawlClient dispatch implemented in PR-2.5c")
+    if skill == "scrape":
+        return await firecrawl_client.scrape(url or query)
+    if skill == "crawl":
+        return await firecrawl_client.crawl(url or query)
+    if skill == "extract":
+        return await firecrawl_client.extract(url or query, query)
+    # search (default)
+    return await firecrawl_client.search(query)
 
 
 # --- Tool wrapper ---

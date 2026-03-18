@@ -197,6 +197,165 @@ async def test_execute_node_cache_hit_skips_stub():
     assert isinstance(result, str)
 
 
+# --- _dispatch skill routing ---
+
+
+@pytest.mark.asyncio
+async def test_dispatch_scrape_calls_scrape() -> None:
+    from agent_workbench.services.web_research_graph import _dispatch
+
+    client = MagicMock()
+    client.scrape = AsyncMock(return_value="scraped content")
+    state = {"matched_skill": "scrape", "url": "https://example.com", "query": "q"}
+    result = await _dispatch(client, state)
+    client.scrape.assert_called_once_with("https://example.com")
+    assert result == "scraped content"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_search_calls_search() -> None:
+    from agent_workbench.services.web_research_graph import _dispatch
+
+    client = MagicMock()
+    client.search = AsyncMock(return_value="search results")
+    state = {"matched_skill": "search", "url": None, "query": "langgraph tutorial"}
+    result = await _dispatch(client, state)
+    client.search.assert_called_once_with("langgraph tutorial")
+    assert result == "search results"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_crawl_calls_crawl() -> None:
+    from agent_workbench.services.web_research_graph import _dispatch
+
+    client = MagicMock()
+    client.crawl = AsyncMock(return_value="crawled pages")
+    state = {"matched_skill": "crawl", "url": "https://docs.example.com", "query": "q"}
+    result = await _dispatch(client, state)
+    client.crawl.assert_called_once_with("https://docs.example.com")
+    assert result == "crawled pages"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_extract_calls_extract_with_query_as_prompt() -> None:
+    from agent_workbench.services.web_research_graph import _dispatch
+
+    client = MagicMock()
+    client.extract = AsyncMock(return_value="price: $9.99")
+    state = {
+        "matched_skill": "extract",
+        "url": "https://shop.com",
+        "query": "extract product price",
+    }
+    result = await _dispatch(client, state)
+    client.extract.assert_called_once_with("https://shop.com", "extract product price")
+    assert result == "price: $9.99"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_defaults_to_search_for_unknown_skill() -> None:
+    from agent_workbench.services.web_research_graph import _dispatch
+
+    client = MagicMock()
+    client.search = AsyncMock(return_value="results")
+    state = {"matched_skill": "unknown", "url": None, "query": "my query"}
+    result = await _dispatch(client, state)
+    client.search.assert_called_once_with("my query")
+    assert result == "results"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_scrape_falls_back_to_query_when_no_url() -> None:
+    from agent_workbench.services.web_research_graph import _dispatch
+
+    client = MagicMock()
+    client.scrape = AsyncMock(return_value="content")
+    state = {"matched_skill": "scrape", "url": None, "query": "fallback query"}
+    await _dispatch(client, state)
+    client.scrape.assert_called_once_with("fallback query")
+
+
+# --- token budget trimming ---
+
+
+@pytest.mark.asyncio
+async def test_execute_node_trims_large_content() -> None:
+    """Raw content exceeding budget is trimmed before chunking."""
+    from agent_workbench.services.web_research_graph import _WEB_CHAR_BUDGET
+
+    conv_id = "conv-trim-test"
+    _web_chunk_cache.pop(conv_id, None)
+    _web_embedding_cache.pop(conv_id, None)
+
+    oversized_content = "x" * (_WEB_CHAR_BUDGET + 10_000)
+    mock_firecrawl = MagicMock()
+    mock_firecrawl.search = AsyncMock(return_value=oversized_content)
+
+    chunked_texts: list = []
+
+    with patch(
+        "agent_workbench.services.web_research_graph.provider_registry"
+    ) as mock_reg:
+        mock_model = MagicMock()
+        mock_model.ainvoke = AsyncMock(return_value=MagicMock(content="search"))
+        mock_reg.create_model.return_value = mock_model
+
+        retriever = _make_retriever()
+        original_chunk = retriever.chunk_text
+
+        def capturing_chunk(text: str, filename: str) -> list:
+            chunked_texts.append(text)
+            return original_chunk(text, filename)
+
+        retriever.chunk_text = capturing_chunk  # type: ignore[method-assign]
+
+        graph = WebResearchGraph(
+            skills_catalog=_SKILLS_CATALOG,
+            semantic_retriever=retriever,
+            model_config=_make_model_config(),
+            firecrawl_client=mock_firecrawl,
+        )
+        await graph.ainvoke("some query", conv_id)
+
+    _web_chunk_cache.pop(conv_id, None)
+    _web_embedding_cache.pop(conv_id, None)
+
+    assert len(chunked_texts) > 0
+    assert len(chunked_texts[0]) <= _WEB_CHAR_BUDGET
+
+
+# --- no api key graceful degradation ---
+
+
+@pytest.mark.asyncio
+async def test_execute_node_no_firecrawl_returns_answer_string() -> None:
+    """With no firecrawl_client, ainvoke still returns a string (not an error)."""
+    conv_id = "conv-no-key-test"
+    _web_chunk_cache.pop(conv_id, None)
+    _web_embedding_cache.pop(conv_id, None)
+
+    with patch(
+        "agent_workbench.services.web_research_graph.provider_registry"
+    ) as mock_reg:
+        mock_model = MagicMock()
+        mock_model.ainvoke = AsyncMock(return_value=MagicMock(content="search"))
+        mock_reg.create_model.return_value = mock_model
+
+        graph = WebResearchGraph(
+            skills_catalog=_SKILLS_CATALOG,
+            semantic_retriever=_make_retriever(),
+            model_config=_make_model_config(),
+            firecrawl_client=None,
+        )
+        result = await graph.ainvoke("what is langgraph?", conv_id)
+
+    _web_chunk_cache.pop(conv_id, None)
+    _web_embedding_cache.pop(conv_id, None)
+
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
 @pytest.mark.asyncio
 async def test_execute_node_cache_miss_stores_chunks():
     """Cache miss: stub content is chunked and stored in _web_chunk_cache."""
