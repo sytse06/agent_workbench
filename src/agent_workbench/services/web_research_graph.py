@@ -298,7 +298,7 @@ class WebResearchTool(BaseTool):
         self,
         query: str,
         url: Optional[str] = None,
-        config: Optional[RunnableConfig] = None,
+        config: RunnableConfig = None,  # type: ignore[assignment]  # bare type required for config injection
         **kwargs: Any,
     ) -> str:
         conversation_id = (config or {}).get("configurable", {}).get("thread_id", "")

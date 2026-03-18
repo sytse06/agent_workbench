@@ -189,18 +189,15 @@ class TestConsolidatedWorkbenchService:
         """
         await service.initialize(mock_db_session)
 
-        # Patch agent_graph.astream_events to yield a model stream event + implicit done
+        # Patch agent_graph.astream to yield a messages chunk
         from langchain_core.messages import AIMessageChunk
 
         chunk = AIMessageChunk(content="Hello")
 
-        async def fake_astream_events(*args, **kwargs):
-            yield {
-                "event": "on_chat_model_stream",
-                "data": {"chunk": chunk},
-            }
+        async def fake_astream(*args, **kwargs):
+            yield {"type": "messages", "data": (chunk, {})}
 
-        service.agent_graph.astream_events = fake_astream_events
+        service.agent_graph.astream = fake_astream
         service.mode_detector.get_effective_mode = AsyncMock(return_value="workbench")
         service._create_conversation = AsyncMock(
             return_value=sample_workbench_state["conversation_id"]
