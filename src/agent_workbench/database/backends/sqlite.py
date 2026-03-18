@@ -6,7 +6,7 @@ using SQLAlchemy ORM with async/await support.
 
 import asyncio
 import concurrent.futures
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 from uuid import UUID
 
@@ -586,7 +586,7 @@ class SQLiteBackend:
             if not user:
                 return False
 
-            await user.update(session, last_login=datetime.utcnow())
+            await user.update(session, last_login=datetime.now(timezone.utc))
             return True
 
         raise RuntimeError("No database session available")
@@ -696,7 +696,7 @@ class SQLiteBackend:
             if not user_session:
                 return False
 
-            await user_session.update(session, last_activity=datetime.utcnow())
+            await user_session.update(session, last_activity=datetime.now(timezone.utc))
             return True
 
         raise RuntimeError("No database session available")
@@ -780,7 +780,7 @@ class SQLiteBackend:
             if not user_session:
                 return False
 
-            await user_session.update(session, session_end=datetime.utcnow())
+            await user_session.update(session, session_end=datetime.now(timezone.utc))
             return True
 
         raise RuntimeError("No database session available")

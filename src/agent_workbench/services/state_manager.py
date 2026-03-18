@@ -1,6 +1,6 @@
 """State manager for conversation state persistence and lifecycle."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -64,7 +64,7 @@ class StateManager:
                     context_data=state_db.context_data or {},
                     active_contexts=state_db.active_contexts or [],
                     metadata=state_db.state_data.get("metadata", {}),
-                    updated_at=state_db.updated_at or datetime.utcnow(),
+                    updated_at=state_db.updated_at or datetime.now(timezone.utc),
                 )
             else:
                 # Create new state for conversation
@@ -80,7 +80,7 @@ class StateManager:
                     context_data={},
                     active_contexts=[],
                     metadata={},
-                    updated_at=datetime.utcnow(),
+                    updated_at=datetime.now(timezone.utc),
                 )
 
             return state
@@ -121,7 +121,7 @@ class StateManager:
                 state_db.state_data = state_data
                 state_db.context_data = state.context_data
                 state_db.active_contexts = state.active_contexts
-                state_db.updated_at = datetime.utcnow()
+                state_db.updated_at = datetime.now(timezone.utc)
             else:
                 # Create new state record
                 state_db = ConversationStateDB(
@@ -129,7 +129,7 @@ class StateManager:
                     state_data=state_data,
                     context_data=state.context_data,
                     active_contexts=state.active_contexts,
-                    updated_at=datetime.utcnow(),
+                    updated_at=datetime.now(timezone.utc),
                 )
                 self.db_session.add(state_db)
 
@@ -175,9 +175,9 @@ class StateManager:
                 active_contexts=[],
                 metadata={
                     "is_temporary": is_temporary,
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
                 },
-                updated_at=datetime.utcnow(),
+                updated_at=datetime.now(timezone.utc),
             )
 
             # Save initial state
@@ -329,9 +329,9 @@ class StateManager:
                 active_contexts=[],
                 metadata={
                     "migrated": True,
-                    "migrated_at": datetime.utcnow().isoformat(),
+                    "migrated_at": datetime.now(timezone.utc).isoformat(),
                 },
-                updated_at=datetime.utcnow(),
+                updated_at=datetime.now(timezone.utc),
             )
 
             # Save migrated state

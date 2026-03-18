@@ -3,7 +3,7 @@
 Tests authentication service methods in isolation with mocked dependencies.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -99,7 +99,7 @@ async def test_get_or_create_user_returns_existing_user(auth_service, mock_db):
         "username": "existinguser",
         "email": "existing@example.com",
         "auth_provider": "huggingface",
-        "last_login": datetime.utcnow(),
+        "last_login": datetime.now(timezone.utc),
         "is_active": True,
     }
     mock_db.get_user_by_username.return_value = existing_user
@@ -142,8 +142,8 @@ async def test_create_session_success(auth_service, mock_db):
     mock_db.get_active_user_session.return_value = {
         "id": session_id,
         "user_id": user_id,
-        "session_start": datetime.utcnow(),
-        "last_activity": datetime.utcnow(),
+        "session_start": datetime.now(timezone.utc),
+        "last_activity": datetime.now(timezone.utc),
         "total_messages": 0,
         "total_tool_calls": 0,
     }
@@ -177,7 +177,7 @@ async def test_get_active_session_found(auth_service, mock_db):
     mock_db.get_active_user_session.return_value = {
         "id": session_id,
         "user_id": user_id,
-        "last_activity": datetime.utcnow(),
+        "last_activity": datetime.now(timezone.utc),
     }
 
     # Get active session
@@ -193,7 +193,7 @@ async def test_get_active_session_found(auth_service, mock_db):
     assert call_args[0] == user_id
     # Verify `since` parameter is approximately 30 minutes ago
     since_param = call_args[1]
-    expected_since = datetime.utcnow() - timedelta(minutes=30)
+    expected_since = datetime.now(timezone.utc) - timedelta(minutes=30)
     assert abs((since_param - expected_since).total_seconds()) < 5
 
 

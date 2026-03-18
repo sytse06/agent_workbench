@@ -76,6 +76,9 @@ show_error_codes = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "unit: marks tests as unit tests (no backend required)",
+]
 
 [dependency-groups]
 dev = [

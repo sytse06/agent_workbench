@@ -5,7 +5,7 @@ for use in HuggingFace Spaces deployment where SQLite persistence is not availab
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -253,8 +253,8 @@ class HubBackend:
                 "avatar_url": avatar_url,
                 "auth_provider": auth_provider,
                 "provider_data": provider_data or {},
-                "created_at": datetime.utcnow().isoformat(),
-                "last_login": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "last_login": datetime.now(timezone.utc).isoformat(),
                 "is_active": True,
             }
 
@@ -282,7 +282,7 @@ class HubBackend:
             if not user:
                 return False
 
-            user["last_login"] = datetime.utcnow().isoformat()
+            user["last_login"] = datetime.now(timezone.utc).isoformat()
 
             # Update all user keys
             self.hub_db.set_value(f"user_id_{user_id}", user, table="users")
@@ -348,9 +348,9 @@ class HubBackend:
             session_data = {
                 "id": session_id,
                 "user_id": user_id,
-                "session_start": datetime.utcnow().isoformat(),
+                "session_start": datetime.now(timezone.utc).isoformat(),
                 "session_end": None,
-                "last_activity": datetime.utcnow().isoformat(),
+                "last_activity": datetime.now(timezone.utc).isoformat(),
                 "ip_address": ip_address,
                 "user_agent": user_agent,
                 "referrer": referrer,
@@ -400,7 +400,7 @@ class HubBackend:
             if not session:
                 return False
 
-            session["last_activity"] = datetime.utcnow().isoformat()
+            session["last_activity"] = datetime.now(timezone.utc).isoformat()
             self.hub_db.set_value(f"session_{session_id}", session, table="sessions")
 
             # Update active_session mapping
@@ -457,7 +457,7 @@ class HubBackend:
                 "id": activity_id,
                 "session_id": session_id,
                 "user_id": user_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "action": action,
                 "metadata": metadata or {},
             }
@@ -477,7 +477,7 @@ class HubBackend:
             if not session:
                 return False
 
-            session["session_end"] = datetime.utcnow().isoformat()
+            session["session_end"] = datetime.now(timezone.utc).isoformat()
             self.hub_db.set_value(f"session_{session_id}", session, table="sessions")
 
             # Remove from active_session mapping
@@ -552,7 +552,7 @@ class HubBackend:
                 "setting_type": setting_type,
                 "category": category,
                 "description": description,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
 
             self.hub_db.set_value(
@@ -587,7 +587,7 @@ class HubBackend:
                 return False
 
             setting["setting_value"] = setting_value
-            setting["updated_at"] = datetime.utcnow().isoformat()
+            setting["updated_at"] = datetime.now(timezone.utc).isoformat()
 
             self.hub_db.set_value(
                 f"setting_{user_id}_{setting_key}", setting, table="settings"

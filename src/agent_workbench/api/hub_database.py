@@ -8,7 +8,7 @@ solving the persistence problem in HuggingFace Spaces deployment.
 import json
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -84,7 +84,7 @@ class HubDatabase:
 
         # Add standard fields
         conversation_id = conversation_data.get("id", str(uuid.uuid4()))
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         new_row = {
             "id": conversation_id,
@@ -156,7 +156,7 @@ class HubDatabase:
         df = self._get_table("business_profiles")
 
         profile_id = profile_data.get("id", str(uuid.uuid4()))
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         new_row = {
             "id": profile_id,
@@ -203,7 +203,7 @@ class HubDatabase:
     def set_value(self, key: str, value: Any, table: str = "key_value"):
         """Set a key-value pair."""
         df = self._get_table(table)
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         new_row = {
             "id": key,
