@@ -1,6 +1,6 @@
 """Standard message format for state management."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 from uuid import UUID
 
@@ -51,7 +51,7 @@ class StandardMessage(BaseModel):
         description="ID of the tool call this message is responding to",
     )
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="Message timestamp",
     )
     metadata: Optional[Dict[str, Any]] = Field(

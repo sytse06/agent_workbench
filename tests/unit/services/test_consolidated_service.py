@@ -176,10 +176,17 @@ class TestConsolidatedWorkbenchService:
             or "Workflow failed" in response.assistant_response
         )
 
+    @pytest.mark.filterwarnings("ignore::RuntimeWarning")
     async def test_stream_workflow(
         self, service, mock_db_session, sample_request, sample_workbench_state
     ):
-        """Test streaming workflow yields events."""
+        """Test streaming workflow yields events.
+
+        RuntimeWarning suppressed: state_bridge.load_into_langgraph_state and
+        save_turn are dual-persistence holdovers from Phase 1 that will be
+        removed when LangGraph middleware becomes the sole persistence layer.
+        At that point stream_workflow shrinks and these tests get rewritten.
+        """
         await service.initialize(mock_db_session)
 
         # Patch agent_graph.astream_events to yield a model stream event + implicit done
