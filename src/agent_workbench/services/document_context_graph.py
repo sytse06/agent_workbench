@@ -8,7 +8,6 @@ re-embedded (~50ms vs. full batch).
 Checkpoint policy (whether to persist caches across restarts) is deferred to PR-2.6a.
 """
 
-import asyncio
 import logging
 from typing import Callable
 
@@ -18,13 +17,12 @@ from typing_extensions import TypedDict
 
 from ..models.schemas import ModelConfig
 from .content_retriever_tool import (
-    _RETRIEVAL_TOKEN_BUDGET,
     _SYNTHESIS_SYSTEM,
     DocumentRetrievalContext,
     RetrievedChunk,
 )
-from .embedding_service import EmbeddingService
 from .providers import provider_registry
+from .semantic_retriever import SemanticRetriever
 
 logger = logging.getLogger(__name__)
 
@@ -53,17 +51,17 @@ class DocumentContextGraph:
     def __init__(
         self,
         session_factory: Callable,
-        embedding_service: EmbeddingService,
+        semantic_retriever: SemanticRetriever,
         model_config: ModelConfig,
     ) -> None:
         self._session_factory = session_factory
-        self._embedding_service = embedding_service
+        self._semantic_retriever = semantic_retriever
         self._model_config = model_config
         self._graph: CompiledStateGraph = self._build()
 
     def _build(self) -> CompiledStateGraph:
         session_factory = self._session_factory
-        embedding_service = self._embedding_service
+        semantic_retriever = self._semantic_retriever
         model_config = self._model_config
 
         async def load_chunks_node(state: DocumentContextState) -> dict:
@@ -109,8 +107,7 @@ class DocumentContextGraph:
             )
             if not chunks:
                 return {"chunk_embeddings": []}
-            texts = [c.content for c in chunks]
-            embeddings = await asyncio.to_thread(embedding_service.embed_batch, texts)
+            embeddings = await semantic_retriever.embed_chunks(chunks)
             logger.info(
                 "DocumentContextGraph.embed_chunks: stored %d embeddings",
                 len(embeddings),
@@ -131,29 +128,14 @@ class DocumentContextGraph:
                     "answer": "No documents have been attached to this conversation."
                 }
 
-            query_vec = await asyncio.to_thread(embedding_service.embed, state["query"])
-            scores = embedding_service.cosine_similarity(query_vec, embeddings)
-
-            # Rank by score; select within token budget
-            scored = sorted(zip(scores, chunks), key=lambda x: x[0], reverse=True)
-            selected, used = [], 0
-            for score, chunk in scored:
-                if used + chunk.token_count > _RETRIEVAL_TOKEN_BUDGET:
-                    continue
-                chunk.score = score
-                selected.append(chunk)
-                used += chunk.token_count
-            if not selected:
-                selected = [c for _, c in scored[:5]]  # fallback: top-5 by score
-
-            # Restore document order for coherent synthesis
-            selected.sort(key=lambda c: c.chunk_index)
+            query_vec = await semantic_retriever.embed_query(state["query"])
+            selected = semantic_retriever.select(query_vec, chunks, embeddings)
 
             ctx = DocumentRetrievalContext(
                 query=state["query"],
                 conversation_id=state["conversation_id"],
                 chunks=selected,
-                total_tokens=used,
+                total_tokens=sum(c.token_count for c in selected),
             )
             answer = await _synthesize(ctx, model_config)
             return {"answer": answer}

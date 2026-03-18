@@ -38,11 +38,13 @@ logger = logging.getLogger(__name__)
 _checkpointer: BaseCheckpointSaver = MemorySaver()
 _checkpointer_conn: Optional[aiosqlite.Connection] = None
 
-# Module-level EmbeddingService singleton. Lazy-loads all-MiniLM-L6-v2 (~80MB)
-# on first embed() call. Shared across all requests — stateless after init.
+# Module-level singletons. EmbeddingService lazy-loads all-MiniLM-L6-v2 (~80MB)
+# on first embed() call. SemanticRetriever wraps it — shared by all retrieval subgraphs.
 from .embedding_service import EmbeddingService  # noqa: E402
+from .semantic_retriever import SemanticRetriever  # noqa: E402
 
 _embedding_service: EmbeddingService = EmbeddingService()
+_semantic_retriever: SemanticRetriever = SemanticRetriever(_embedding_service)
 
 
 async def init_checkpointer(
@@ -128,7 +130,7 @@ class ConsolidatedWorkbenchService:
         retriever = ContentRetrieverTool(
             session_factory=get_session,
             model_config=self.default_model_config,
-            embedding_service=_embedding_service,
+            semantic_retriever=_semantic_retriever,
         )
         self.agent_service = AgentService(self.default_model_config)
         self.agent_graph = AgentGraph(

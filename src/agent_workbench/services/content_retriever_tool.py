@@ -11,7 +11,6 @@ from ..models.schemas import ModelConfig
 
 logger = logging.getLogger(__name__)
 
-_RETRIEVAL_TOKEN_BUDGET = 16_000
 _SYNTHESIS_SYSTEM = (
     "You are a precise document assistant. Answer the query using ONLY the "
     "provided document excerpts. Be concise. After each claim, add a citation "
@@ -60,7 +59,7 @@ class ContentRetrieverTool(BaseTool):
         self,
         session_factory: Callable,
         model_config: ModelConfig,
-        embedding_service: Any,  # EmbeddingService — Any avoids circular import
+        semantic_retriever: Any,  # SemanticRetriever — Any avoids circular import
         **data: Any,
     ):
         super().__init__(**data)
@@ -70,7 +69,7 @@ class ContentRetrieverTool(BaseTool):
 
         doc_graph = DocumentContextGraph(
             session_factory=session_factory,
-            embedding_service=embedding_service,
+            semantic_retriever=semantic_retriever,
             model_config=model_config,
         )
         object.__setattr__(self, "_doc_graph", doc_graph)
