@@ -142,7 +142,24 @@ def _build_domain_tool(
     semantic_retriever: SemanticRetriever,
     firecrawl_client: Optional[Any],
 ) -> Optional[Any]:
+    if defn.name == "document_retrieval":
+        from ..api.database import get_session
+        from .content_retriever_tool import ContentRetrieverTool
+
+        return ContentRetrieverTool(
+            session_factory=get_session,
+            model_config=model_config,
+            semantic_retriever=semantic_retriever,
+            description=defn.description,
+        )
+
     if defn.name == "web_research":
+        if firecrawl_client is None:
+            logger.info(
+                "SkillLoader: skipping web_research — firecrawl_client not provided"
+            )
+            return None
+
         from .web_research_graph import WebResearchGraph, WebResearchTool
 
         graph = WebResearchGraph(

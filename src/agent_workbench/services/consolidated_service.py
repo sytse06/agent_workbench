@@ -124,42 +124,30 @@ class ConsolidatedWorkbenchService:
         self.conversation_service = ConversationService()
         self.context_service = ContextService()
 
-        # Agent + LangGraph service
+        # Agent + LangGraph service — all tools built via SkillLoader
         from pathlib import Path
 
-        from .content_retriever_tool import ContentRetrieverTool
         from .firecrawl_client import FirecrawlClient
         from .skill_loader import SkillLoader
-
-        retriever = ContentRetrieverTool(
-            session_factory=get_session,
-            model_config=self.default_model_config,
-            semantic_retriever=_semantic_retriever,
-        )
 
         _skills_root = Path(__file__).parent.parent / "skills"
         _skill_loader = SkillLoader(_skills_root)
         _app_mode = os.getenv("APP_MODE", "workbench")
         _firecrawl_api_key = os.getenv("FIRECRAWL_API_KEY")
-        if _firecrawl_api_key:
-            _firecrawl_client: Optional[FirecrawlClient] = FirecrawlClient(
-                _firecrawl_api_key
-            )
-            web_tools = _skill_loader.build_tools(
-                mode=_app_mode,
-                model_config=self.default_model_config,
-                semantic_retriever=_semantic_retriever,
-                firecrawl_client=_firecrawl_client,
-            )
-            logger.info("Web research tools enabled: %s", [t.name for t in web_tools])
-        else:
-            logger.warning("FIRECRAWL_API_KEY not set — web_research skill disabled")
-            web_tools = []
+        _firecrawl_client: Optional[FirecrawlClient] = (
+            FirecrawlClient(_firecrawl_api_key) if _firecrawl_api_key else None
+        )
+        all_tools = _skill_loader.build_tools(
+            mode=_app_mode,
+            model_config=self.default_model_config,
+            semantic_retriever=_semantic_retriever,
+            firecrawl_client=_firecrawl_client,
+        )
 
         self.agent_service = AgentService(self.default_model_config)
         self.agent_graph = AgentGraph(
             self.default_model_config,
-            tools=[retriever, *web_tools],
+            tools=all_tools,
             checkpointer=_checkpointer,
         )
         self.state_bridge = LangGraphStateBridge(

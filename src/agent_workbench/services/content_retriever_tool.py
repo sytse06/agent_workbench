@@ -44,12 +44,15 @@ class ContentRetrieverInput(BaseModel):
     )
 
 
+_DEFAULT_DESCRIPTION = (
+    "Search and retrieve information from documents attached to this conversation. "
+    "Use when the user asks about content in uploaded files."
+)
+
+
 class ContentRetrieverTool(BaseTool):
     name: str = "document_retrieval"
-    description: str = (
-        "Search and retrieve information from documents attached to this conversation. "
-        "Use when the user asks about content in uploaded files."
-    )
+    description: str = _DEFAULT_DESCRIPTION
     args_schema: Type[BaseModel] = ContentRetrieverInput
 
     # Private — injected at construction
@@ -60,9 +63,10 @@ class ContentRetrieverTool(BaseTool):
         session_factory: Callable,
         model_config: ModelConfig,
         semantic_retriever: Any,  # SemanticRetriever — Any avoids circular import
+        description: str = _DEFAULT_DESCRIPTION,
         **data: Any,
     ):
-        super().__init__(**data)
+        super().__init__(description=description, **data)
         # Lazy import avoids circular dependency: document_context_graph imports
         # RetrievedChunk and DocumentRetrievalContext from this module.
         from .document_context_graph import DocumentContextGraph

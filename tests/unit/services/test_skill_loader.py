@@ -30,6 +30,18 @@ _VALID_SKILLS_MD = textwrap.dedent("""\
     Find information about a topic.
 """)
 
+_DOC_RETRIEVAL_SKILLS_MD = textwrap.dedent("""\
+    ---
+    name: document_retrieval
+    description: "Search and retrieve information from attached documents."
+    ---
+
+    # Document Retrieval Skills
+
+    ## search
+    Find relevant passages from uploaded documents that answer the query.
+""")
+
 
 def _make_retriever() -> SemanticRetriever:
     mock_es = MagicMock(spec=EmbeddingService)
@@ -105,6 +117,7 @@ def test_build_tools_returns_one_tool_for_web_research(tmp_path: Path):
         mode="workbench",
         model_config=_make_model_config(),
         semantic_retriever=_make_retriever(),
+        firecrawl_client=MagicMock(),
     )
     assert len(tools) == 1
     assert tools[0].name == "web_research"
@@ -119,6 +132,7 @@ def test_build_tools_description_comes_from_frontmatter(tmp_path: Path):
         mode="workbench",
         model_config=_make_model_config(),
         semantic_retriever=_make_retriever(),
+        firecrawl_client=MagicMock(),
     )
     assert "Search and retrieve" in tools[0].description
 
@@ -151,6 +165,7 @@ def test_build_tools_mode_specific_overrides_shared(tmp_path: Path):
         mode="workbench",
         model_config=_make_model_config(),
         semantic_retriever=_make_retriever(),
+        firecrawl_client=MagicMock(),
     )
     assert len(tools) == 1
     assert "Mode-specific description" in tools[0].description
@@ -168,3 +183,67 @@ def test_build_tools_unknown_domain_skipped(tmp_path: Path):
         semantic_retriever=_make_retriever(),
     )
     assert tools == []
+
+
+def test_build_tools_web_research_skipped_without_firecrawl_client(tmp_path: Path):
+    (tmp_path / "shared" / "web_research").mkdir(parents=True)
+    (tmp_path / "shared" / "web_research" / "SKILLS.md").write_text(_VALID_SKILLS_MD)
+
+    loader = SkillLoader(tmp_path)
+    tools = loader.build_tools(
+        mode="workbench",
+        model_config=_make_model_config(),
+        semantic_retriever=_make_retriever(),
+        firecrawl_client=None,
+    )
+    assert tools == []
+
+
+def test_build_tools_returns_document_retrieval_tool(tmp_path: Path):
+    (tmp_path / "shared" / "document_retrieval").mkdir(parents=True)
+    (tmp_path / "shared" / "document_retrieval" / "SKILLS.md").write_text(
+        _DOC_RETRIEVAL_SKILLS_MD
+    )
+
+    loader = SkillLoader(tmp_path)
+    tools = loader.build_tools(
+        mode="workbench",
+        model_config=_make_model_config(),
+        semantic_retriever=_make_retriever(),
+    )
+    assert len(tools) == 1
+    assert tools[0].name == "document_retrieval"
+
+
+def test_build_tools_document_retrieval_description_from_frontmatter(tmp_path: Path):
+    (tmp_path / "shared" / "document_retrieval").mkdir(parents=True)
+    (tmp_path / "shared" / "document_retrieval" / "SKILLS.md").write_text(
+        _DOC_RETRIEVAL_SKILLS_MD
+    )
+
+    loader = SkillLoader(tmp_path)
+    tools = loader.build_tools(
+        mode="workbench",
+        model_config=_make_model_config(),
+        semantic_retriever=_make_retriever(),
+    )
+    assert "attached documents" in tools[0].description
+
+
+def test_build_tools_both_domains_when_firecrawl_provided(tmp_path: Path):
+    (tmp_path / "shared" / "document_retrieval").mkdir(parents=True)
+    (tmp_path / "shared" / "document_retrieval" / "SKILLS.md").write_text(
+        _DOC_RETRIEVAL_SKILLS_MD
+    )
+    (tmp_path / "shared" / "web_research").mkdir(parents=True)
+    (tmp_path / "shared" / "web_research" / "SKILLS.md").write_text(_VALID_SKILLS_MD)
+
+    loader = SkillLoader(tmp_path)
+    tools = loader.build_tools(
+        mode="workbench",
+        model_config=_make_model_config(),
+        semantic_retriever=_make_retriever(),
+        firecrawl_client=MagicMock(),
+    )
+    tool_names = {t.name for t in tools}
+    assert tool_names == {"document_retrieval", "web_research"}
