@@ -223,9 +223,15 @@ class SemanticRetriever:
 
 ```
 src/agent_workbench/skills/
-└── web_research/
-    └── SKILLS.md
+├── shared/
+│   └── web_research/
+│       └── SKILLS.md      ← available in all modes
+├── workbench/             ← future: code_execution, data_management
+└── seo_coach/             ← future: seo_analysis
 ```
+
+`SkillLoader.build_tools()` receives the active mode and loads `shared/` plus the
+mode-specific subdirectory. Adding a new domain means adding a directory — no code changes.
 
 **`SKILLS.md` format:**
 
@@ -287,10 +293,13 @@ class SkillLoader:
 
     def build_tools(
         self,
+        mode: str,                            # "workbench" | "seo_coach"
         model_config: ModelConfig,
         semantic_retriever: SemanticRetriever,
         firecrawl_client: "FirecrawlClient",
-    ) -> list[BaseTool]: ...
+    ) -> list[BaseTool]:
+        """Load shared/ + mode-specific skills, return one BaseTool per domain."""
+        ...
 ```
 
 **Files:**
@@ -364,6 +373,7 @@ api_key = os.getenv("FIRECRAWL_API_KEY")
 if api_key:
     _firecrawl_client = FirecrawlClient(api_key)
     web_tools = _skill_loader.build_tools(
+        mode=self.mode,                        # "workbench" | "seo_coach"
         model_config=self.default_model_config,
         semantic_retriever=_semantic_retriever,
         firecrawl_client=_firecrawl_client,
@@ -409,7 +419,7 @@ self.agent_graph = AgentGraph(
 | `services/document_context_graph.py` | 2.5a | Use `SemanticRetriever` |
 | `services/content_retriever_tool.py` | 2.5a | Remove `_RETRIEVAL_TOKEN_BUDGET` |
 | `tests/unit/services/test_semantic_retriever.py` | 2.5a | **NEW** |
-| `skills/web_research/SKILLS.md` | 2.5b | **NEW** |
+| `skills/shared/web_research/SKILLS.md` | 2.5b | **NEW** |
 | `services/skill_loader.py` | 2.5b | **NEW** |
 | `services/web_research_graph.py` | 2.5b+c | **NEW** |
 | `tests/unit/services/test_skill_loader.py` | 2.5b | **NEW** |
@@ -431,7 +441,11 @@ No DB migrations. No changes to `AgentGraph`, `database.py`, or DB backends.
 | Result cache eviction (TTL/LRU) | PR-2.6a checkpoint policy |
 | SEO Coach: Dutch synthesis prompt | PR-2.6 mode-aware skill config |
 | Rate limiting / retry in `FirecrawlClient` | PR-2.6a ops hardening |
-| Multiple skill domains beyond `web_research` | Future — pattern already extensible |
+| `data_management` domain | Future — `parse_file` (Excel/CSV), `ga4_query`, `ga4_explore`, `transform` |
+| `code_execution` domain | Future — `write_code`, `run_code`; sandbox choice (E2B / Modal / smolagents interpreter) deferred |
+| `seo_analysis` domain (SEO Coach only) | Future — keyword research, competitor analysis, content scoring |
+| Cross-domain data bridge (`_data_context_cache`) | Future — module-level cache keyed by `conversation_id`; lets `data_management` → `code_execution` pipeline pass large datasets without flooding `MessagesState` |
+| Visualization output format | Future — base64 PNG, temp file path, or Plotly JSON; unresolved until `code_execution` is scoped |
 
 ---
 
