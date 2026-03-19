@@ -1,6 +1,6 @@
 """Unit tests for ConsolidatedWorkbenchService."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -21,6 +21,16 @@ def mock_db_session():
     mock = AsyncMock()
     mock.add = MagicMock()  # session.add() is synchronous
     return mock
+
+
+@pytest.fixture(autouse=True)
+def mock_provider_registry():
+    """Patch provider_registry.create_model to avoid real API key requirements."""
+    with patch(
+        "src.agent_workbench.services.providers.provider_registry.create_model",
+        return_value=MagicMock(),
+    ):
+        yield
 
 
 @pytest.fixture
