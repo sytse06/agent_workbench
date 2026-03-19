@@ -378,20 +378,6 @@ class ConsolidatedWorkbenchService:
             request, conversation_id, effective_mode
         )
 
-        # Load history into state
-        try:
-            if self.state_bridge is None:
-                raise AttributeError("state_bridge not initialized")
-            loaded = await self.state_bridge.load_into_langgraph_state(
-                conversation_id=conversation_id,
-                user_message=request.user_message,
-                workflow_mode=effective_mode,
-                business_profile=request.business_profile,
-            )
-            initial_state = {**initial_state, **loaded}  # type: ignore[assignment]
-        except Exception:
-            pass  # history load failure is non-fatal; proceed without history
-
         # Build messages using the appropriate mode handler
         if effective_mode == "seo_coach":
             seo_handler = self.lang_graph_service.seo_coach_handler
@@ -488,17 +474,11 @@ class ConsolidatedWorkbenchService:
         }
         final_response_text = answer_acc
 
-        # Persist the turn after streaming completes
-        if final_response_text:
-            from ..models.standard_messages import StandardMessage
-
-            history = list(initial_state.get("conversation_history", []))
-            history.append(StandardMessage(role="user", content=request.user_message))
-            history.append(
-                StandardMessage(role="assistant", content=final_response_text)
+        # Write thread metadata after each turn
+        if conversation_id and self.db_session is not None:
+            await self._upsert_thread_metadata(
+                conversation_id, request.user_message, final_response_text
             )
-            save_state = {**initial_state, "conversation_history": history}  # type: ignore[assignment]
-            await self.lang_graph_service.save_turn(save_state)  # type: ignore[arg-type]
 
     async def get_conversation_state(self, conversation_id: UUID) -> WorkbenchState:
         """
@@ -514,46 +494,95 @@ class ConsolidatedWorkbenchService:
             ConversationError: If conversation not found
         """
         try:
-            if self.state_bridge:
-                return await self.state_bridge.load_into_langgraph_state(
-                    conversation_id=conversation_id,
-                    user_message="",  # Empty for state retrieval
-                    workflow_mode="workbench",  # Default mode
-                )
-            else:
-                # Return default state if bridge not available
-                return WorkbenchState(
-                    conversation_id=conversation_id,
-                    user_message="",
-                    assistant_response=None,
-                    model_config=self.default_model_config,
-                    provider_name=self.default_model_config.provider,
-                    context_data={},
-                    active_contexts=[],
-                    conversation_history=[],
-                    workflow_mode="workbench",
-                    workflow_steps=["Default state"],
-                    current_operation=None,
-                    execution_successful=True,
-                    current_error=None,
-                    retry_count=0,
-                    business_profile=None,
-                    seo_analysis=None,
-                    coaching_context=None,
-                    coaching_phase=None,
-                    debug_mode=None,
-                    parameter_overrides=None,
-                    mcp_tools_active=[],
-                    agent_state=None,
-                    workflow_data=None,
-                    document_context=None,
-                    document_filename=None,
-                )
+            if self.agent_graph is not None:
+                state = await self.agent_graph.get_state(str(conversation_id))
+                if state is not None:
+                    return state  # type: ignore[return-value]
+            # Return default state if checkpointer has no entry yet
+            return WorkbenchState(
+                conversation_id=conversation_id,
+                user_message="",
+                assistant_response=None,
+                model_config=self.default_model_config,
+                provider_name=self.default_model_config.provider,
+                context_data={},
+                active_contexts=[],
+                conversation_history=[],
+                workflow_mode="workbench",
+                workflow_steps=["Default state"],
+                current_operation=None,
+                execution_successful=True,
+                current_error=None,
+                retry_count=0,
+                business_profile=None,
+                seo_analysis=None,
+                coaching_context=None,
+                coaching_phase=None,
+                debug_mode=None,
+                parameter_overrides=None,
+                mcp_tools_active=[],
+                agent_state=None,
+                workflow_data=None,
+                document_context=None,
+                document_filename=None,
+            )
         except Exception as e:
             logger.error(f"Failed to get conversation state: {str(e)}")
             raise ConversationError(
                 f"Failed to get conversation state: {str(e)}"
             ) from e
+
+    async def _upsert_thread_metadata(
+        self,
+        thread_id: UUID,
+        user_message: str,
+        response_text: str,
+    ) -> None:
+        """Insert or update thread_metadata after each completed turn.
+
+        Non-fatal: failures are logged and swallowed so streaming is not affected.
+        """
+        from datetime import datetime, timezone
+
+        from sqlalchemy import select
+
+        from ..models.database import ThreadMetadata
+
+        if self.db_session is None:
+            return
+
+        try:
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+            result = await self.db_session.execute(
+                select(ThreadMetadata).where(ThreadMetadata.thread_id == thread_id)
+            )
+            row = result.scalar_one_or_none()
+
+            if row is None:
+                title = user_message[:100] if user_message else "Untitled"
+                preview = response_text[:200] if response_text else ""
+                self.db_session.add(
+                    ThreadMetadata(
+                        thread_id=thread_id,
+                        title=title,
+                        preview=preview,
+                        created_at=now,
+                        last_updated_at=now,
+                    )
+                )
+            else:
+                row.last_updated_at = now
+
+            await self.db_session.commit()
+        except Exception:
+            logger.warning(
+                "Failed to upsert thread metadata for %s", thread_id, exc_info=True
+            )
+            try:
+                await self.db_session.rollback()
+            except Exception:
+                pass
 
     async def create_business_profile(
         self, profile_data: Dict[str, Any], conversation_id: UUID

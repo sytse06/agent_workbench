@@ -25,6 +25,7 @@ from .api.routes import (
     models,
     share,
     simple_chat,
+    threads,
 )
 from .database import init_adaptive_database
 from .services.consolidated_service import close_checkpointer, init_checkpointer
@@ -531,6 +532,7 @@ app.include_router(share.router)
 # Other routes
 app.include_router(models.router)
 app.include_router(agent_configs.router)
+app.include_router(threads.router)
 
 
 @app.get("/health")
