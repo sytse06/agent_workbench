@@ -104,7 +104,7 @@ functionality and would delay the core agent work.
   - Multi-turn bug fixed: `conversation_id` round-tripped through Gradio `additional_outputs`
   - NOTE: embedding + cosine selection logic is inline in `DocumentContextGraph` —
     to be extracted into shared `SemanticRetriever` in PR-2.5a
-- [ ] Phase 2.5: WebResearch Skills (PR-25) — see `docs/project/PR-25-webresearch-skills.md`
+- [x] Phase 2.5: WebResearch Skills (PR-25) — see `docs/project/PR-25-webresearch-skills.md`
   - Hierarchical skill routing: one domain tool → subgraph selects skill from `SKILLS.md` catalog
   - PR-2.5a: Extract `SemanticRetriever` from `DocumentContextGraph` (shared retrieval pipeline)
     — refactors ContentRetrieverTool to use it; no behavior change, proven before new code added
@@ -112,17 +112,37 @@ functionality and would delay the core agent work.
   - PR-2.5c: `FirecrawlClient` (httpx, direct REST API) + wire into `consolidated_service`
   - Multi-turn web cache: `_web_chunk_cache` / `_web_embedding_cache` by (conv_id, url)
   - Graceful degradation: no `FIRECRAWL_API_KEY` → web_research tool disabled, app still works
-- [ ] Phase 2.6a: Thread Management (PR-26a)
-  - **Requires PR-2.3c** (checkpointer prerequisite)
-  - Summarization node: replaces oldest messages with a summary when context window pressure detected
-  - Time travel: `GET /threads/{id}/history` + `POST /threads/{id}/revert/{checkpoint_id}` endpoints
-  - Thread deletion: `DELETE /threads/{id}` removes checkpointer state + DB conversation record
-  - Gradio controls: revert button, delete thread, conversation browser sidebar (see design decisions)
-  - Long-term memory Store (`InMemoryStore` dev / `AsyncSqliteStore` prod) for cross-session user data
-    — SEO Coach `BusinessProfile` → semantic memory; Workbench agent instructions → procedural memory
-- [ ] Phase 2.6b: Middleware
-  - Built-in first: PII redaction, human-in-the-loop
+  - ContentRetrieverTool + WebResearchTool retrofitted into SKILLS.md pattern; routing fix
+- [ ] Phase 2.6a: Dual persistence removal + thread metadata + listing API (PR-26a)
+  - **Requires PR-2.5** (on `feature/webresearch-skills`) — see `docs/project/PR-26-threads.md`
+  - Remove `state_bridge.load_into_langgraph_state()` + `save_turn()` from `stream_workflow()`
+  - Replace `get_conversation_state()` state retrieval with direct `agent_graph.get_state()` call
+  - `thread_metadata` table (thread_id, title, preview, created_at, last_updated_at)
+  - Alembic migration: create `thread_metadata`, migrate `conversations` rows, rename FK columns
+    (`documents.conversation_id` → `thread_id`, `document_chunks.conversation_id` → `thread_id`),
+    drop `conversations` table
+  - `GET /threads` endpoint returning `ThreadSummary` list ordered by `last_updated_at DESC`
+- [ ] Phase 2.6b: Thread switching + deletion + sidebar UI (PR-26b)
+  - **Requires PR-2.6a**
+  - `DELETE /threads/{id}` via LangGraph SDK (no direct SQL against checkpointer tables)
+  - `GET /threads/{id}/messages` to reconstruct display history from `aget_state_history()`
+  - Collapsible sidebar (slides in from left), thread switching, deletion, "New conversation" button
+  - Flip `show_conv_browser` default to `True` for workbench mode
+- [ ] Phase 2.6c: Context compaction / summarization node (independent of 2.6a/b)
+  - Summarization node writes a summary back into checkpointer when context window pressure detected
+- [ ] Phase 2.6d: Long-term memory Store (blocked on Phase 3 auth for namespace key)
+  - LangGraph `Store` with operational memory files per user:
+    - `/memories/agents.md` — how to work with this user: behavior, tone, tool preferences (community standard filename)
+    - `/memories/domain_context.md` — user's domain: project context + tech stack (Workbench) or business profile + SEO goals (SEO Coach), replacing static `BusinessProfile`
+  - Self-improving instructions: agent proactively updates these files via tool calls; system prompt instructs it to do so
+  - Memory panel UI: user can read and edit both files directly; explicit commands ("remember this", "update your notes")
+  - Namespace key must be tied to authenticated user — Phase 3 auth prerequisite
+  - Note: `InMemoryStore` resets on restart; `AsyncSqliteStore` has single-process limitation — Postgres Store is production-grade
+- [ ] Phase 2.6e: Middleware
+  - Built-in: `interrupt_before=[\"tool_node\"]`, PII redaction
   - Custom: context injection, execution tracking
+- [ ] Phase 2.6f: SEO Coach sidebar (follow-up after 2.6b — `show_conv_browser` already feature-flagged)
+- [ ] Phase 2.6g: LLM-generated thread titles (later enhancement — no schema change needed, layers on top of 2.6a)
 
 ---
 
@@ -140,6 +160,16 @@ Deferred from Phase 2 — implement after agent functionality is stable.
   - Wire `user_settings_service.py` into settings page save/load
   - Share target handler (`/share` endpoint)
 - [ ] Phase 3.2: Production Hardening (rate limiting, concurrency, monitoring)
+- [ ] Phase 3.3: Tool dispatch UX — streaming progress indicators
+  - Surface WIP state to the user during multi-step tool use: "searching...", "reading document...", "fetching URL..."
+  - `get_stream_writer()` is already pre-wired in `AgentGraph.astream()` via `stream_mode=["messages","custom"]` — ready to use
+  - Implement per skill domain when specialized skills ship (coding, data management, etc.) — each domain defines its own progress events
+  - Keeps streaming latency transparent; critical UX for long-running tool chains
+- [ ] Phase 3.4: Postgres checkpointer + Store migration
+  - Swap `AsyncSqliteSaver` → `langgraph-checkpoint-postgres` (required before multi-worker deployment)
+  - Swap `AsyncSqliteStore` → `PostgresStore` for long-term memory
+  - `AsyncSqliteSaver` is a latent bomb for multi-worker Uvicorn: each worker gets its own SQLite connection
+  - Must be planned before memory architecture is locked in; independent of auth but pairs naturally with Phase 3
 
 ---
 
@@ -164,10 +194,24 @@ Deferred from Phase 2 — implement after agent functionality is stable.
 
 ---
 
+## Phase 4: Multi-Agent Coordination
+
+Prerequisite: Phase 3 complete (auth + Postgres infrastructure), Phase 2.6d long-term memory Store live.
+
+- [ ] Phase 4.0: Multi-agent orchestration via LangGraph
+  - Pattern: main orchestrator agent delegates tasks to an assembly of specialist subagents
+  - Each subagent is a compiled `StateGraph` with its own tools and `SKILLS.md` domain
+  - Orchestrator routes by intent (e.g. web research → `web_research` subagent, document work → `document_retrieval` subagent, SEO → `seo_coach` subagent)
+  - Communication via LangGraph subgraph protocol — subgraph outputs flow back into orchestrator `MessagesState`
+  - Shared long-term memory: all agents read/write the same `/memories/agents.md` + `/memories/domain_context.md` via the Store
+  - Design decision required: deepagents filesystem metaphor vs. raw `Store` KV — evaluate before implementing
+  - Note: deepagents library not a dependency; the self-improving instructions pattern is adoptable independently
+
+---
+
 ## Later — Features
 
 - [ ] SEO Coach production deployment to HuggingFace Spaces
-- [ ] Multi-agent coordination via LangGraph (Phase 3+)
 - [x] Agent memory and learning — planned in PR-2.6a (short-term via checkpointer, long-term via Store)
 - [x] Streaming support — upgraded to LangGraph v2 native streaming in PR-2.3b
 
