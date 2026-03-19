@@ -10,6 +10,7 @@ from agent_workbench.services.document_context_graph import (
     DocumentContextGraph,
 )
 from agent_workbench.services.embedding_service import EmbeddingService
+from agent_workbench.services.semantic_retriever import SemanticRetriever
 
 
 def _make_config() -> ModelConfig:
@@ -39,10 +40,11 @@ def _make_graph(session_factory=None, embedding_service=None) -> DocumentContext
         embedding_service.embed.return_value = [0.1] * 384
         embedding_service.embed_batch.return_value = [[0.1] * 384]
         embedding_service.cosine_similarity.return_value = [0.9]
+    semantic_retriever = SemanticRetriever(embedding_service)
     with patch("agent_workbench.services.document_context_graph.provider_registry"):
         return DocumentContextGraph(
             session_factory=session_factory,
-            embedding_service=embedding_service,
+            semantic_retriever=semantic_retriever,
             model_config=_make_config(),
         )
 
@@ -140,7 +142,7 @@ async def test_embed_chunks_node_skips_when_embeddings_computed():
 
         graph = DocumentContextGraph(
             session_factory=fake_session,
-            embedding_service=mock_embedding_service,
+            semantic_retriever=SemanticRetriever(mock_embedding_service),
             model_config=_make_config(),
         )
 
@@ -216,7 +218,7 @@ async def test_retrieve_node_respects_token_budget():
 
         graph = DocumentContextGraph(
             session_factory=fake_session,
-            embedding_service=mock_es,
+            semantic_retriever=SemanticRetriever(mock_es),
             model_config=_make_config(),
         )
 
@@ -276,7 +278,7 @@ async def test_retrieve_node_restores_document_order():
 
         graph = DocumentContextGraph(
             session_factory=fake_session,
-            embedding_service=mock_es,
+            semantic_retriever=SemanticRetriever(mock_es),
             model_config=_make_config(),
         )
 

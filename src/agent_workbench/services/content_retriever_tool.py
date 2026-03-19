@@ -11,7 +11,6 @@ from ..models.schemas import ModelConfig
 
 logger = logging.getLogger(__name__)
 
-_RETRIEVAL_TOKEN_BUDGET = 16_000
 _SYNTHESIS_SYSTEM = (
     "You are a precise document assistant. Answer the query using ONLY the "
     "provided document excerpts. Be concise. After each claim, add a citation "
@@ -45,12 +44,15 @@ class ContentRetrieverInput(BaseModel):
     )
 
 
+_DEFAULT_DESCRIPTION = (
+    "Search and retrieve information from documents attached to this conversation. "
+    "Use when the user asks about content in uploaded files."
+)
+
+
 class ContentRetrieverTool(BaseTool):
     name: str = "document_retrieval"
-    description: str = (
-        "Search and retrieve information from documents attached to this conversation. "
-        "Use when the user asks about content in uploaded files."
-    )
+    description: str = _DEFAULT_DESCRIPTION
     args_schema: Type[BaseModel] = ContentRetrieverInput
 
     # Private — injected at construction
@@ -60,17 +62,18 @@ class ContentRetrieverTool(BaseTool):
         self,
         session_factory: Callable,
         model_config: ModelConfig,
-        embedding_service: Any,  # EmbeddingService — Any avoids circular import
+        semantic_retriever: Any,  # SemanticRetriever — Any avoids circular import
+        description: str = _DEFAULT_DESCRIPTION,
         **data: Any,
     ):
-        super().__init__(**data)
+        super().__init__(description=description, **data)
         # Lazy import avoids circular dependency: document_context_graph imports
         # RetrievedChunk and DocumentRetrievalContext from this module.
         from .document_context_graph import DocumentContextGraph
 
         doc_graph = DocumentContextGraph(
             session_factory=session_factory,
-            embedding_service=embedding_service,
+            semantic_retriever=semantic_retriever,
             model_config=model_config,
         )
         object.__setattr__(self, "_doc_graph", doc_graph)

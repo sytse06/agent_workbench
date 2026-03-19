@@ -187,7 +187,15 @@ class WorkbenchModeHandler:
             fname = state.get("document_filename", "document")
             doc_ctx = state["document_context"]
             messages.append(
-                SystemMessage(content=f"[Attached document: {fname}]\n\n{doc_ctx}")
+                SystemMessage(
+                    content=(
+                        f"[Attached document: {fname}]\n\n{doc_ctx}\n\n"
+                        "The user has uploaded the above document. "
+                        "When the user asks questions about its content, "
+                        "use the `document_retrieval` tool to search it — "
+                        "do NOT use web search for questions about uploaded documents."
+                    )
+                )
             )
 
         # Add conversation history (both turns for multi-turn context)

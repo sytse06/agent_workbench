@@ -1,6 +1,6 @@
 """Bridge between LLM-001B ConversationState and LangGraph WorkbenchState."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -122,9 +122,9 @@ class LangGraphStateBridge:
                     "debug_mode": lg_state.get("debug_mode"),
                     "parameter_overrides": lg_state.get("parameter_overrides"),
                     # Store datetime as ISO string in metadata
-                    "last_updated": datetime.utcnow().isoformat(),
+                    "last_updated": datetime.now(timezone.utc).isoformat(),
                 },
-                updated_at=datetime.utcnow(),
+                updated_at=datetime.now(timezone.utc),
             )
 
             # Save using LLM-001B infrastructure
@@ -219,7 +219,7 @@ class LangGraphStateBridge:
                     StandardMessage(
                         role=msg.get("role", "user"),
                         content=msg.get("content", ""),
-                        timestamp=msg.get("timestamp", datetime.utcnow()),
+                        timestamp=msg.get("timestamp", datetime.now(timezone.utc)),
                         metadata=msg.get("metadata"),
                     )
                 )
@@ -227,7 +227,9 @@ class LangGraphStateBridge:
                 # Handle other formats as needed
                 standard_messages.append(
                     StandardMessage(
-                        role="assistant", content=str(msg), timestamp=datetime.utcnow()
+                        role="assistant",
+                        content=str(msg),
+                        timestamp=datetime.now(timezone.utc),
                     )
                 )
 
@@ -374,7 +376,7 @@ class LangGraphStateBridge:
                 StandardMessage(
                     role="assistant",
                     content=workflow_state["assistant_response"],
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                 )
             )
 
@@ -391,7 +393,7 @@ class LangGraphStateBridge:
             "debug_mode": workflow_state.get("debug_mode", False),
             "parameter_overrides": workflow_state.get("parameter_overrides", {}),
             "workflow_data": workflow_state.get("workflow_data", {}),
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc),
         }
 
     def merge_workflow_context(

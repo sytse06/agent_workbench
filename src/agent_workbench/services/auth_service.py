@@ -2,7 +2,7 @@
 
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from gradio import Request
@@ -158,7 +158,7 @@ class AuthService:
         """
         try:
             timeout_minutes = max_age_minutes or self.session_timeout_minutes
-            since = datetime.utcnow() - timedelta(minutes=timeout_minutes)
+            since = datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)
 
             session = self.db.get_active_user_session(user_id, since)
 
@@ -245,7 +245,7 @@ class AuthService:
             # Get created session
             # Note: We need to retrieve it to get the full session data
             # This is a workaround since create_user_session returns ID only
-            since = datetime.utcnow() - timedelta(seconds=10)
+            since = datetime.now(timezone.utc) - timedelta(seconds=10)
             session = self.db.get_active_user_session(user_id, since)
 
             if not session:

@@ -11,6 +11,7 @@ from agent_workbench.services.content_retriever_tool import (
     RetrievedChunk,
 )
 from agent_workbench.services.embedding_service import EmbeddingService
+from agent_workbench.services.semantic_retriever import SemanticRetriever
 
 
 def _make_model_config() -> ModelConfig:
@@ -26,12 +27,13 @@ def _make_tool() -> ContentRetrieverTool:
         yield
 
     mock_es = MagicMock(spec=EmbeddingService)
+    semantic_retriever = SemanticRetriever(mock_es)
 
     with patch("agent_workbench.services.document_context_graph.DocumentContextGraph"):
         return ContentRetrieverTool(
             session_factory=fake_session,
             model_config=_make_model_config(),
-            embedding_service=mock_es,
+            semantic_retriever=semantic_retriever,
         )
 
 
@@ -42,6 +44,25 @@ def test_tool_metadata():
     tool = _make_tool()
     assert tool.name == "document_retrieval"
     assert "uploaded files" in tool.description
+
+
+def test_tool_description_injectable():
+    async def fake_session():  # type: ignore[misc]
+        return
+        yield
+
+    mock_es = MagicMock(spec=EmbeddingService)
+    semantic_retriever = SemanticRetriever(mock_es)
+
+    custom_desc = "Custom description from SKILLS.md frontmatter."
+    with patch("agent_workbench.services.document_context_graph.DocumentContextGraph"):
+        tool = ContentRetrieverTool(
+            session_factory=fake_session,
+            model_config=_make_model_config(),
+            semantic_retriever=semantic_retriever,
+            description=custom_desc,
+        )
+    assert tool.description == custom_desc
 
 
 # --- _arun no conversation_id ---
@@ -71,6 +92,7 @@ async def test_arun_delegates_to_doc_graph():
         yield
 
     mock_es = MagicMock(spec=EmbeddingService)
+    semantic_retriever = SemanticRetriever(mock_es)
     mock_doc_graph = MagicMock()
     mock_doc_graph.ainvoke = AsyncMock(return_value="Graph answer.")
 
@@ -81,7 +103,7 @@ async def test_arun_delegates_to_doc_graph():
         tool = ContentRetrieverTool(
             session_factory=fake_session,
             model_config=_make_model_config(),
-            embedding_service=mock_es,
+            semantic_retriever=semantic_retriever,
         )
 
     result = await tool._arun(
@@ -102,6 +124,7 @@ async def test_arun_returns_str():
         yield
 
     mock_es = MagicMock(spec=EmbeddingService)
+    semantic_retriever = SemanticRetriever(mock_es)
     mock_doc_graph = MagicMock()
     mock_doc_graph.ainvoke = AsyncMock(return_value="Any string answer.")
 
@@ -112,7 +135,7 @@ async def test_arun_returns_str():
         tool = ContentRetrieverTool(
             session_factory=fake_session,
             model_config=_make_model_config(),
-            embedding_service=mock_es,
+            semantic_retriever=semantic_retriever,
         )
 
     result = await tool._arun(

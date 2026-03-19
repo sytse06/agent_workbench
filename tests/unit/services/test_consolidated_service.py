@@ -1,6 +1,6 @@
 """Unit tests for ConsolidatedWorkbenchService."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -21,6 +21,16 @@ def mock_db_session():
     mock = AsyncMock()
     mock.add = MagicMock()  # session.add() is synchronous
     return mock
+
+
+@pytest.fixture(autouse=True)
+def mock_provider_registry():
+    """Patch provider_registry.create_model to avoid real API key requirements."""
+    with patch(
+        "src.agent_workbench.services.providers.provider_registry.create_model",
+        return_value=MagicMock(),
+    ):
+        yield
 
 
 @pytest.fixture
@@ -176,24 +186,28 @@ class TestConsolidatedWorkbenchService:
             or "Workflow failed" in response.assistant_response
         )
 
+    @pytest.mark.filterwarnings("ignore::RuntimeWarning")
     async def test_stream_workflow(
         self, service, mock_db_session, sample_request, sample_workbench_state
     ):
-        """Test streaming workflow yields events."""
+        """Test streaming workflow yields events.
+
+        RuntimeWarning suppressed: state_bridge.load_into_langgraph_state and
+        save_turn are dual-persistence holdovers from Phase 1 that will be
+        removed when LangGraph middleware becomes the sole persistence layer.
+        At that point stream_workflow shrinks and these tests get rewritten.
+        """
         await service.initialize(mock_db_session)
 
-        # Patch agent_graph.astream_events to yield a model stream event + implicit done
+        # Patch agent_graph.astream to yield a messages chunk
         from langchain_core.messages import AIMessageChunk
 
         chunk = AIMessageChunk(content="Hello")
 
-        async def fake_astream_events(*args, **kwargs):
-            yield {
-                "event": "on_chat_model_stream",
-                "data": {"chunk": chunk},
-            }
+        async def fake_astream(*args, **kwargs):
+            yield {"type": "messages", "data": (chunk, {})}
 
-        service.agent_graph.astream_events = fake_astream_events
+        service.agent_graph.astream = fake_astream
         service.mode_detector.get_effective_mode = AsyncMock(return_value="workbench")
         service._create_conversation = AsyncMock(
             return_value=sample_workbench_state["conversation_id"]

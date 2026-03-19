@@ -31,6 +31,7 @@ async def test_save_and_build_context_saves_document() -> None:
     mock_docling.build_context_block.return_value = "Hello context"
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()  # session.add() is synchronous in SQLAlchemy
 
     with patch(
         "agent_workbench.services.file_processing_service.DocumentModel"

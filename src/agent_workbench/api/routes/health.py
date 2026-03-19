@@ -1,6 +1,6 @@
 """Health check API routes for Agent Workbench."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +27,7 @@ async def health_check(
     return HealthCheckResponse(
         status="healthy" if database_connected else "unhealthy",
         database_connected=database_connected,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
     )
 
 
@@ -36,4 +36,4 @@ async def health_check(
 )
 async def ping() -> dict:
     """Simple ping endpoint."""
-    return {"message": "pong", "timestamp": datetime.utcnow()}
+    return {"message": "pong", "timestamp": datetime.now(timezone.utc)}

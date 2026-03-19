@@ -1,6 +1,6 @@
 """Unit tests for LangGraphStateBridge conversion logic."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 from uuid import uuid4
 
@@ -114,7 +114,7 @@ async def test_extract_from_workflow_builds_messages(bridge):
             {
                 "role": "user",
                 "content": "hello",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         ],
         "assistant_response": "world",

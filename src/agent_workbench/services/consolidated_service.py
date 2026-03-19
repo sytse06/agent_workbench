@@ -38,11 +38,13 @@ logger = logging.getLogger(__name__)
 _checkpointer: BaseCheckpointSaver = MemorySaver()
 _checkpointer_conn: Optional[aiosqlite.Connection] = None
 
-# Module-level EmbeddingService singleton. Lazy-loads all-MiniLM-L6-v2 (~80MB)
-# on first embed() call. Shared across all requests — stateless after init.
+# Module-level singletons. EmbeddingService lazy-loads all-MiniLM-L6-v2 (~80MB)
+# on first embed() call. SemanticRetriever wraps it — shared by all retrieval subgraphs.
 from .embedding_service import EmbeddingService  # noqa: E402
+from .semantic_retriever import SemanticRetriever  # noqa: E402
 
 _embedding_service: EmbeddingService = EmbeddingService()
+_semantic_retriever: SemanticRetriever = SemanticRetriever(_embedding_service)
 
 
 async def init_checkpointer(
@@ -122,18 +124,30 @@ class ConsolidatedWorkbenchService:
         self.conversation_service = ConversationService()
         self.context_service = ContextService()
 
-        # Agent + LangGraph service
-        from .content_retriever_tool import ContentRetrieverTool
+        # Agent + LangGraph service — all tools built via SkillLoader
+        from pathlib import Path
 
-        retriever = ContentRetrieverTool(
-            session_factory=get_session,
-            model_config=self.default_model_config,
-            embedding_service=_embedding_service,
+        from .firecrawl_client import FirecrawlClient
+        from .skill_loader import SkillLoader
+
+        _skills_root = Path(__file__).parent.parent / "skills"
+        _skill_loader = SkillLoader(_skills_root)
+        _app_mode = os.getenv("APP_MODE", "workbench")
+        _firecrawl_api_key = os.getenv("FIRECRAWL_API_KEY")
+        _firecrawl_client: Optional[FirecrawlClient] = (
+            FirecrawlClient(_firecrawl_api_key) if _firecrawl_api_key else None
         )
+        all_tools = _skill_loader.build_tools(
+            mode=_app_mode,
+            model_config=self.default_model_config,
+            semantic_retriever=_semantic_retriever,
+            firecrawl_client=_firecrawl_client,
+        )
+
         self.agent_service = AgentService(self.default_model_config)
         self.agent_graph = AgentGraph(
             self.default_model_config,
-            tools=[retriever],
+            tools=all_tools,
             checkpointer=_checkpointer,
         )
         self.state_bridge = LangGraphStateBridge(
