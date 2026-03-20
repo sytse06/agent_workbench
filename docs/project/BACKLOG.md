@@ -113,15 +113,16 @@ functionality and would delay the core agent work.
   - Multi-turn web cache: `_web_chunk_cache` / `_web_embedding_cache` by (conv_id, url)
   - Graceful degradation: no `FIRECRAWL_API_KEY` → web_research tool disabled, app still works
   - ContentRetrieverTool + WebResearchTool retrofitted into SKILLS.md pattern; routing fix
-- [ ] Phase 2.6a: Dual persistence removal + thread metadata + listing API (PR-26a)
-  - **Requires PR-2.5** (on `feature/webresearch-skills`) — see `docs/project/PR-26-threads.md`
-  - Remove `state_bridge.load_into_langgraph_state()` + `save_turn()` from `stream_workflow()`
-  - Replace `get_conversation_state()` state retrieval with direct `agent_graph.get_state()` call
-  - `thread_metadata` table (thread_id, title, preview, created_at, last_updated_at)
-  - Alembic migration: create `thread_metadata`, migrate `conversations` rows, rename FK columns
-    (`documents.conversation_id` → `thread_id`, `document_chunks.conversation_id` → `thread_id`),
-    drop `conversations` table
-  - `GET /threads` endpoint returning `ThreadSummary` list ordered by `last_updated_at DESC`
+- [x] Phase 2.6a: Dual persistence removal + thread metadata + listing API (PR-26a)
+  - `state_bridge.load_into_langgraph_state()` + `save_turn()` removed from `stream_workflow()`
+  - `get_conversation_state()` replaced with direct `agent_graph.get_state()` call
+  - `thread_metadata` table created (thread_id, title, preview, created_at, last_updated_at)
+  - `_upsert_thread_metadata()` writes row after each turn (non-fatal)
+  - Alembic migration `4ea9663c23e2`: creates `thread_metadata` + index
+  - `GET /api/v1/threads` endpoint returning `ThreadSummary` list ordered by `last_updated_at DESC`
+  - **Deferred**: `documents.conversation_id` → `thread_id` rename + `conversations` table drop
+    (SQLite ALTER TABLE limitations; FK is inactive; deferring to follow-up migration in PR-2.6b+)
+  - 426 unit tests passing, all quality checks green
 - [ ] Phase 2.6b: Thread switching + deletion + sidebar UI (PR-26b)
   - **Requires PR-2.6a**
   - `DELETE /threads/{id}` via LangGraph SDK (no direct SQL against checkpointer tables)

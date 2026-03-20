@@ -8,6 +8,10 @@ _log_level = getattr(
 )
 logging.basicConfig(level=_log_level, format="%(levelname)s %(name)s: %(message)s")
 
+# Suppress verbose low-level loggers that flood output even at DEBUG level
+for _noisy in ("aiosqlite", "sqlalchemy.engine", "sqlalchemy.pool"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
 import uvicorn  # noqa: E402
 
 from .main import app  # noqa: E402
