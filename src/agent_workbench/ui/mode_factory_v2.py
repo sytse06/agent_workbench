@@ -224,8 +224,8 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
 
     # Route 1: Chat page (default, shown at root "/" path)
     with demo:
-        # Capture BrowserState and Dataset list returned from chat page
-        conversations_list_storage, conv_list = chat.render(
+        # Capture BrowserState, Dataset list, and session_id_state from chat page
+        conversations_list_storage, conv_list, session_id_state = chat.render(
             config, user_state, conversation_state, settings_state
         )
 
@@ -234,6 +234,14 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
             conversations_list_storage,
             conv_list,
         )
+
+        # Init session UUID on page load (workbench only — BrowserState persists)
+        if session_id_state is not None:
+            from uuid import uuid4
+
+            @demo.load(inputs=[session_id_state], outputs=[session_id_state])
+            def _init_session_id(current_id: str) -> str:
+                return current_id if current_id else str(uuid4())
 
         # Auto-load conversation list on page load
         if conv_list is not None:

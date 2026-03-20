@@ -319,6 +319,7 @@ class ConsolidatedWorkflowRequest(BaseModel):
     document_context: Optional[str] = None
     document_filename: Optional[str] = None
     active_tools: List[str] = Field(default_factory=list)
+    session_id: Optional[str] = None
 
 
 class ConsolidatedWorkflowResponse(BaseModel):

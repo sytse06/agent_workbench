@@ -27,6 +27,9 @@ from .context_service import ContextService
 from .conversation_service import ConversationService
 from .langgraph_bridge import LangGraphStateBridge
 from .langgraph_service import LangGraphService
+from .memory_store import close_store as _close_store
+from .memory_store import get_store, read_memory
+from .memory_store import init_store as _init_store
 from .mode_detector import ModeDetector
 from .state_manager import StateManager
 
@@ -38,6 +41,9 @@ logger = logging.getLogger(__name__)
 _checkpointer: BaseCheckpointSaver = MemorySaver()
 _checkpointer_conn: Optional[aiosqlite.Connection] = None
 _agent_graph_instance: Optional["AgentGraph"] = None
+
+# LangGraph BaseStore — initialized at startup via init_store()
+_store: Optional[Any] = None
 
 # Module-level singletons. EmbeddingService lazy-loads all-MiniLM-L6-v2 (~80MB)
 # on first embed() call. SemanticRetriever wraps it — shared by all retrieval subgraphs.
@@ -68,6 +74,19 @@ async def close_checkpointer() -> None:
         await _checkpointer_conn.close()
         _checkpointer_conn = None
         logger.info("LangGraph checkpointer connection closed")
+
+
+async def init_store(db_path: str = "data/langgraph_store.db") -> None:
+    """Initialize the LangGraph memory store. Call from FastAPI lifespan."""
+    global _store
+    await _init_store(db_path)
+    _store = get_store()
+    logger.info("LangGraph memory store initialized at %s", db_path)
+
+
+async def close_store() -> None:
+    """Close the memory store connection at app shutdown."""
+    await _close_store()
 
 
 def get_agent_graph() -> Optional["AgentGraph"]:
@@ -155,6 +174,7 @@ class ConsolidatedWorkbenchService:
             self.default_model_config,
             tools=all_tools,
             checkpointer=_checkpointer,
+            store=get_store(),
         )
         global _agent_graph_instance
         _agent_graph_instance = self.agent_graph
@@ -405,6 +425,22 @@ class ConsolidatedWorkbenchService:
         in_think = False
         seo_model_config = model_config if effective_mode == "seo_coach" else None
 
+        # Read long-term memory for this session
+        memory_context = ""
+        session_id = request.session_id
+        if session_id:
+            _mem_store = get_store()
+            if _mem_store is not None:
+                agents_mem = await read_memory(_mem_store, session_id, "agents")
+                domain_mem = await read_memory(_mem_store, session_id, "domain_context")
+                parts = []
+                if agents_mem:
+                    parts.append(f"## Behavioral notes\n{agents_mem}")
+                if domain_mem:
+                    parts.append(f"## Domain context\n{domain_mem}")
+                if parts:
+                    memory_context = "# Long-term memory\n\n" + "\n\n".join(parts)
+
         # Determine which messages to pass to AgentGraph.
         # If the checkpointer already has history for this thread (from a previous
         # turn in the same process run), pass only the new user message to avoid
@@ -424,6 +460,8 @@ class ConsolidatedWorkbenchService:
                 agent_messages,
                 model_config=seo_model_config,
                 thread_id=thread_id,
+                session_id=session_id,
+                memory_context=memory_context,
             ):
                 if chunk["type"] == "messages":
                     message_chunk, _meta = chunk["data"]

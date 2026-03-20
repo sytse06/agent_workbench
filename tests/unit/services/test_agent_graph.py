@@ -310,3 +310,56 @@ def test_should_continue_returns_tool_node_when_tool_calls_present():
     last = msg
     result = "tool_node" if (hasattr(last, "tool_calls") and last.tool_calls) else "end"
     assert result == "tool_node"
+
+
+# --- memory context ---
+
+
+def test_context_includes_memory_context():
+    config = _make_config()
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(config)
+    ctx = graph._context(memory_context="remember X")
+    assert ctx["memory_context"] == "remember X"
+
+
+def test_context_default_memory_context_is_empty():
+    config = _make_config()
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(config)
+    ctx = graph._context()
+    assert ctx["memory_context"] == ""
+
+
+@pytest.mark.asyncio
+async def test_ainvoke_passes_session_id_in_config():
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config())
+        with patch.object(graph, "_graph") as mock_compiled:
+            ai_msg = AIMessage(content="ok")
+            mock_compiled.ainvoke = AsyncMock(return_value={"messages": [ai_msg]})
+            await graph.ainvoke(
+                [HumanMessage(content="hi")],
+                thread_id="conv-123",
+                session_id="sess-abc",
+            )
+        call_kwargs = mock_compiled.ainvoke.call_args
+        cfg = call_kwargs[1]["config"]
+        expected = {"configurable": {"thread_id": "conv-123", "session_id": "sess-abc"}}
+        assert cfg == expected
+
+
+@pytest.mark.asyncio
+async def test_ainvoke_passes_memory_context_in_context():
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config())
+        with patch.object(graph, "_graph") as mock_compiled:
+            ai_msg = AIMessage(content="ok")
+            mock_compiled.ainvoke = AsyncMock(return_value={"messages": [ai_msg]})
+            await graph.ainvoke(
+                [HumanMessage(content="hi")],
+                memory_context="remember to be concise",
+            )
+        call_kwargs = mock_compiled.ainvoke.call_args
+        ctx = call_kwargs[1]["context"]
+        assert ctx["memory_context"] == "remember to be concise"

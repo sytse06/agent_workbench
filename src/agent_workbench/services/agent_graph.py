@@ -16,6 +16,7 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 from langgraph.runtime import Runtime
+from langgraph.store.base import BaseStore
 from typing_extensions import TypedDict
 
 from ..models.schemas import ModelConfig
@@ -56,6 +57,7 @@ class AgentOutput(TypedDict):
 @dataclass
 class AgentContext:
     model_config: ModelConfig
+    memory_context: str = ""
     # tools removed — fixed at graph build time, not injected at call time
 
 
@@ -91,10 +93,12 @@ class AgentGraph:
         model_config: ModelConfig,
         tools: list = [],
         checkpointer: Optional[BaseCheckpointSaver] = None,
+        store: Optional[BaseStore] = None,
     ) -> None:
         self._model_config = model_config
         self._tools = list(tools)  # freeze copy
         self._checkpointer: BaseCheckpointSaver = checkpointer or MemorySaver()
+        self._store = store
         self._graph: CompiledStateGraph = self._build()
 
     def _build(self) -> CompiledStateGraph:
@@ -135,9 +139,14 @@ class AgentGraph:
 
         async def llm_node(state: MessagesState, runtime: Runtime) -> dict:
             model = provider_registry.create_model(runtime.context.model_config)
+            messages = list(state["messages"])
+            if runtime.context.memory_context:
+                messages = [
+                    SystemMessage(content=runtime.context.memory_context)
+                ] + messages
             if tools:
                 model = model.bind_tools(tools)
-            response = await model.ainvoke(state["messages"])
+            response = await model.ainvoke(messages)
             return {"messages": [response]}
 
         def should_continue(state: MessagesState) -> str:
@@ -170,15 +179,25 @@ class AgentGraph:
         else:
             builder.add_conditional_edges("llm_node", should_continue)
 
-        return builder.compile(checkpointer=self._checkpointer)
+        return builder.compile(checkpointer=self._checkpointer, store=self._store)
 
-    def _context(self, model_config: Optional[ModelConfig] = None) -> dict:
-        return {"model_config": model_config or self._model_config}
+    def _context(
+        self, model_config: Optional[ModelConfig] = None, memory_context: str = ""
+    ) -> dict:
+        return {
+            "model_config": model_config or self._model_config,
+            "memory_context": memory_context,
+        }
 
-    def _config(self, thread_id: Optional[str]) -> dict:
+    def _config(
+        self, thread_id: Optional[str], session_id: Optional[str] = None
+    ) -> dict:
+        cfg: dict = {}
         if thread_id:
-            return {"configurable": {"thread_id": thread_id}}
-        return {}
+            cfg["thread_id"] = thread_id
+        if session_id:
+            cfg["session_id"] = session_id
+        return {"configurable": cfg} if cfg else {}
 
     async def get_state(self, thread_id: str) -> Optional[Any]:
         """Return the latest checkpointed state for thread_id, or None."""
@@ -191,12 +210,14 @@ class AgentGraph:
         messages: List[BaseMessage],
         model_config: Optional[ModelConfig] = None,
         thread_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        memory_context: str = "",
     ) -> BaseMessage:
         """Batch invocation. Returns final AIMessage."""
         result = await self._graph.ainvoke(
             {"messages": messages},
-            config=self._config(thread_id),
-            context=self._context(model_config),
+            config=self._config(thread_id, session_id),
+            context=self._context(model_config, memory_context),
         )
         return result["messages"][-1]
 
@@ -205,6 +226,8 @@ class AgentGraph:
         messages: List[BaseMessage],
         model_config: Optional[ModelConfig] = None,
         thread_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        memory_context: str = "",
     ) -> AsyncGenerator[dict, None]:
         """Stream chunks from the agent loop using LangGraph v2 streaming format.
 
@@ -214,8 +237,8 @@ class AgentGraph:
         """
         async for chunk in self._graph.astream(
             {"messages": messages},
-            config=self._config(thread_id),
-            context=self._context(model_config),
+            config=self._config(thread_id, session_id),
+            context=self._context(model_config, memory_context),
             stream_mode=["messages", "custom"],
             version="v2",
         ):

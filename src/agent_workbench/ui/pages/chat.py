@@ -106,7 +106,7 @@ def render(
     user_state: gr.State,
     conversation_state: gr.State,
     settings_state: gr.State,
-) -> Tuple[Optional[gr.BrowserState], Optional[gr.Dropdown]]:
+) -> Tuple[Optional[gr.BrowserState], Optional[gr.Dropdown], Optional[gr.BrowserState]]:
     """
     Render chat interface with optional sidebar.
 
@@ -127,6 +127,7 @@ def render(
     if not config.get("load_custom_js"):
         # Thread data state (holds list of dicts from GET /threads)
         threads_state = gr.State([])
+        session_id_state = gr.BrowserState("", storage_key="aw_session_id")
 
         with gr.Sidebar(open=False, label="Conversations"):
             new_chat_btn = gr.Button("New Chat", size="sm", variant="secondary")
@@ -164,6 +165,7 @@ def render(
                 settings_state,
                 pending_files_wb,
                 conv_id_state_wb,
+                session_id_state,
             ],
             additional_outputs=[conv_id_state_wb],
             save_history=False,
@@ -285,7 +287,7 @@ def render(
             ],
         )
 
-        return threads_state, conv_dataset
+        return threads_state, conv_dataset, session_id_state
 
     # SEO Coach: custom branded UI
     # BrowserState for conversations list (sidebar)
@@ -775,10 +777,10 @@ def render(
     # This enables conversation list population on page refresh
     if config.get("show_conv_browser", False):
         logger.debug("render() returning conversations_list_storage and conv_list")
-        return conversations_list_storage, conv_list
+        return conversations_list_storage, conv_list, None
     else:
         logger.debug("render() returning None, None (show_conv_browser=False)")
-        return None, None
+        return None, None, None
 
 
 def populate_list(
@@ -1076,6 +1078,7 @@ async def handle_chat_interface_message(
     settings: Optional[Dict[str, Any]] = None,
     pending_files: Optional[list] = None,
     conv_id: Optional[str] = None,
+    session_id: Optional[str] = None,
 ):
     """Handle chat message submission for gr.ChatInterface (async streaming).
 
@@ -1116,6 +1119,8 @@ async def handle_chat_interface_message(
     }
     if conv_id:
         payload["conversation_id"] = conv_id
+    if session_id:
+        payload["session_id"] = session_id
 
     thinking_content = ""
     answer_content = ""
