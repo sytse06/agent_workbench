@@ -504,6 +504,203 @@ Nothing downstream changes — the Store namespace key is still just a string.
 
 ---
 
+---
+
+## Pattern 6 — HITL via interrupt() (not interrupt_before=)
+
+### The problem it solves
+
+The spec for PR-2.6e originally listed `interrupt_before=["tool_node"]` as the HITL
+mechanism. This is a compile-time graph config that stops before **every** tool call,
+unconditionally, with no ability to pass context to the UI or apply conditions.
+
+### The correct pattern
+
+Call `interrupt()` **inside a node**. It pauses the graph, passes a payload to the
+caller (e.g. the Gradio UI), and resumes cleanly when the caller reinvokes with a
+response. It's conditional — fire it only when human review is needed.
+
+```python
+from langgraph.types import interrupt
+
+def review_node(state):
+    last_tool_call = state["messages"][-1].tool_calls[0]
+
+    # Only interrupt for high-risk tools, not every call
+    if last_tool_call["name"] in HIGH_RISK_TOOLS:
+        response = interrupt({
+            "tool": last_tool_call["name"],
+            "args": last_tool_call["args"],
+            "action": "approve_or_reject",
+        })
+        if response.get("approved"):
+            return {"approved": True}
+        return {"approved": False, "reason": response.get("reason")}
+
+    return {"approved": True}   # auto-approve low-risk tools
+```
+
+**Wire it** — add the node between `llm_node` and `tool_node`:
+
+```python
+builder.add_node("review_node", review_node)
+builder.add_conditional_edges(
+    "llm_node", should_continue,
+    {"review_node": "review_node", END: END}
+)
+builder.add_conditional_edges(
+    "review_node",
+    lambda s: "tool_node" if s.get("approved") else END,
+    {"tool_node": "tool_node", END: END},
+)
+```
+
+**Resume** — the caller reinvokes the graph with the human response:
+
+```python
+# Initial call — pauses at interrupt
+result = await graph.ainvoke(input, config=config)
+# result contains the interrupt payload
+
+# Human reviews, then resume:
+final = await graph.ainvoke({"approved": True}, config=config)
+```
+
+### interrupt_before= vs interrupt() comparison
+
+| | `interrupt_before=["tool_node"]` | `interrupt()` inside a node |
+|---|---|---|
+| When it fires | Every tool call, always | Conditionally — you decide |
+| Payload to UI | None | Any dict you want |
+| Resume input | None (just reinvoke) | Dict returned from `interrupt()` |
+| Compile-time | Yes — baked in at build | No — runtime logic |
+| Use case | Blanket approval gate | Selective, context-aware review |
+
+**Rule:** always use `interrupt()`. `interrupt_before=` is a blunt instrument.
+
+**Requirement:** graph must be compiled with a checkpointer — `interrupt()` saves state
+before pausing so the graph can resume from exactly that point.
+
+---
+
+## Pattern 7 — Multi-Agent via langgraph-supervisor / langgraph-swarm
+
+### The problem it solves
+
+Phase 4 requires orchestrating multiple specialist agents. Building a custom supervisor
+or swarm routing mechanism from scratch is hundreds of lines of boilerplate.
+
+### The solution
+
+Use the official packages. Do not build from scratch.
+
+```bash
+pip install langgraph-supervisor langgraph-swarm
+```
+
+### Supervisor pattern (central orchestrator)
+
+One LLM decides which specialist to call. Predictable, easier to debug.
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langgraph.prebuilt import create_react_agent
+from langgraph_supervisor import create_supervisor
+
+model = ChatAnthropic(model="claude-sonnet-4-6")
+
+web_agent = create_react_agent(
+    model, tools=[web_research_tool],
+    name="web_research", prompt="You handle web research tasks."
+)
+doc_agent = create_react_agent(
+    model, tools=[document_retrieval_tool],
+    name="document_retrieval", prompt="You handle document retrieval tasks."
+)
+
+workflow = create_supervisor(
+    agents=[web_agent, doc_agent],
+    model=model,
+    prompt="Route web research to web_research, document tasks to document_retrieval.",
+)
+app = workflow.compile(checkpointer=checkpointer)
+```
+
+### Swarm pattern (peer-to-peer handoff)
+
+Agents hand off to each other directly. More flexible, agents decide routing.
+
+```python
+from langgraph_swarm import create_handoff_tool, create_swarm
+
+triage = create_react_agent(
+    model,
+    tools=[
+        create_handoff_tool(agent_name="web_research"),
+        create_handoff_tool(agent_name="document_retrieval"),
+    ],
+    name="triage",
+    prompt="Route to the right specialist.",
+)
+
+app = create_swarm(
+    [triage, web_agent, doc_agent],
+    default_active_agent="triage",
+).compile(checkpointer=checkpointer)
+```
+
+### When to use which
+
+| Scenario | Use |
+|---|---|
+| Clear task hierarchy, one decision-maker | Supervisor |
+| Agents know when to hand off | Swarm |
+| Mix of structured pipeline + flexible routing | Hybrid (swarm within teams, supervisor between) |
+| Our Phase 4 architecture | Evaluate at design time — both are viable |
+
+---
+
+## Pattern 8 — @task for Durable Side-Effects
+
+### The problem it solves
+
+A node performs a non-deterministic side-effect (API call, DB write, file write). If the
+graph resumes from a checkpoint after a crash, the node runs again — causing double-writes
+or duplicate API calls.
+
+### The solution
+
+Wrap the side-effect in `@task`. LangGraph records the result in the checkpoint after the
+first execution and returns the cached result on any subsequent replay. The effect runs
+exactly once per checkpoint.
+
+```python
+from langgraph.func import task
+
+@task
+async def write_to_store(store, namespace, key, content):
+    """Runs once per checkpoint — safe to replay."""
+    await store.aput(namespace, key, {"content": content})
+    return True
+```
+
+### When it matters
+
+| Scenario | Use @task? |
+|---|---|
+| Store write in a node (PR-2.6d UpdateMemoryTool) | Yes, if the graph may be interrupted mid-run |
+| Sending an email / posting a webhook | Yes — idempotency critical |
+| Pure LLM call (already deterministic via checkpointer) | No |
+| DB reads | No — idempotent by nature |
+
+### Current state in this codebase
+
+`UpdateMemoryTool` in `memory_tools.py` does NOT currently use `@task`. This is acceptable
+for Phase 2 (single-user, low crash risk). Add `@task` before Phase 4 when the graph runs
+longer and crash-mid-run becomes a real concern.
+
+---
+
 ## Checklist: adding a new skill domain
 
 - [ ] Create `skills/shared/{domain_name}/SKILLS.md` (or `skills/{mode}/` for mode-specific)

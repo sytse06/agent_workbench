@@ -146,7 +146,10 @@ functionality and would delay the core agent work.
   - **Deferred**: settings page memory panel UI (API wired, UI not yet built); cross-device memory (blocked on Phase 3 auth); SEO Coach memory wiring
   - 450 tests passing, all quality checks green
 - [ ] Phase 2.6e: Middleware
-  - Built-in: `interrupt_before=[\"tool_node\"]`, PII redaction
+  - **HITL**: use `interrupt()` inside a review node — NOT `interrupt_before=["tool_node"]`
+    - `interrupt()` is conditional, passes a payload to the UI, resumes cleanly (see PATTERNS.md Pattern 6)
+    - `interrupt_before=` is a coarser compile-time stop with no payload or condition control
+  - PII redaction wrapper around `llm_node`
   - Custom: context injection, execution tracking
 - [ ] Phase 2.6f: SEO Coach sidebar (follow-up after 2.6b — `show_conv_browser` already feature-flagged)
 - [ ] Phase 2.6g: LLM-generated thread titles (later enhancement — no schema change needed, layers on top of 2.6a)
@@ -211,7 +214,12 @@ Prerequisite: Phase 3 complete (auth + Postgres infrastructure), Phase 2.6d long
   - Orchestrator routes by intent (e.g. web research → `web_research` subagent, document work → `document_retrieval` subagent, SEO → `seo_coach` subagent)
   - Communication via LangGraph subgraph protocol — subgraph outputs flow back into orchestrator `MessagesState`
   - Shared long-term memory: all agents read/write the same `/memories/agents.md` + `/memories/domain_context.md` via the Store
-  - Design decision required: deepagents filesystem metaphor vs. raw `Store` KV — evaluate before implementing
+  - **Implementation**: use `langgraph-supervisor` + `langgraph-swarm` packages — do NOT build from scratch
+    - `pip install langgraph-supervisor langgraph-swarm`
+    - Supervisor pattern: central orchestrator routes to specialists (predictable, easier to debug)
+    - Swarm pattern: agents hand off directly via `create_handoff_tool()` (flexible, peer-to-peer)
+    - See PATTERNS.md Pattern 7 for code templates
+  - Design decision required: supervisor vs. swarm vs. hybrid — evaluate before implementing
   - Note: deepagents library not a dependency; the self-improving instructions pattern is adoptable independently
 
 ---
