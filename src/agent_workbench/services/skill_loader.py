@@ -170,5 +170,10 @@ def _build_domain_tool(
         )
         return WebResearchTool(graph=graph, description=defn.description)
 
+    if defn.name == "memory":
+        from .memory_tools import update_memory
+
+        return update_memory
+
     logger.warning("SkillLoader: no handler for domain %r — skipping", defn.name)
     return None

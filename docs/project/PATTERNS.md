@@ -319,6 +319,191 @@ _semantic_retriever = SemanticRetriever(_embedding_service)
 
 ---
 
+---
+
+## Pattern 3 — Ephemeral Per-Request Data via AgentContext
+
+### The problem it solves
+
+Some data needs to reach every LLM call inside the agent graph but must NOT be stored in
+the checkpointer — it changes between turns (e.g. long-term memory snapshots), is
+re-derived fresh each invocation, or is caller-side context that doesn't belong in
+conversation history.
+
+Injecting it as a real message (HumanMessage / SystemMessage) would store it in
+`MessagesState` and corrupt the conversation record. Passing it via global state is fragile.
+
+### The solution
+
+Use LangGraph's `context_schema` to define a per-invocation dataclass. Fields are injected
+at call time via `runtime.context` inside any node — they never enter `MessagesState` and are
+never checkpointed.
+
+```python
+from dataclasses import dataclass, field
+from langgraph.runtime import Runtime
+
+@dataclass
+class AgentContext:
+    model_config: ModelConfig
+    memory_context: str = ""   # ephemeral — fresh every turn, never stored
+
+# In llm_node (inside _build()):
+async def llm_node(state: MessagesState, runtime: Runtime) -> dict:
+    messages = list(state["messages"])
+    if runtime.context.memory_context:
+        messages = [SystemMessage(content=runtime.context.memory_context)] + messages
+    model = provider_registry.create_model(runtime.context.model_config)
+    response = await model.ainvoke(messages)
+    return {"messages": [response]}   # only the AIMessage enters MessagesState
+
+# In _build():
+builder = StateGraph(MessagesState, context_schema=AgentContext, ...)
+```
+
+**Call site** — pass context at invocation time, not at compile time:
+
+```python
+await graph.astream(
+    {"messages": messages},
+    config={"configurable": {"thread_id": thread_id}},
+    context={"model_config": model_config, "memory_context": memory_content},
+    ...
+)
+```
+
+### When to use this pattern
+
+| Data | Put in MessagesState? | Put in AgentContext? |
+|---|---|---|
+| User / assistant messages | Yes | No |
+| Tool call results | Yes (ToolMessage) | No |
+| LLM model config (changes per request) | No | Yes |
+| Long-term memory snapshot | No — changes every turn | Yes |
+| PII-redacted version of a message | No — use separately | Yes |
+| Feature flags for this invocation | No | Yes |
+
+---
+
+## Pattern 4 — Store Tool via InjectedStore + RunnableConfig
+
+### The problem it solves
+
+A tool needs to write to the LangGraph `Store` using a per-request namespace key
+(e.g. `session_id` or `user_id`). The key is not known at graph compile time and
+must not be hardcoded into the tool. The tool also needs the `Store` instance injected
+without coupling to module-level globals.
+
+### The solution
+
+LangGraph's `InjectedStore` injects the compiled graph's store into the tool at call
+time. `RunnableConfig` carries per-invocation context (like `session_id`) via the
+`configurable` dict. Both are available as function parameters and are invisible to the
+LLM (the agent never sees them in the tool signature).
+
+```python
+from typing import Annotated
+from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import tool
+from langgraph.prebuilt import InjectedStore
+from langgraph.store.base import BaseStore
+
+@tool
+async def update_memory(
+    key: Annotated[str, "Memory key: 'agents' or 'domain_context'"],
+    content: Annotated[str, "Full new file content (replaces existing)."],
+    config: RunnableConfig,                         # injected — LLM never sees this
+    store: Annotated[BaseStore, InjectedStore()],   # injected — LLM never sees this
+) -> str:
+    """Update a long-term memory file about this user."""
+    session_id = (config.get("configurable") or {}).get("session_id", "anonymous")
+    await store.aput((session_id, "memories"), key, {"content": content})
+    return f"Memory '{key}' updated."
+```
+
+**Wire it** — compile the graph with the store; pass `session_id` in the config:
+
+```python
+# At startup (once):
+agent = AgentGraph(model_config, tools=[update_memory], checkpointer=checkpointer, store=store)
+
+# Per request:
+await agent.astream(messages, thread_id=thread_id, session_id=session_id)
+# _config() sets: {"configurable": {"thread_id": ..., "session_id": ...}}
+```
+
+**Read side** — read before the graph runs and pass via `AgentContext`, not via the Store inside the graph:
+
+```python
+# In consolidated_service.stream_workflow():
+agents_mem = await read_memory(store, session_id, "agents")
+domain_mem = await read_memory(store, session_id, "domain_context")
+memory_context = build_memory_prefix(agents_mem, domain_mem)  # string or ""
+
+await agent_graph.astream(..., session_id=session_id, memory_context=memory_context)
+```
+
+This keeps read and write paths decoupled: reads are explicit and happen before the graph
+runs (Pattern 3 delivers the result); writes are agent-initiated tool calls during the run.
+
+### Key rules
+
+- `InjectedStore` and `RunnableConfig` parameters must come AFTER the parameters the LLM fills
+- The tool's docstring + annotated `key`/`content` params are what the LLM sees — keep them tight
+- The graph must be compiled with `store=store`; otherwise `InjectedStore` injects `None`
+- `session_id` travels in `config["configurable"]`, same dict as `thread_id`
+
+---
+
+## Pattern 5 — Minimal Session Identity (BrowserState UUID)
+
+### The problem it solves
+
+A feature needs a stable per-user namespace key (e.g. for LangGraph Store) but full
+OAuth is not yet available. Building a full auth system just for a namespace key is
+over-engineering — the session only needs to be stable within one browser.
+
+### The solution
+
+`gr.BrowserState` persists a value in `localStorage`. Generate a UUID on first page
+load; return it unchanged on subsequent loads. The UUID becomes the namespace key.
+
+```python
+# In chat.render() — workbench block:
+session_id_state = gr.BrowserState("", storage_key="aw_session_id")
+
+# In mode_factory_v2.py — after chat.render():
+@demo.load(inputs=[session_id_state], outputs=[session_id_state])
+def _init_session_id(current_id: str) -> str:
+    from uuid import uuid4
+    return current_id if current_id else str(uuid4())
+```
+
+Pass it through the API as a request field:
+
+```python
+# handle_chat_interface_message → payload:
+if session_id:
+    payload["session_id"] = session_id   # → ConsolidatedWorkflowRequest.session_id
+```
+
+### Phase 3 migration path
+
+When HF OAuth lands, replace the BrowserState source with the authenticated user ID.
+Nothing downstream changes — the Store namespace key is still just a string.
+
+### Limitations
+
+| Property | BrowserState UUID |
+|---|---|
+| Survives page refresh | Yes (localStorage) |
+| Survives browser cache clear | No — new UUID generated |
+| Cross-device | No |
+| Tied to identity | No |
+| Cost | ~10 lines, zero infrastructure |
+
+---
+
 ## Checklist: adding a new skill domain
 
 - [ ] Create `skills/shared/{domain_name}/SKILLS.md` (or `skills/{mode}/` for mode-specific)

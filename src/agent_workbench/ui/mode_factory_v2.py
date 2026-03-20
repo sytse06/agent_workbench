@@ -224,8 +224,8 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
 
     # Route 1: Chat page (default, shown at root "/" path)
     with demo:
-        # Capture BrowserState and Dataset list returned from chat page
-        conversations_list_storage, conv_list = chat.render(
+        # Capture BrowserState, Dataset list, and session_id_state from chat page
+        conversations_list_storage, conv_list, session_id_state = chat.render(
             config, user_state, conversation_state, settings_state
         )
 
@@ -235,33 +235,42 @@ def build_gradio_app(config: Dict[str, Any]) -> gr.Blocks:
             conv_list,
         )
 
-        # Auto-load conversation history into Dataset list from BrowserState
-        # on page load (only for guest users - auth users use database)
-        if conversations_list_storage and conv_list:
-            logger.debug(
-                "Sidebar enabled — wiring demo.load event for conversation list"
-            )
+        # Init session UUID on page load (workbench only — BrowserState persists)
+        if session_id_state is not None:
+            from uuid import uuid4
 
-            @demo.load(
-                inputs=[user_state, conversations_list_storage], outputs=[conv_list]
-            )
-            def load_conversations_from_browser(user_state_val, stored_conversations):
-                """
-                Load conversation history from BrowserState (localStorage).
+            @demo.load(inputs=[session_id_state], outputs=[session_id_state])
+            def _init_session_id(current_id: str) -> str:
+                return current_id if current_id else str(uuid4())
 
-                For guest users only - authenticated users use database.
-                """
-                logger.debug(
-                    "load_conversations_from_browser: user_state=%s, stored=%d items",
-                    user_state_val,
-                    len(stored_conversations or []),
+        # Auto-load conversation list on page load
+        if conv_list is not None:
+            import gradio as _gr
+
+            if isinstance(conversations_list_storage, _gr.BrowserState):
+                # SEO Coach: BrowserState-based (localStorage)
+                logger.debug("Sidebar enabled — wiring BrowserState demo.load")
+
+                @demo.load(
+                    inputs=[user_state, conversations_list_storage],
+                    outputs=[conv_list],
                 )
+                def load_conversations_from_browser(
+                    user_state_val, stored_conversations
+                ):
+                    from .pages.chat import populate_list
 
-                from .pages.chat import populate_list
+                    return populate_list(user_state_val, stored_conversations or [])
 
-                result = populate_list(user_state_val, stored_conversations or [])
-                logger.debug("populate_list returned: %s", result)
-                return result
+            else:
+                # Workbench: API-based thread list
+                logger.debug("Sidebar enabled — wiring API-based demo.load")
+
+                @demo.load(outputs=[conv_list, conversations_list_storage])
+                def load_threads_on_startup():
+                    from .pages.chat import _refresh_thread_list
+
+                    return _refresh_thread_list()
 
         else:
             logger.debug(

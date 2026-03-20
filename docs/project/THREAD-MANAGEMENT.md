@@ -173,6 +173,51 @@ A single-user desktop app and a multi-user webapp have fundamentally different m
 
 **Key open question before any of this is implemented:** what is the target deployment model at the point where memory goes live? If HF Spaces (single process, SQLite OK), the current stack is fine. If a proper multi-user webapp (multiple workers, shared DB), it needs Postgres-backed checkpointer and Store.
 
+---
+
+## PR-2.6d Implementation — Decisions Taken (2026-03-20)
+
+### Namespace key: Session UUID (Phase 2 interim approach)
+
+Full HF OAuth (Phase 3.0) was considered as a prerequisite but rejected as a blocker. The deepagents finding — "namespace key must be tied to the authenticated user" — applies strictly only to *cross-device* memory. For Phase 2 (single-user, single-device), a stable per-browser UUID is sufficient.
+
+**Decision:** `gr.BrowserState("aw_session_id")` generates a UUID on first page load and persists it in `localStorage`. It is passed to the backend as `ConsolidatedWorkflowRequest.session_id`. The namespace is `(session_id, "memories")`.
+
+**Phase 3 migration path:** When HF OAuth lands, swap `request.session_id` source from BrowserState to the authenticated user ID. Store logic — namespace key, read/write methods — does not change.
+
+### Store backend: AsyncSqliteStore
+
+`data/langgraph_store.db` — separate file from the checkpointer (`data/langgraph_checkpoints.db`). Initialized in the FastAPI lifespan alongside the checkpointer. Same graceful-degradation pattern: falls back to no-op (store is `None`) on init failure, app still works.
+
+### Memory injection: ephemeral SystemMessage (not stored in checkpointer)
+
+Memory content is read from the Store before each `AgentGraph.astream()` call and passed as `memory_context: str` via `AgentContext` (the context schema). Inside `llm_node`, it is prepended as a `SystemMessage` at invocation time and returned from the node — it is never added to `MessagesState` and never written to the checkpointer.
+
+Consequence: the LLM sees current memory on every turn without polluting the thread history. The compaction node only processes real conversation messages, not stale memory snapshots. Memory and conversation state are fully decoupled.
+
+### UpdateMemoryTool: InjectedStore + RunnableConfig
+
+The agent writes to the Store via a `@tool` function using LangGraph's `InjectedStore` injection pattern. `session_id` is retrieved from `config["configurable"]["session_id"]`, which is set by `AgentGraph._config()` when the graph is invoked. No factory pattern, no closure — clean injection at call time.
+
+Trigger conditions encoded in the SKILLS.md catalog:
+- User says "remember this" / "note that"
+- User corrects behavior: "stop doing X", "don't Y"
+- User reveals important context (tech stack, project goal, business info)
+- User confirms a non-obvious approach worked well
+
+### Memory panel UI: deferred to follow-up
+
+The `GET/PUT /api/v1/memory/{key}` API is wired and tested. The settings page UI (two editable textareas) is deferred — the API is the only remaining dependency. This can be added in a focused UI PR without touching the backend.
+
+### What this PR does NOT do
+
+- No cross-device memory (requires Phase 3 auth)
+- No memory eviction / TTL (unsolved problem in the ecosystem)
+- No SEO Coach memory (same wiring, deferred to 2.6f or follow-up)
+- No settings page UI panel (deferred)
+
+---
+
 ### deepagents library — findings
 
 deepagents (`langchain-ai/deepagents`) did not replace LangGraph `Store` — it built a filesystem metaphor on top of it. The reason: LangGraph Store's raw KV interface (`put/get/search`) doesn't map naturally to how LLMs navigate information. deepagents adds `ls`, `read_file`, `write_file`, `edit_file`, `grep` as tools, and the LLM navigates memory as a virtual filesystem. The underlying storage is still LangGraph `BaseStore`.

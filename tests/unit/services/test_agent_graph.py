@@ -230,6 +230,67 @@ async def test_astream_yields_chunks():
     assert chunks[2]["type"] == "custom"
 
 
+# --- compaction ---
+
+
+def test_token_estimate_empty():
+    from agent_workbench.services.agent_graph import _token_estimate
+
+    assert _token_estimate([]) == 0
+
+
+def test_token_estimate_sums_character_length():
+    from agent_workbench.services.agent_graph import _token_estimate
+
+    msgs = [HumanMessage(content="a" * 400), AIMessage(content="b" * 400)]
+    # (400 + 400) // 4 == 200
+    assert _token_estimate(msgs) == 200
+
+
+def test_should_compact_below_threshold_routes_to_llm():
+    from agent_workbench.services.agent_graph import _should_compact
+
+    msgs = [HumanMessage(content="hello"), AIMessage(content="hi")]
+    assert _should_compact({"messages": msgs}) == "llm_node"
+
+
+def test_should_compact_above_threshold_routes_to_compact():
+    from agent_workbench.services.agent_graph import (
+        COMPACTION_TOKEN_THRESHOLD,
+        _should_compact,
+    )
+
+    # Each message has enough chars to push token estimate strictly over the threshold.
+    # Need total chars > THRESHOLD * 4; using +10 per msg clears integer-division ties.
+    chars_per_msg = (COMPACTION_TOKEN_THRESHOLD * 4) // 2 + 10
+    msgs = [
+        HumanMessage(content="x" * chars_per_msg),
+        AIMessage(content="y" * chars_per_msg),
+    ]
+    assert _should_compact({"messages": msgs}) == "compact_node"
+
+
+def test_compact_node_present_in_graph():
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config())
+    assert "compact_node" in graph._graph.get_graph().nodes
+
+
+def test_compact_node_present_with_tools():
+    from langchain_core.tools import tool
+
+    @tool
+    def noop(x: str) -> str:
+        """No-op."""
+        return x
+
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config(), tools=[noop])
+    nodes = graph._graph.get_graph().nodes
+    assert "compact_node" in nodes
+    assert "tool_node" in nodes
+
+
 # --- should_continue edge logic ---
 
 
@@ -249,3 +310,56 @@ def test_should_continue_returns_tool_node_when_tool_calls_present():
     last = msg
     result = "tool_node" if (hasattr(last, "tool_calls") and last.tool_calls) else "end"
     assert result == "tool_node"
+
+
+# --- memory context ---
+
+
+def test_context_includes_memory_context():
+    config = _make_config()
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(config)
+    ctx = graph._context(memory_context="remember X")
+    assert ctx["memory_context"] == "remember X"
+
+
+def test_context_default_memory_context_is_empty():
+    config = _make_config()
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(config)
+    ctx = graph._context()
+    assert ctx["memory_context"] == ""
+
+
+@pytest.mark.asyncio
+async def test_ainvoke_passes_session_id_in_config():
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config())
+        with patch.object(graph, "_graph") as mock_compiled:
+            ai_msg = AIMessage(content="ok")
+            mock_compiled.ainvoke = AsyncMock(return_value={"messages": [ai_msg]})
+            await graph.ainvoke(
+                [HumanMessage(content="hi")],
+                thread_id="conv-123",
+                session_id="sess-abc",
+            )
+        call_kwargs = mock_compiled.ainvoke.call_args
+        cfg = call_kwargs[1]["config"]
+        expected = {"configurable": {"thread_id": "conv-123", "session_id": "sess-abc"}}
+        assert cfg == expected
+
+
+@pytest.mark.asyncio
+async def test_ainvoke_passes_memory_context_in_context():
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config())
+        with patch.object(graph, "_graph") as mock_compiled:
+            ai_msg = AIMessage(content="ok")
+            mock_compiled.ainvoke = AsyncMock(return_value={"messages": [ai_msg]})
+            await graph.ainvoke(
+                [HumanMessage(content="hi")],
+                memory_context="remember to be concise",
+            )
+        call_kwargs = mock_compiled.ainvoke.call_args
+        ctx = call_kwargs[1]["context"]
+        assert ctx["memory_context"] == "remember to be concise"

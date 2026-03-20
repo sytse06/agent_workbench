@@ -61,6 +61,39 @@ PROCESSING_ICON_DATA_URI = svg_to_data_uri("/static/icons/svg/processing_icon_24
 _FILE_TYPES = [".pdf", ".docx", ".txt", ".md"]
 
 
+def _refresh_thread_list() -> tuple:
+    """Fetch threads from API and return (gr.Dataset update, threads list)."""
+    threads = _fetch_threads_sync()
+    samples = [[t.get("title", "Untitled")] for t in threads]
+    return gr.Dataset(samples=samples), threads
+
+
+def _fetch_threads_sync() -> list:
+    """Synchronous fetch of thread list from API."""
+    try:
+        resp = requests.get("http://localhost:8000/api/v1/threads/", timeout=5)
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception:
+        pass
+    return []
+
+
+async def _fetch_thread_messages_async(thread_id: str) -> list:
+    """Async fetch of thread messages from API."""
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"http://localhost:8000/api/v1/threads/{thread_id}/messages",
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+    except Exception:
+        pass
+    return []
+
+
 def _extract_message(input: Union[str, dict]) -> tuple[str, list]:
     """Extract text and files from MultimodalTextbox input or plain string."""
     if isinstance(input, dict):
@@ -73,7 +106,7 @@ def render(
     user_state: gr.State,
     conversation_state: gr.State,
     settings_state: gr.State,
-) -> Tuple[Optional[gr.BrowserState], Optional[gr.Dropdown]]:
+) -> Tuple[Optional[gr.BrowserState], Optional[gr.Dropdown], Optional[gr.BrowserState]]:
     """
     Render chat interface with optional sidebar.
 
@@ -90,15 +123,17 @@ def render(
         "render() called, load_custom_js=%s", config.get("load_custom_js", False)
     )
 
-    # Workbench: native gr.Sidebar (collapsed by default) + gr.ChatInterface
+    # Workbench: native gr.Sidebar + gr.ChatInterface
     if not config.get("load_custom_js"):
-        conv_storage = gr.BrowserState(
-            default_value=[],
-            storage_key="wb_conversations",
-        )
+        # Thread data state (holds list of dicts from GET /threads)
+        threads_state = gr.State([])
+        session_id_state = gr.BrowserState("", storage_key="aw_session_id")
 
         with gr.Sidebar(open=False, label="Conversations"):
             new_chat_btn = gr.Button("New Chat", size="sm", variant="secondary")
+            delete_thread_btn = gr.Button(
+                "Delete Thread", size="sm", variant="stop", visible=False
+            )
             conv_dataset = gr.Dataset(
                 components=[gr.Textbox(visible=False)],
                 samples=[],
@@ -130,6 +165,7 @@ def render(
                 settings_state,
                 pending_files_wb,
                 conv_id_state_wb,
+                session_id_state,
             ],
             additional_outputs=[conv_id_state_wb],
             save_history=False,
@@ -176,35 +212,82 @@ def render(
             outputs=[approval_group_wb, pending_files_wb],
         )
 
-        # Save conversation after each message
-        chat_iface.chatbot.change(
-            fn=update_conversations_list,
-            inputs=[chat_iface.chatbot, conv_storage, user_state],
-            outputs=[conv_storage],
+        # After each turn: refresh thread list from API
+        conv_id_state_wb.change(
+            fn=_refresh_thread_list,
+            outputs=[conv_dataset, threads_state],
+            queue=False,
         )
 
-        # Update sidebar list when storage changes
-        conv_storage.change(
-            fn=populate_list,
-            inputs=[user_state, conv_storage],
-            outputs=[conv_dataset],
-        )
+        # Thread selection: load messages from API, set conv_id
+        async def on_thread_select(
+            evt: gr.SelectData,
+            thread_data: list,
+        ) -> tuple:
+            if not thread_data or evt.index >= len(thread_data):
+                return [], None, gr.Button(visible=False)
+            thread = thread_data[evt.index]
+            thread_id = thread.get("thread_id")
+            if not thread_id:
+                return [], None, gr.Button(visible=False)
+            messages = await _fetch_thread_messages_async(thread_id)
+            chatbot_history = [
+                gr.ChatMessage(role=m["role"], content=m["content"]) for m in messages
+            ]
+            return chatbot_history, thread_id, gr.Button(visible=True)
 
-        # Load selected conversation into chatbot
         conv_dataset.select(
-            fn=load_selected_conversation,
-            inputs=[user_state, conv_storage],
-            outputs=[chat_iface.chatbot, conversation_state],
+            fn=on_thread_select,
+            inputs=[threads_state],
+            outputs=[chat_iface.chatbot, conv_id_state_wb, delete_thread_btn],
         )
 
-        # New chat clears the chatbot and state
+        # Delete selected thread
+        async def on_delete_thread(
+            thread_id: Optional[str],
+        ) -> tuple:
+            if thread_id:
+                try:
+                    async with httpx.AsyncClient() as client:
+                        await client.delete(
+                            f"http://localhost:8000/api/v1/threads/{thread_id}",
+                            timeout=10,
+                        )
+                except Exception as e:
+                    logger.warning("Failed to delete thread %s: %s", thread_id, e)
+            samples, threads = _refresh_thread_list()
+            return (
+                samples,
+                threads,
+                [],
+                None,
+                gr.Button(visible=False),
+            )
+
+        delete_thread_btn.click(
+            fn=on_delete_thread,
+            inputs=[conv_id_state_wb],
+            outputs=[
+                conv_dataset,
+                threads_state,
+                chat_iface.chatbot,
+                conv_id_state_wb,
+                delete_thread_btn,
+            ],
+        )
+
+        # New chat: clear chatbot + reset conv_id
         new_chat_btn.click(
-            fn=lambda: ([], [], None),
-            outputs=[chat_iface.chatbot, conversation_state, conv_id_state_wb],
+            fn=lambda: ([], [], None, gr.Button(visible=False)),
+            outputs=[
+                chat_iface.chatbot,
+                conversation_state,
+                conv_id_state_wb,
+                delete_thread_btn,
+            ],
         )
 
-        # Return storage + dataset so mode_factory wires the page-load event
-        return conv_storage, conv_dataset
+        return threads_state, conv_dataset, session_id_state
 
     # SEO Coach: custom branded UI
     # BrowserState for conversations list (sidebar)
@@ -694,10 +777,10 @@ def render(
     # This enables conversation list population on page refresh
     if config.get("show_conv_browser", False):
         logger.debug("render() returning conversations_list_storage and conv_list")
-        return conversations_list_storage, conv_list
+        return conversations_list_storage, conv_list, None
     else:
         logger.debug("render() returning None, None (show_conv_browser=False)")
-        return None, None
+        return None, None, None
 
 
 def populate_list(
@@ -995,6 +1078,7 @@ async def handle_chat_interface_message(
     settings: Optional[Dict[str, Any]] = None,
     pending_files: Optional[list] = None,
     conv_id: Optional[str] = None,
+    session_id: Optional[str] = None,
 ):
     """Handle chat message submission for gr.ChatInterface (async streaming).
 
@@ -1035,6 +1119,8 @@ async def handle_chat_interface_message(
     }
     if conv_id:
         payload["conversation_id"] = conv_id
+    if session_id:
+        payload["session_id"] = session_id
 
     thinking_content = ""
     answer_content = ""

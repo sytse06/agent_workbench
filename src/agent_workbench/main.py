@@ -22,13 +22,19 @@ from .api.routes import (
     agent_configs,
     chat_workflow,
     health,
+    memory,
     models,
     share,
     simple_chat,
     threads,
 )
 from .database import init_adaptive_database
-from .services.consolidated_service import close_checkpointer, init_checkpointer
+from .services.consolidated_service import (
+    close_checkpointer,
+    close_store,
+    init_checkpointer,
+    init_store,
+)
 from .services.model_config_service import model_config_service
 
 
@@ -105,6 +111,15 @@ async def lifespan(app: FastAPI):
         print(f"⚠️ LangGraph checkpointer initialization failed: {e}")
         print("🔧 Continuing with in-memory checkpointer (state lost on restart)...")
 
+    # Initialize LangGraph memory store (AsyncSqliteStore for cross-restart persistence)
+    try:
+        store_db = os.getenv("LANGGRAPH_STORE_DB", "data/langgraph_store.db")
+        await init_store(store_db)
+        print(f"✅ LangGraph memory store initialized at {store_db}")
+    except Exception as e:
+        print(f"⚠️ LangGraph memory store initialization failed: {e}")
+        print("🔧 Continuing without persistent memory store...")
+
     print("✅ FastAPI lifespan services initialized")
 
     # Create and mount Gradio interfaces
@@ -142,6 +157,7 @@ async def lifespan(app: FastAPI):
     print("🔧 Cleaning up FastAPI lifespan services...")
     await app.requests_client.aclose()
     await close_checkpointer()
+    await close_store()
     print("✅ FastAPI lifespan cleanup complete")
 
 
@@ -533,6 +549,7 @@ app.include_router(share.router)
 app.include_router(models.router)
 app.include_router(agent_configs.router)
 app.include_router(threads.router)
+app.include_router(memory.router)
 
 
 @app.get("/health")
