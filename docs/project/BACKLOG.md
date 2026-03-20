@@ -123,14 +123,19 @@ functionality and would delay the core agent work.
   - **Deferred**: `documents.conversation_id` → `thread_id` rename + `conversations` table drop
     (SQLite ALTER TABLE limitations; FK is inactive; deferring to follow-up migration in PR-2.6b+)
   - 426 unit tests passing, all quality checks green
-- [ ] Phase 2.6b: Thread switching + deletion + sidebar UI (PR-26b)
-  - **Requires PR-2.6a**
-  - `DELETE /threads/{id}` via LangGraph SDK (no direct SQL against checkpointer tables)
-  - `GET /threads/{id}/messages` to reconstruct display history from `aget_state_history()`
-  - Collapsible sidebar (slides in from left), thread switching, deletion, "New conversation" button
-  - Flip `show_conv_browser` default to `True` for workbench mode
-- [ ] Phase 2.6c: Context compaction / summarization node (independent of 2.6a/b)
-  - Summarization node writes a summary back into checkpointer when context window pressure detected
+- [x] Phase 2.6b: Thread switching + deletion + sidebar UI (PR-26b)
+  - `DELETE /api/v1/threads/{id}` — deletes `thread_metadata` row + `documents`; 404 if not found
+  - `GET /api/v1/threads/{id}/messages` — reconstructs display history from checkpointer state
+  - Workbench sidebar: `gr.State`-backed thread list fetched from `GET /api/v1/threads/`
+  - Thread switching via `conv_dataset.select` → async message load; `delete_thread_btn` visible on selection
+  - `mode_factory_v2.py`: `isinstance(gr.BrowserState)` branch — API path for workbench, BrowserState for SEO Coach
+  - 436 tests passing, all quality checks green
+- [x] Phase 2.6c: Context compaction / summarization node (PR-26c)
+  - Conditional `compact_node` fires above `COMPACTION_TOKEN_THRESHOLD` (4 000 tokens ≈ 16 000 chars)
+  - `RemoveMessage` ops replace old messages; `SystemMessage("[Conversation summary]\n…")` preserved
+  - `_should_compact` routing via `add_conditional_edges(START, …)` — compact_node → llm_node
+  - `COMPACTION_KEEP_RECENT = 6` messages kept verbatim after compaction
+  - 436 tests passing, all quality checks green
 - [ ] Phase 2.6d: Long-term memory Store (blocked on Phase 3 auth for namespace key)
   - LangGraph `Store` with operational memory files per user:
     - `/memories/agents.md` — how to work with this user: behavior, tone, tool preferences (community standard filename)
