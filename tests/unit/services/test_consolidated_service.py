@@ -190,13 +190,7 @@ class TestConsolidatedWorkbenchService:
     async def test_stream_workflow(
         self, service, mock_db_session, sample_request, sample_workbench_state
     ):
-        """Test streaming workflow yields events.
-
-        RuntimeWarning suppressed: state_bridge.load_into_langgraph_state and
-        save_turn are dual-persistence holdovers from Phase 1 that will be
-        removed when LangGraph middleware becomes the sole persistence layer.
-        At that point stream_workflow shrinks and these tests get rewritten.
-        """
+        """Test streaming workflow yields events."""
         await service.initialize(mock_db_session)
 
         # Patch agent_graph.astream to yield a messages chunk
@@ -220,23 +214,78 @@ class TestConsolidatedWorkbenchService:
         assert any(e["type"] == "answer_chunk" for e in events)
         assert any(e["type"] == "done" for e in events)
 
+    @pytest.mark.filterwarnings("ignore::RuntimeWarning")
+    async def test_stream_workflow_does_not_call_state_bridge_save_turn(
+        self, service, mock_db_session, sample_request, sample_workbench_state
+    ):
+        """state_bridge.save_turn must never be called — dual-write removed in PR-2.6a."""  # noqa: E501
+        await service.initialize(mock_db_session)
+
+        from langchain_core.messages import AIMessageChunk
+
+        chunk = AIMessageChunk(content="Hello")
+
+        async def fake_astream(*args, **kwargs):
+            yield {"type": "messages", "data": (chunk, {})}
+
+        service.agent_graph.astream = fake_astream
+        service.mode_detector.get_effective_mode = AsyncMock(return_value="workbench")
+        service._create_conversation = AsyncMock(
+            return_value=sample_workbench_state["conversation_id"]
+        )
+        service._upsert_thread_metadata = AsyncMock()
+        # Replace save_turn with a Mock so we can assert it was not called
+        service.lang_graph_service.save_turn = AsyncMock()
+
+        async for _ in service.stream_workflow(sample_request):
+            pass
+
+        service.lang_graph_service.save_turn.assert_not_called()
+
+    @pytest.mark.filterwarnings("ignore::RuntimeWarning")
+    async def test_stream_workflow_upserts_thread_metadata(
+        self, service, mock_db_session, sample_request, sample_workbench_state
+    ):
+        """Thread metadata upsert is called after streaming completes."""
+        await service.initialize(mock_db_session)
+
+        from langchain_core.messages import AIMessageChunk
+
+        chunk = AIMessageChunk(content="Hello")
+
+        async def fake_astream(*args, **kwargs):
+            yield {"type": "messages", "data": (chunk, {})}
+
+        service.agent_graph.astream = fake_astream
+        service.mode_detector.get_effective_mode = AsyncMock(return_value="workbench")
+        service._create_conversation = AsyncMock(
+            return_value=sample_workbench_state["conversation_id"]
+        )
+        service._upsert_thread_metadata = AsyncMock()
+
+        async for _ in service.stream_workflow(sample_request):
+            pass
+
+        service._upsert_thread_metadata.assert_called_once()
+        call_kwargs = service._upsert_thread_metadata.call_args
+        assert call_kwargs[0][0] == sample_workbench_state["conversation_id"]
+
     async def test_get_conversation_state(
         self, service, mock_db_session, sample_workbench_state
     ):
-        """Test getting conversation state."""
+        """Test getting conversation state via agent_graph.get_state()."""
         await service.initialize(mock_db_session)
 
         conversation_id = uuid4()
 
-        # Mock state bridge
-        service.state_bridge.load_into_langgraph_state = AsyncMock(
-            return_value=sample_workbench_state
-        )
+        # Mock agent_graph.get_state to return the workbench state
+        service.agent_graph.get_state = AsyncMock(return_value=sample_workbench_state)
 
         # Get conversation state
         state = await service.get_conversation_state(conversation_id)
 
         assert state == sample_workbench_state
+        service.agent_graph.get_state.assert_called_once_with(str(conversation_id))
 
     async def test_create_business_profile(self, service, mock_db_session):
         """Test creating business profile."""

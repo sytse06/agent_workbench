@@ -439,6 +439,16 @@ class ErrorResponse(BaseModel):
     error_code: Optional[str] = None
 
 
+class ThreadSummary(BaseModel):
+    """Summary of a conversation thread for the browser sidebar."""
+
+    thread_id: UUID
+    title: str
+    preview: str
+    created_at: datetime
+    last_updated_at: datetime
+
+
 class ConversationSummary(BaseModel):
     """Summary information about a conversation."""
 

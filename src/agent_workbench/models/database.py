@@ -492,6 +492,24 @@ class UserSessionModel(Base):
         await session.commit()
 
 
+class ThreadMetadata(Base):
+    """Thin metadata table for the conversation browser.
+
+    The LangGraph checkpointer owns conversation state; this table stores
+    only the human-readable metadata needed for the thread listing UI.
+    """
+
+    __tablename__ = "thread_metadata"
+
+    thread_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    title: Mapped[str] = mapped_column(String(100), nullable=False)
+    preview: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    last_updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    __table_args__ = (Index("idx_thread_metadata_last_updated", "last_updated_at"),)
+
+
 class DocumentModel(Base, TimestampMixin):
     """SQLAlchemy model for documents table."""
 
