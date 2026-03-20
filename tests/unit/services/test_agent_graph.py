@@ -230,6 +230,67 @@ async def test_astream_yields_chunks():
     assert chunks[2]["type"] == "custom"
 
 
+# --- compaction ---
+
+
+def test_token_estimate_empty():
+    from agent_workbench.services.agent_graph import _token_estimate
+
+    assert _token_estimate([]) == 0
+
+
+def test_token_estimate_sums_character_length():
+    from agent_workbench.services.agent_graph import _token_estimate
+
+    msgs = [HumanMessage(content="a" * 400), AIMessage(content="b" * 400)]
+    # (400 + 400) // 4 == 200
+    assert _token_estimate(msgs) == 200
+
+
+def test_should_compact_below_threshold_routes_to_llm():
+    from agent_workbench.services.agent_graph import _should_compact
+
+    msgs = [HumanMessage(content="hello"), AIMessage(content="hi")]
+    assert _should_compact({"messages": msgs}) == "llm_node"
+
+
+def test_should_compact_above_threshold_routes_to_compact():
+    from agent_workbench.services.agent_graph import (
+        COMPACTION_TOKEN_THRESHOLD,
+        _should_compact,
+    )
+
+    # Each message has enough chars to push token estimate strictly over the threshold.
+    # Need total chars > THRESHOLD * 4; using +10 per msg clears integer-division ties.
+    chars_per_msg = (COMPACTION_TOKEN_THRESHOLD * 4) // 2 + 10
+    msgs = [
+        HumanMessage(content="x" * chars_per_msg),
+        AIMessage(content="y" * chars_per_msg),
+    ]
+    assert _should_compact({"messages": msgs}) == "compact_node"
+
+
+def test_compact_node_present_in_graph():
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config())
+    assert "compact_node" in graph._graph.get_graph().nodes
+
+
+def test_compact_node_present_with_tools():
+    from langchain_core.tools import tool
+
+    @tool
+    def noop(x: str) -> str:
+        """No-op."""
+        return x
+
+    with patch("agent_workbench.services.agent_graph.provider_registry"):
+        graph = AgentGraph(_make_config(), tools=[noop])
+    nodes = graph._graph.get_graph().nodes
+    assert "compact_node" in nodes
+    assert "tool_node" in nodes
+
+
 # --- should_continue edge logic ---
 
 
