@@ -136,14 +136,15 @@ functionality and would delay the core agent work.
   - `_should_compact` routing via `add_conditional_edges(START, …)` — compact_node → llm_node
   - `COMPACTION_KEEP_RECENT = 6` messages kept verbatim after compaction
   - 436 tests passing, all quality checks green
-- [ ] Phase 2.6d: Long-term memory Store (blocked on Phase 3 auth for namespace key)
-  - LangGraph `Store` with operational memory files per user:
-    - `/memories/agents.md` — how to work with this user: behavior, tone, tool preferences (community standard filename)
-    - `/memories/domain_context.md` — user's domain: project context + tech stack (Workbench) or business profile + SEO goals (SEO Coach), replacing static `BusinessProfile`
-  - Self-improving instructions: agent proactively updates these files via tool calls; system prompt instructs it to do so
-  - Memory panel UI: user can read and edit both files directly; explicit commands ("remember this", "update your notes")
-  - Namespace key must be tied to authenticated user — Phase 3 auth prerequisite
-  - Note: `InMemoryStore` resets on restart; `AsyncSqliteStore` has single-process limitation — Postgres Store is production-grade
+- [x] Phase 2.6d: Long-term memory Store (PR-26d)
+  - `AsyncSqliteStore` initialized at startup (`data/langgraph_store.db`), namespace `(session_id, "memories")`
+  - Session UUID via `gr.BrowserState("aw_session_id")` — generated on first page load, persists in localStorage
+  - Memory read before each `AgentGraph.astream()` call; injected as ephemeral `SystemMessage` inside `llm_node` via `AgentContext.memory_context` — never stored in checkpointer
+  - `UpdateMemoryTool`: `@tool` using `InjectedStore` + `RunnableConfig` for session_id; wired as `memory` skill domain (workbench only)
+  - `GET/PUT /api/v1/memory/{key}` endpoints ready for memory panel UI
+  - Phase 3 migration path: swap `session_id` source from BrowserState → authenticated user ID; Store logic unchanged
+  - **Deferred**: settings page memory panel UI (API wired, UI not yet built); cross-device memory (blocked on Phase 3 auth); SEO Coach memory wiring
+  - 450 tests passing, all quality checks green
 - [ ] Phase 2.6e: Middleware
   - Built-in: `interrupt_before=[\"tool_node\"]`, PII redaction
   - Custom: context injection, execution tracking
