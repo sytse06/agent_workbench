@@ -449,6 +449,13 @@ class ThreadSummary(BaseModel):
     last_updated_at: datetime
 
 
+class ThreadMessage(BaseModel):
+    """A single message in a thread, for display in the sidebar."""
+
+    role: str
+    content: str
+
+
 class ConversationSummary(BaseModel):
     """Summary information about a conversation."""
 

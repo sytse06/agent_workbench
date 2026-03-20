@@ -69,3 +69,61 @@ def test_get_threads_empty_returns_empty_list():
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_delete_nonexistent_thread_returns_404():
+    """DELETE /threads/{id} returns 404 when thread does not exist."""
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    client = TestClient(_make_app(mock_session))
+    response = client.delete(f"/api/v1/threads/{uuid4()}")
+    assert response.status_code == 404
+
+
+def test_delete_existing_thread_returns_204():
+    """DELETE /threads/{id} returns 204 and deletes metadata row."""
+    mock_session = AsyncMock()
+    mock_row = MagicMock()
+    mock_select_result = MagicMock()
+    mock_select_result.scalar_one_or_none.return_value = mock_row
+    mock_delete_result = MagicMock()
+    # First execute = SELECT (returns row), second = DELETE documents
+    mock_session.execute = AsyncMock(
+        side_effect=[mock_select_result, mock_delete_result]
+    )
+    mock_session.delete = AsyncMock()
+    mock_session.commit = AsyncMock()
+
+    client = TestClient(_make_app(mock_session))
+    response = client.delete(f"/api/v1/threads/{uuid4()}")
+    assert response.status_code == 204
+    mock_session.delete.assert_called_once_with(mock_row)
+
+
+def test_get_thread_messages_service_not_ready(mocker):
+    """GET /threads/{id}/messages returns 503 when agent service not ready."""
+    mocker.patch(
+        "agent_workbench.api.routes.threads.get_agent_graph",
+        return_value=None,
+    )
+    mock_session = AsyncMock()
+    client = TestClient(_make_app(mock_session))
+    response = client.get(f"/api/v1/threads/{uuid4()}/messages")
+    assert response.status_code == 503
+
+
+def test_get_thread_messages_thread_not_found(mocker):
+    """GET /threads/{id}/messages returns 404 when thread has no checkpointed state."""
+    mock_graph = AsyncMock()
+    mock_graph.get_state = AsyncMock(return_value=None)
+    mocker.patch(
+        "agent_workbench.api.routes.threads.get_agent_graph",
+        return_value=mock_graph,
+    )
+    mock_session = AsyncMock()
+    client = TestClient(_make_app(mock_session))
+    response = client.get(f"/api/v1/threads/{uuid4()}/messages")
+    assert response.status_code == 404

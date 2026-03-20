@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 # cross-restart persistence. Falls back to MemorySaver on init failure.
 _checkpointer: BaseCheckpointSaver = MemorySaver()
 _checkpointer_conn: Optional[aiosqlite.Connection] = None
+_agent_graph_instance: Optional["AgentGraph"] = None
 
 # Module-level singletons. EmbeddingService lazy-loads all-MiniLM-L6-v2 (~80MB)
 # on first embed() call. SemanticRetriever wraps it — shared by all retrieval subgraphs.
@@ -67,6 +68,11 @@ async def close_checkpointer() -> None:
         await _checkpointer_conn.close()
         _checkpointer_conn = None
         logger.info("LangGraph checkpointer connection closed")
+
+
+def get_agent_graph() -> Optional["AgentGraph"]:
+    """Return the module-level AgentGraph singleton (set at startup)."""
+    return _agent_graph_instance
 
 
 class ConsolidatedWorkbenchService:
@@ -150,6 +156,8 @@ class ConsolidatedWorkbenchService:
             tools=all_tools,
             checkpointer=_checkpointer,
         )
+        global _agent_graph_instance
+        _agent_graph_instance = self.agent_graph
         self.state_bridge = LangGraphStateBridge(
             self.state_manager, self.context_service
         )
